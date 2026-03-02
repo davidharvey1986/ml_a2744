@@ -21,8 +21,14 @@ conda activate dark_matter_da
 ### Data Structure
 
 Create a `data/` folder in the project root with the following pickle files using the get_data_and_models.sh script.
+This creates a folder of 
+
+- data/convergence contains idealised data of projected mass maps only
+- data/shear containts the shear maps and kappa maps
+- data/obs/concat contains idealised forward modelled maps
 
 All datasets include
+
 
 **Bahamas domain:**
 - `bahamas_cdm.pkl` (no cross-section, class 0)
@@ -44,9 +50,6 @@ All datasets include
 **TNG domain:**
 - `tng.pkl` (no cross-section, class 0)
 
-- data/convergence contains idealised data of projected mass maps only
-- data/shear containts the shear maps and kappa maps
-- data/obs/concat contains idealised forward modelled maps
 ```
 project_root/
 ├── data
