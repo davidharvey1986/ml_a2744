@@ -64,7 +64,7 @@ project_root/
 │      └── darkskies_0.2.pkl
 │   ├── shear/
 │   ├── obs
-│   │   ├── convergence/concat
+│       ├── convergence/concat
 ├── notebooks
 │   ├── pickles/
 │   ├── constraints/
@@ -74,8 +74,7 @@ project_root/
 ├── train.py
 ├── utils.py
 ├── adaptation.py
-├── run_experiment.sh
-
+├── incremental_learning.sh
 └── README.md
 ```
 
