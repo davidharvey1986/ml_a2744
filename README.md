@@ -1,11 +1,15 @@
-# Deep learning reveals evidence for self-interacting dark matter in the massive galaxy cluster, A2744
+# Dark Matter Domain Adaptation
 
-The public release of code for the paper entitled
-"Deep learning reveals evidence for self-interacting dark matter in the massive galaxy cluster, A2744"
+A systematic study of models, augmentations, and domain adaptation techniques for astronomical dark matter detection across different simulation domains.
 
 ## Overview
 
-This project uses BAHAMAS, DARKSKIES to train a squeezenet architecture that can reliabily return estimates of the self-interaction cross-section.
+This project addresses the significant performance gap between source and target domains in dark matter detection by systematically evaluating:
+- Different neural network architectures
+- Data augmentation strategies  
+- Loss weighting schemes
+- Domain adaptation methods (MMD, CORAL, DANN, CDAN)
+- Mixup strategies
 
 ## Setup
 
@@ -20,15 +24,7 @@ conda activate dark_matter_da
 
 ### Data Structure
 
-Create a `data/` folder in the project root with the following pickle files using the get_data_and_models.sh script.
-This creates a folder of 
-
-- `data/convergence` contains idealised data of projected mass maps only
-- `data/shear` containts the shear maps and kappa maps
-- `data/obs/concat` contains idealised forward modelled maps
-
-All datasets include
-
+Create a `data/` folder in the project root with the following pickle files:
 
 **Bahamas domain:**
 - `bahamas_cdm.pkl` (no cross-section, class 0)
@@ -42,39 +38,24 @@ All datasets include
 - `darkskies_0.1.pkl` (cross-section 0.1, class 1)
 - `darkskies_0.2.pkl` (cross-section 0.2, class 1)
 
-**Flamingo domain:**
-- `flaming.pkl` (no cross-section, class 0)
-- `flaming_lo.pkl` (no cross-section, class 0)
-- `flaming_hi.pkl` (no cross-section, class 0)
-
-**TNG domain:**
-- `tng.pkl` (no cross-section, class 0)
-
 ```
 project_root/
-├── data
-│   ├── convergence/
-│      ├── bahamas_cdm.pkl
-│      ├── bahamas_0.1.pkl
-│      ├── bahamas_0.3.pkl
-│      ├── darkskies_cdm.pkl
-│      ├── darkskies_0.01.pkl
-│      ├── darkskies_0.05.pkl
-│      ├── darkskies_0.1.pkl
-│      └── darkskies_0.2.pkl
-│   ├── shear/
-│   ├── obs
-│       ├── convergence/concat
-├── notebooks
-│   ├── pickles/
-│   ├── constraints/
+├── data/
+│   ├── bahamas_cdm.pkl
+│   ├── bahamas_0.1.pkl
+│   ├── bahamas_0.3.pkl
+│   ├── darkskies_cdm.pkl
+│   ├── darkskies_0.01.pkl
+│   ├── darkskies_0.05.pkl
+│   ├── darkskies_0.1.pkl
+│   └── darkskies_0.2.pkl
 ├── main.py
 ├── model.py
 ├── dataset.py
 ├── train.py
 ├── utils.py
 ├── adaptation.py
-├── incremental_learning.sh
+├── run_experiment.sh
 └── README.md
 ```
 
@@ -112,4 +93,4 @@ Before running experiments, make these adjustments:
 - `train.py`: Training and evaluation loops
 - `utils.py`: Argument parsing, metrics, and helper functions
 - `adaptation.py`: Domain adaptation loss functions and components
-- `incremental_learning.sh`: Automated training runner
+- `run_experiment.sh`: Automated experiment runner
