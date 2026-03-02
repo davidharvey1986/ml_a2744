@@ -1,15 +1,10 @@
-# Dark Matter Domain Adaptation
+# Deep learning reveals evidence for self-interacting dark matter in the massive galaxy cluster, A2744
 
-A systematic study of models, augmentations, and domain adaptation techniques for astronomical dark matter detection across different simulation domains.
+Code based for manuscript "Deep learning reveals evidence for self-interacting dark matter in the massive galaxy cluster, A2744"
 
 ## Overview
 
-This project addresses the significant performance gap between source and target domains in dark matter detection by systematically evaluating:
-- Different neural network architectures
-- Data augmentation strategies  
-- Loss weighting schemes
-- Domain adaptation methods (MMD, CORAL, DANN, CDAN)
-- Mixup strategies
+This repo provides everything required to reproduce the plots in manuscript "Deep learning reveals evidence for self-interacting dark matter in the massive galaxy cluster, A2744". 
 
 ## Setup
 
@@ -28,7 +23,11 @@ https://drive.google.com/drive/u/1/folders/14b623LKcaOMFc9OavPLrzPyQwo6p30uW
 
 run `./get_model_and_data.sh`
 then `python add_shear_to_data.sh`
-then `incremental_learning.sh` to run all training (takes ~two weeks on a M2 Pro Chip)
+
+optionally you can then run
+`incremental_learning.sh` to run all training (takes ~two weeks on a M2 Pro Chip)
+
+Once you have creatd all data then the notebooks should run.
 
 **Bahamas domain:**
 - `bahamas_cdm.pkl` (no cross-section, class 0)
