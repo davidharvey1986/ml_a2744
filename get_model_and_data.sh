@@ -13,5 +13,5 @@ gdown --folder "https://drive.google.com/drive/folders/${FOLDER_ID}" -O "$OUTPUT
 
 echo "Download complete. Unpacking."
 tar -xvf models.tar.gz && rm -fr models.tar.gz
-tar -xvf pickles.tar.gz && mv pickles/notebooks && rm -fr pickles.tar.gz
-echo "Done.
+tar -xvf pickles.tar.gz && mv pickles notebooks && rm -fr pickles.tar.gz
+echo "Done."
