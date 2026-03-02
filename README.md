@@ -23,8 +23,12 @@ conda activate dark_matter_da
 ```
 
 ### Data Structure
+All data, models and pickled analysis files can be found here:
+https://drive.google.com/drive/u/1/folders/14b623LKcaOMFc9OavPLrzPyQwo6p30uW
 
-Create a `data/` folder in the project root with the following pickle files:
+run `./get_model_and_data.sh`
+then `python add_shear_to_data.sh`
+then `incremental_learning.sh` to run all training (takes ~two weeks on a M2 Pro Chip)
 
 **Bahamas domain:**
 - `bahamas_cdm.pkl` (no cross-section, class 0)
