@@ -123,6 +123,9 @@ def main(
         for idata_set in tqdm(all_data_sets):
             
             new_file_name = idata_set.replace('convergence',f'obs/{ifilter}')
+            new_data_path = os.path.dirname(new_file_name)  
+            if not os.path.isdir( new_data_path ):
+                os.system(f"mkdir -p {new_data_path}") 
 
             meta, data = pkl.load( open( idata_set, "rb"))
             if ('darkskies' in idata_set) | ('flamingo' in idata_set):
@@ -489,7 +492,7 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
 
 if __name__ == "__main__":
     #Base models - h=1 since we want them statistically the same
-    main( search_path="data/convergence/*.pkl", h=0.7, sample_data=False )
+    #main( search_path="data/convergence/*.pkl", h=0.7, sample_data=False )
     #Final data, h=0.7 so that the data is correct for final outputs
-    #main( search_path="data/convergence/flamingo*.pkl", h=0.7, sample_data=True, data_dir='data/a2744' )
-    #main( search_path="data/convergence/flamingo*.pkl", h=0.7, sample_data=True, data_dir='data/a2744' )
+    main( search_path="data/convergence/*.pkl", h=0.7, sample_data=True, data_dir='data/a2744' )
+   
