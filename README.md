@@ -26,8 +26,10 @@ We note that we are not at liberty to share the Flamingo or TNG data - however f
 
 To re-derive the plots please run:
 
-`./get_model_and_data.sh`
-`python add_shear_to_data.sh`
+```
+./get_model_and_data.sh
+python add_shear_to_data.sh
+```
 
 optionally you can then run
 `incremental_learning.sh` to run all training (takes ~two weeks on a M2 Pro Chip)
