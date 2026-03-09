@@ -22,6 +22,8 @@ conda activate dark_matter_da
 All data, models and pickled analysis files can be found here:
 https://drive.google.com/drive/u/1/folders/14b623LKcaOMFc9OavPLrzPyQwo6p30uW
 
+We note that we are not at liberty to share the Flamingo or TNG data - however for the purposes of the referring of the paper these can be provided on request privately.
+
 To re-derive the plots please run:
 
 `./get_model_and_data.sh`
