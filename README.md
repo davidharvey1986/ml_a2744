@@ -28,7 +28,7 @@ To re-derive the plots please run:
 
 ```
 ./get_model_and_data.sh
-python add_shear_to_data.sh
+python add_shear_to_data.py
 ```
 
 optionally you can then run
