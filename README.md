@@ -12,7 +12,8 @@ This repo provides everything required to reproduce the plots in manuscript "Dee
 
 Create the environment from the provided requirements file:
 
-```./setup.sh
+```
+./setup.sh
 ```
 
 ### Data Structure
