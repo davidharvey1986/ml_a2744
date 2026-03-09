@@ -492,7 +492,7 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
 
 if __name__ == "__main__":
     #Base models - h=1 since we want them statistically the same
-    #main( search_path="data/convergence/*.pkl", h=0.7, sample_data=False )
+    main( search_path="data/convergence/*.pkl", h=0.7, sample_data=False )
     #Final data, h=0.7 so that the data is correct for final outputs
     main( search_path="data/convergence/*.pkl", h=0.7, sample_data=True, data_dir='data/a2744' )
    
