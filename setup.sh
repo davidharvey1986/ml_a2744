@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+CWD=`echo $PWD`
 set -e
 
 ENV_NAME="astro-env"
@@ -28,11 +29,16 @@ pip install torch torchvision
 
 pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow lenspack
 
-git clone git@github.com:davidharvey1986/pyRRG.git
+if [ ! -d pyRRG]
+then
+    git clone git@github.com:davidharvey1986/pyRRG.git
+fi
 
 cd pyRRG 
 pip install .
+cd ..
 
+echo "export PYTHONPATH=${CWD}" >> $ENV_NAME/bin/activate
 
 echo ""
 echo "Environment created."
