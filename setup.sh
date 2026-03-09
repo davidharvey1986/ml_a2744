@@ -6,7 +6,7 @@ ENV_NAME="astro-env"
 
 # Create virtual environment
 
-python3 -m venv $ENV_NAME
+python3.11 -m venv $ENV_NAME
 
 # Activate it
 
@@ -14,7 +14,7 @@ source $ENV_NAME/bin/activate
 
 # Upgrade pip
 
-pip install --upgrade pip setuptools wheel
+pip install --upgrade pip setuptools==59.8.0 wheel
 
 # Core scientific stack
 
@@ -26,7 +26,7 @@ pip install torch torchvision
 
 # Utilities
 
-pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow 
+pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow lenspack
 
 git clone git@github.com:davidharvey1986/pyRRG.git
 
