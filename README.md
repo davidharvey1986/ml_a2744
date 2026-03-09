@@ -12,9 +12,7 @@ This repo provides everything required to reproduce the plots in manuscript "Dee
 
 Create the environment from the provided requirements file:
 
-```bash
-conda create --name dark_matter_da --file req.txt
-conda activate dark_matter_da
+```./setup.sh
 ```
 
 ### Data Structure
