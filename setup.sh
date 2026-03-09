@@ -1,45 +1,40 @@
 #!/usr/bin/env bash
 
-# Create environment
+set -e
 
-conda create -y -n astro-env python=3.9
+ENV_NAME="astro-env"
 
-# Activate environment
+# Create virtual environment
 
-source $(conda info --base)/etc/profile.d/conda.sh
-conda activate astro-env
+python3 -m venv $ENV_NAME
 
-# Install core scientific stack
+# Activate it
 
-conda install -y 
-numpy 
-scipy 
-pandas 
-matplotlib 
-seaborn 
-scikit-learn 
-ipython 
-ipykernel 
-jupyter 
-pip
+source $ENV_NAME/bin/activate
 
-# Install ML / astronomy related packages
+# Upgrade pip
 
-pip install 
-torch torchvision --index-url https://download.pytorch.org/whl/cu126
+pip install --upgrade pip setuptools wheel
 
-pip install 
-wandb 
-gdown 
-sympy 
-networkx 
-filelock 
-jinja2 
-fsspec 
-requests 
-pyyaml 
-pillow 
-pyrrg
+# Core scientific stack
 
-echo "Environment astro-env created successfully."
-echo "Activate it with: conda activate astro-env"
+pip install numpy==1.26.1 scipy pandas  matplotlib seaborn scikit-learn ipython ipykernel jupyter
+
+# PyTorch (CUDA 12.6 wheels)
+
+pip install torch torchvision
+
+# Utilities
+
+pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow 
+
+git clone git@github.com:davidharvey1986/pyRRG.git
+
+cd pyRRG 
+pip install .
+
+
+echo ""
+echo "Environment created."
+echo "Activate it with:"
+echo "source $ENV_NAME/bin/activate"
