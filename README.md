@@ -16,6 +16,7 @@ Installation time ~ 10 minutes.
 
 ```
 ./setup.sh
+source astro-env/bin/activate
 ```
 
 ### Data Structure
