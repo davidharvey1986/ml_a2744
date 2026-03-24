@@ -21,20 +21,23 @@ Create the environment from the provided requirements file. This assumes that py
 All data, models and pickled analysis files can be found here:
 https://drive.google.com/drive/u/1/folders/14b623LKcaOMFc9OavPLrzPyQwo6p30uW
 
-We note that we are not at liberty to share the Flamingo or TNG data - however for the purposes of the referring of the paper these can be provided on request privately.
+We note that we are not at liberty to share the Flamingo or TNG data - however for the purposes of the refereeing of the paper these can be provided on request privately.
 
-To re-derive the plots please run this and then load notebook/plots_for_paper.ipynb. You will need to be sure that PYTHONPATH points towards the root directory.
-`EXPORT PYTHONPATH=/path/to/root/`
-
+To re-derive the plots please run 
 ```
 ./get_model_and_data.sh
 python add_shear_to_data.py
 ```
+Then load notebook/plots_for_paper.ipynb. You will need to be sure that PYTHONPATH points towards the root directory.
+`EXPORT PYTHONPATH=/path/to/root/` before opening the notebook
 
-optionally you can then run
-`incremental_learning.sh` to run all training (takes ~two weeks on a M2 Pro Chip)
+Optionally you can then run
+`incremental_learning.sh` to run all training (takes ~two weeks on a M1 Pro Chip)
 
-Once you have creatd all data then the notebooks should run.
+Once you have created all data then the notebooks should run.
+
+Overview of the data
+---------------------
 
 **Bahamas domain:**
 - `bahamas_cdm.pkl` (no cross-section, class 0)
@@ -48,6 +51,8 @@ Once you have creatd all data then the notebooks should run.
 - `darkskies_0.1.pkl` (cross-section 0.1, class 1)
 - `darkskies_0.2.pkl` (cross-section 0.2, class 1)
 
+Code structure and notes for code base
+---------------------
 ```
 project_root/
 ├── data/
