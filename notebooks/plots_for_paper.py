@@ -144,7 +144,6 @@ for ifx, ifilter in enumerate( filter_list):
     ax[1].legend()
 filename = "plots/intrinsic_ell.pdf"
 plt.savefig(filename)
-os.system("pdfcrop %s %s" % ( filename, filename))
 
 
 # ## Postage stamp examples
@@ -292,7 +291,6 @@ for iax in ax.flatten():
     
 filename = "plots/data_examples.pdf"
 plt.savefig(filename)
-os.system("pdfcrop %s %s" % ( filename, filename))
 
 
 # # Domain Adaptation
@@ -481,7 +479,6 @@ fig.align_xlabels()
 
 filename = "plots/final_model_weighting_with_data.pdf"
 plt.savefig(filename)
-os.system("pdfcrop %s %s" % ( filename, filename))
  
 
 
@@ -677,7 +674,6 @@ for ifx, ifilter in enumerate(filter_list):
 axarr[0].legend(handles=handles)
 filename = f"plots/output_to_model.pdf"
 plt.savefig(filename)
-os.system("pdfcrop %s %s" % ( filename, filename))  
 
 
 # In[21]:
@@ -759,7 +755,6 @@ print(f"$\sigma_{{\\rm DM}}/m={max_like.real:0.2f}_{{-{error[0].real:0.2f}}}^{{+
 ax.legend()
 fname = "plots/particle_physics.pdf"
 plt.savefig(fname)
-os.system(f"pdfcrop {fname} {fname}")
 
 
 # ## Appendix plots
@@ -782,7 +777,6 @@ ax.set_ylabel("Goodness-of-fit")
 ax.set_xlabel("Self-interaction cross-section [cm$^2$/g]")
 fname="plots/goodness_of_fit.pdf"
 plt.savefig(fname)
-os.system(f"pdfcrop {fname} {fname}")
 
 
 # In[24]:
@@ -873,7 +867,6 @@ for ifx, ifilter in enumerate(['concat']):
     ax.set_xlim(1,30)
 fname="plots/correlated_models.pdf"
 plt.savefig(fname)
-os.system(f"pdfcrop {fname} {fname}")
 
 
 # ### A) Source redshift dependency
@@ -994,7 +987,6 @@ for izs, isource_redshift in enumerate(all_zs):
 axarr[0].set_ylabel("$X$ / $X_{z=1.65}$ - 1")
 fname = "plots/source_redshift.pdf"
 plt.savefig(fname)
-os.system(f"pdfcrop {fname} {fname}")
 
 
 # ## B) Shape measuremenet bias
@@ -1141,7 +1133,6 @@ axarr[icomp,0].text( 1.0,0.,"Self-interaction Cross-Section")
 
 fname="plots/shape_measurement_bias.pdf"
 plt.savefig(fname)
-os.system(f"pdfcrop {fname} {fname}")
 
 
 # ## C) Mass dependence 
@@ -1225,5 +1216,4 @@ for imass_bin in tqdm(range(n_mass_bins)):
 axarr[0].set_ylabel("$X$ / $X_{M=M_{\\rm fid}}$ - 1")
 fname = "plots/mass_dependency.pdf"
 plt.savefig(fname)
-os.system(f"pdfcrop {fname} {fname}")
 
