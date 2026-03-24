@@ -23,7 +23,8 @@ https://drive.google.com/drive/u/1/folders/14b623LKcaOMFc9OavPLrzPyQwo6p30uW
 
 We note that we are not at liberty to share the Flamingo or TNG data - however for the purposes of the referring of the paper these can be provided on request privately.
 
-To re-derive the plots please run:
+To re-derive the plots please run this and then load notebook/plots_for_paper.ipynb. You will need to be sure that PYTHONPATH points towards the root directory.
+`EXPORT PYTHONPATH=/path/to/root/`
 
 ```
 ./get_model_and_data.sh
