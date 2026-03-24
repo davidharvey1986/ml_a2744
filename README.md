@@ -10,7 +10,7 @@ This repo provides everything required to reproduce the plots in manuscript "Dee
 
 ### Environment Setup
 
-Create the environment from the provided requirements file. This assumes that python3.11 is in the path. Please make sure it is. If it isnt you can change setup.sh to python3.10. However, it has only been tested on these two - bot 3.9 or 3.12. 
+Create the environment from the provided requirements file. This assumes that python3.11 is in the path. Please make sure it is. If it isnt you can change setup.sh to python3.10. However, it has only been tested on these two - bot 3.9 or 3.12. Note that it also requires Java.
 
 Installation time ~ 10 minutes.
 
@@ -32,6 +32,8 @@ To re-derive the plots please run
 ```
 ./get_model_and_data.sh
 python add_shear_to_data.py
+cd notebooks
+./plots_for_paper.py
 ```
 Then load notebook/plots_for_paper.ipynb. You will need to be sure that PYTHONPATH points towards the root directory.
 `EXPORT PYTHONPATH=/path/to/root/` before opening the notebook
