@@ -10,7 +10,7 @@ This repo provides everything required to reproduce the plots in manuscript "Dee
 
 ### Environment Setup
 
-Create the environment from the provided requirements file:
+Create the environment from the provided requirements file. This assumes that python3.11 is in the path. Please make sure it is!
 
 ```
 ./setup.sh
