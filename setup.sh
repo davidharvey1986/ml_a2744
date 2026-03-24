@@ -27,7 +27,7 @@ pip install torch torchvision
 
 # Utilities
 
-pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow lenspack
+pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow lenspack scienceplots
 
 if [ ! -d pyRRG ]
 then
