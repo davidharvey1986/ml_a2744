@@ -24,6 +24,8 @@ source astro-env/bin/activate
 All data, models and pickled analysis files can be found here:
 https://drive.google.com/drive/u/1/folders/14b623LKcaOMFc9OavPLrzPyQwo6p30uW
 
+Note: this requies ~5GB of storage and can take a while to download.
+
 We note that we are not at liberty to share the Flamingo or TNG data - however for the purposes of the refereeing of the paper these can be provided on request privately.
 
 To re-derive the plots please run 
