@@ -29,7 +29,7 @@ pip install torch torchvision
 
 pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow lenspack
 
-if [ ! -d pyRRG]
+if [ ! -d pyRRG ]
 then
     git clone git@github.com:davidharvey1986/pyRRG.git
 fi
