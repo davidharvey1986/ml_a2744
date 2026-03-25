@@ -1162,7 +1162,7 @@ def figure9():
            'tgt':np.mean(1-mass_results[2]['tgt']['thresholds'], axis=0)
           }
 
-    for imass_bin in tqdm(range(n_mass_bins)):
+    for imass_bin in range(n_mass_bins):
 
 
 
