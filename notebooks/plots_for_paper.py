@@ -384,10 +384,10 @@ def figure3():
 
                 tgt = get_threshold_for_cross( 
                     all_results[imodel][target], 
-                    mass_cut=None, 
+                    mass_cut=mass_cit, 
                     integrated_mass=True,
                     function=np.mean,
-                    mass_weights=None, #mass_weights[target],
+                    mass_weights=mass_weights[target],
                     dataset=domain[target].split('_')[0],
                     quiet=False)
 
