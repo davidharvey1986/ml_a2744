@@ -35,7 +35,7 @@ from add_shear_to_data import *
 
 import numpy as np
 from matplotlib import pyplot as plt
-from netloader.network import Network
+#from netloader.network import Network
 from torchvision.models import (
     ResNet18_Weights, resnet18, ResNet34_Weights, resnet34,
     MobileNet_V3_Small_Weights, mobilenet_v3_small,

@@ -8,8 +8,13 @@ from get_model_probabilities import *
 color = {'f115w':'c', 'f150w':'pink','concat':'k'}
 
 
+
 import scienceplots
 plt.style.use(["science","grid"])
+
+import matplotlib as mpl
+
+mpl.rcParams['text.usetex'] = False
 
 
 # Paper Plots

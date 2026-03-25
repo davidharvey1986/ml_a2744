@@ -7,7 +7,7 @@ from torchvision.models import (
     SqueezeNet1_1_Weights, squeezenet1_1,
 )
 from adaptation import DomainDiscriminator, GradientReverseLayer, MultiLinearMap
-from netloader.network import Network
+#from netloader.network import Network
 
 
 class SmallCNN(nn.Module):
