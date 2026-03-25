@@ -763,8 +763,7 @@ def figure4and5():
     # In[22]:
 
 def figure6():
-    plt.figure()
-    ax = plt.gca()
+
     nmodels=30
     unique_cross, latent_distances, latent_quantiles =  pkl.load(open("pickles/latent_space.pkl","rb"))
     av_distances = [ np.mean([ np.mean(latent_distances[i][j]) for i in range(nmodels)]) for j in range(len(unique_cross))]
@@ -785,6 +784,7 @@ def figure6():
 
     # In[24]:
 
+def figure7():
 
     fig, axarr = plt.subplots(1,1,figsize=(4,3))
     axarr = [axarr]
@@ -871,13 +871,13 @@ def figure6():
     fname="plots/correlated_models.pdf"
     plt.savefig(fname)
 
-    print("Figure 6 done")
+    print("Figure 7 done")
 
 # ### A) Source redshift dependency
 
 # In[25]:
 
-def figure7():
+def figure8():
     config='baha2dark'
     ifilter  = 'concat'
     cdm = 5e-3
@@ -992,12 +992,12 @@ def figure7():
     fname = "plots/source_redshift.pdf"
     plt.savefig(fname)
 
-    print("Figure 7 done")
+    print("Figure 8 done")
 
 # ## B) Shape measuremenet bias
 
 # In[29]:
-def figure8():
+def figure9():
 
     config='baha2dark'
     filter_list  = ['concat']
@@ -1138,13 +1138,13 @@ def figure8():
 
     fname="plots/shape_measurement_bias.pdf"
     plt.savefig(fname)
-    print("Figure 8 done")
+    print("Figure 9 done")
 
 
 # ## C) Mass dependence 
 
 # In[30]:
-def figure9():
+def figure10():
 
     output_name = "pickles/mass_data_dependence.pkl"
 
@@ -1222,7 +1222,7 @@ def figure9():
     axarr[0].set_ylabel("$X$ / $X_{M=M_{\\rm fid}}$ - 1")
     fname = "plots/mass_dependency.pdf"
     plt.savefig(fname)
-    print("Figure 9 done")
+    print("Figure 10 done")
 
 if __name__ == "__main__":
     figure1()
