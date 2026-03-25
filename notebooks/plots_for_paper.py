@@ -1182,7 +1182,7 @@ def figure9():
             ax.errorbar( cross_sections+1e-3, 
                         means/ref[target] -1,
                         errors/ref[target],
-                        fmt='-v', label=f"${mass_cut[0]}$", 
+                        fmt='-v', 
                         capsize=2,
                         markersize=8, color=color[target][imass_bin])
 
