@@ -763,7 +763,7 @@ def figure4and5():
     # In[22]:
 
 def figure6():
-
+    plt.clf()
     nmodels=30
     unique_cross, latent_distances, latent_quantiles =  pkl.load(open("pickles/latent_space.pkl","rb"))
     av_distances = [ np.mean([ np.mean(latent_distances[i][j]) for i in range(nmodels)]) for j in range(len(unique_cross))]
@@ -1233,3 +1233,4 @@ if __name__ == "__main__":
     figure7()
     figure8()
     figure9()
+    figure10()
