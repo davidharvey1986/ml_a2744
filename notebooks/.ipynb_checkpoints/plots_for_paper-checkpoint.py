@@ -149,7 +149,7 @@ def figure1():
         ax[1].legend()
     filename = "plots/intrinsic_ell.pdf"
     plt.savefig(filename)
-
+    print("Figure 1 done")
 
 # ## Postage stamp examples
 
@@ -297,6 +297,7 @@ def figure2():
     filename = "plots/data_examples.pdf"
     plt.savefig(filename)
 
+    print("Figure 2 done")
 
 # # Domain Adaptation
 
@@ -484,6 +485,7 @@ def figure3():
 
     filename = "plots/final_model_weighting_with_data.pdf"
     plt.savefig(filename)
+    print("Figure 3 done")
 
 
 
@@ -675,6 +677,7 @@ def figure4and5():
     axarr[0].legend(handles=handles)
     filename = f"plots/output_to_model.pdf"
     plt.savefig(filename)
+    print("Figure 4 done")
 
     markersize = 12
 
@@ -752,7 +755,8 @@ def figure4and5():
     fname = "plots/particle_physics.pdf"
     plt.savefig(fname)
 
-    
+    print("Figure 5 done")
+  
 
     # ## Appendix plots
 
@@ -776,6 +780,7 @@ def figure6():
     fname="plots/goodness_of_fit.pdf"
     plt.savefig(fname)
 
+    print("Figure 6 done")
 
     # In[24]:
 
@@ -865,6 +870,7 @@ def figure6():
     fname="plots/correlated_models.pdf"
     plt.savefig(fname)
 
+    print("Figure 6 done")
 
 # ### A) Source redshift dependency
 
@@ -872,7 +878,7 @@ def figure6():
 
 def figure7():
     config='baha2dark'
-    filter_list  = ['concat']
+    ifilter = 'concat'
     cdm = 5e-3
 
 
@@ -883,7 +889,7 @@ def figure7():
     }
 
 
-    source_tests = f"pickles/source_redshift_{ifilter}_test.pkl"
+     = f"pickles/source_redshift_{ifilter}_test.pkl"
 
     all_tests = pkl.load(open(source_tests,'rb'))
 
@@ -985,6 +991,7 @@ def figure7():
     fname = "plots/source_redshift.pdf"
     plt.savefig(fname)
 
+    print("Figure 7 done")
 
 # ## B) Shape measuremenet bias
 
@@ -1130,12 +1137,13 @@ def figure8():
 
     fname="plots/shape_measurement_bias.pdf"
     plt.savefig(fname)
+    print("Figure 8 done")
 
 
 # ## C) Mass dependence 
 
 # In[30]:
-def figure8():
+def figure9():
 
     output_name = "pickles/mass_data_dependence.pkl"
 
@@ -1213,6 +1221,7 @@ def figure8():
     axarr[0].set_ylabel("$X$ / $X_{M=M_{\\rm fid}}$ - 1")
     fname = "plots/mass_dependency.pdf"
     plt.savefig(fname)
+    print("Figure 9 done")
 
 if __name__ == "__main__":
     figure1()
@@ -1222,4 +1231,4 @@ if __name__ == "__main__":
     figure6()
     figure7()
     figure8()
-    
+    figure9()
