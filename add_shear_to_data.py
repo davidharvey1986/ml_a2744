@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from lenspack.image.inversion import ks93inv, ks93
 from lenspack.utils import sigma_critical, bin2d
 from glob import glob

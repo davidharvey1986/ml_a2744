@@ -7,7 +7,7 @@ ENV_NAME="astro-env"
 
 # Create virtual environment
 
-python3.11 -m venv $ENV_NAME
+python3.10 -m venv $ENV_NAME
 
 # Activate it
 
