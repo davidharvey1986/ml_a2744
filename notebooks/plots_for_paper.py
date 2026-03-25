@@ -500,7 +500,7 @@ def figure3():
 
 # In[19]:
 
-def figure4():
+def figure4and5():
 
     def g1_func( snr, a, b, c, d ):
         return a + b*np.exp( snr /c) + d*snr
@@ -573,13 +573,11 @@ def figure4():
 
         popt_err = np.sqrt(np.diag(pcov))
         name =['a','b','c','d']
-        print(', '.join([ f"${name[i]:0.2}={popt[i]:0.2}\pm{popt_err[i]:0.2}$" for i in range(len(popt))]))
         dof = cross.shape[0] - len(name)
 
         chi = np.sum( (thresholds - g1_func(cross, *popt))**2/err**2)/dof
 
         chierr = np.sqrt(2./dof)
-        print(f'$\chi={chi:0.2}\pm{chierr:0.1}$')
         cdm_cross = g1_inv( cdm_thresh, *popt).real
 
 
@@ -631,7 +629,6 @@ def figure4():
         ###PLOT 3
 
         #####################
-        print(f"$\\sigma_{{\\rm CDM}}={10**cdm_cross[0]:0.1}$\cpg")
         ax = axarr[1]
 
 
@@ -644,7 +641,6 @@ def figure4():
         x_cross = g1_inv( xpdf, *popt)
         f_cross = ypdf  * jacob(xpdf, *popt)
         f_cross = f_cross/np.nansum(f_cross)/(x_cross-np.roll(x_cross,1))
-        #print(np.sum(f_cross)*(x_cross-np.roll(x_cross,1)))
         ax.plot(x_cross, f_cross, 'k-')
 
         #ax.set_ylim(ax.get_ylim())
@@ -671,7 +667,6 @@ def figure4():
 
 
         #ax.set_
-        print(f"{max_like_log} - {max_like_log - low} + {high - max_like_log}")
         max_like = 10**max_like_log
         error = np.array([max_like - 10**low, 10**high - max_like])
         ax.set_ylim(0,1.3)
@@ -681,10 +676,6 @@ def figure4():
     filename = f"plots/output_to_model.pdf"
     plt.savefig(filename)
 
-
-# In[21]:
-
-def figure5():
     markersize = 12
 
     fig = plt.figure(figsize=(7,4))
@@ -756,7 +747,6 @@ def figure5():
     ax.errorbar( np.mean(velocity_disp), max_like, yerr=error[:,None], 
                 markersize=20, color='red', fmt='*', capsize=4, lw=2)
 
-    print(f"$\sigma_{{\\rm DM}}/m={max_like.real:0.2f}_{{-{error[0].real:0.2f}}}^{{+{error[1].real:0.2f}}}$cm$^2$/g")
     # get handles
     ax.legend()
     fname = "plots/particle_physics.pdf"
@@ -867,7 +857,6 @@ def figure6():
 
         ax.legend(loc=1)
         ax.set_xlabel("N Aggregated Models")
-        print(np.mean(popt[0]/ics))
         if ifx == 0:
             ax.set_ylabel("Error")
 
@@ -1229,8 +1218,7 @@ if __name__ == "__main__":
     figure1()
     figure2()
     figure3()
-    figure4()
-    figure5()
+    figure4and5()
     figure6()
     figure7()
     figure8()

@@ -35,7 +35,7 @@ from add_shear_to_data import *
 
 import numpy as np
 from matplotlib import pyplot as plt
-from netloader.network import Network
+#from netloader.network import Network
 from torchvision.models import (
     ResNet18_Weights, resnet18, ResNet34_Weights, resnet34,
     MobileNet_V3_Small_Weights, mobilenet_v3_small,
@@ -92,7 +92,6 @@ def remove_cluster_members( cat_raw, photoz):
     keep_numbers = np.array([ np.where(i==all_numbers)[0][0] for i in all_numbers if i not in cluster_numbers ])
     
     nremove = cluster_numbers.shape[0]
-    print(f"REMOVING {nremove} GALAXIES")
     
 
     
@@ -222,10 +221,7 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
             cat_b['z'][ extra_cat_b ]
         ]) 
         
-        print(f"{matched_cat.shape[0]} galaxies in common")
-        print(f"{extra_cat_a.shape[0]} extra galaxies in cat_a")
-        print(f"{extra_cat_b.shape[0]} extra galaxies in cat_b")
-        print(f"{final_g2.shape[0]} total galaxies")
+
 
 
 
@@ -245,10 +241,7 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
 
     else:
         
-        print(f"{matched_cat.shape[0]} galaxies in common")
-        print(f"{extra_cat_a.shape[0]} extra galaxies in cat_a")
-        print(f"{extra_cat_b.shape[0]} extra galaxies in cat_b")
-        print(f"{final_g2.shape[0]} total galaxies")
+
 
 
 
@@ -443,7 +436,6 @@ def plot_predictions(
                 torch.mean(prob[:,0]),
                 torch.mean(prob[:,0])
             ],[0,2*ax.get_ylim()[1]],'k--')
-            print(f"{icross}: {torch.mean(prob[:,0])}")
             ax.plot([
                     0.5, 0.5
             ],[0,2*ax.get_ylim()[1]],'k:')
@@ -532,7 +524,6 @@ class args:
     unbalance=False
     log_mass_cut=0
     
-    print(f"Source redshift:{zs}")
 
           
     
@@ -861,8 +852,7 @@ def plot_observations( filename, ifilter,
             nsigma=3.
         
         err = [error*nsigma + means, means - error*nsigma ]
-        print(err)
-        
+
         if ifilter == 'concat':
             if not noise:
                 ax.text( 0.002,means,"A2744 UNCOVERS DATA", ha='left',va='bottom', fontsize=12)
