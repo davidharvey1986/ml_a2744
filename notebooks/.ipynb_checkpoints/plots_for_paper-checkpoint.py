@@ -878,7 +878,7 @@ def figure6():
 
 def figure7():
     config='baha2dark'
-    ifilter = 'concat'
+    ifilter  = 'concat'
     cdm = 5e-3
 
 
@@ -889,7 +889,7 @@ def figure7():
     }
 
 
-     = f"pickles/source_redshift_{ifilter}_test.pkl"
+    source_tests = f"pickles/source_redshift_{ifilter}_test.pkl"
 
     all_tests = pkl.load(open(source_tests,'rb'))
 
