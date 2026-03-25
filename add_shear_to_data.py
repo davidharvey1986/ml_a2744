@@ -63,6 +63,10 @@ def main(
             
             meta, data = pkl.load( open( idata_set, "rb"))
             new_data_set = idata_set.replace("convergence","shear")
+
+            if os.path.isfile(new_data_set):
+                print(f"Already found {new_data_set}, skipping")
+                continue
             new_data_path = os.path.dirname(new_data_set)      
     
             if ('darkskies' in idata_set) | ('flamingo' in idata_set):
@@ -123,7 +127,11 @@ def main(
         for idata_set in tqdm(all_data_sets):
             
             new_file_name = idata_set.replace('convergence',f'obs/{ifilter}')
-            new_data_path = os.path.dirname(new_file_name)  
+            new_data_path = os.path.dirname(new_file_name)
+            if os.path.isfile(new_file_name):
+                print(f"Already found {new_file_name}, skipping")
+                continue
+            
             if not os.path.isdir( new_data_path ):
                 os.system(f"mkdir -p {new_data_path}") 
 
