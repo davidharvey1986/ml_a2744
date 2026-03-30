@@ -10,7 +10,7 @@ This repo provides everything required to reproduce the plots in manuscript "Dee
 
 ### Environment Setup
 
-Create the environment from the provided requirements file. This assumes that python3.11 is in the path. Please make sure it is. If it isnt you can change setup.sh to python3.10. However, it has only been tested on these two - bot 3.9 or 3.12. Note that it also requires Java.
+Create the environment from the provided requirements file. This assumes that python3.11 is in the path. Please make sure it is. If it isnt you can change setup.sh to python3.10. However, it has only been tested on these two - not 3.9 or 3.12. Note that it also requires Java.
 
 Installation time ~ 10 minutes.
 
