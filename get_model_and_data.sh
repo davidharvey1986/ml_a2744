@@ -12,7 +12,28 @@ echo "Downloading folder $FOLDER_ID..."
 gdown --folder "https://drive.google.com/drive/folders/${FOLDER_ID}" -O "$OUTPUT_DIR"
 
 echo "Download complete. Unpacking."
-tar -xf models.tar.gz && rm -fr models.tar.gz
-tar -xf data.tar.gz && rm -fr data.tar.gz
-tar -xf pickles.tar.gz && mv pickles notebooks && rm -fr pickles.tar.gz
+
+echo "Input password for models.zip"
+unzip models.zip
+if [ -d models ]
+then
+    rm -fr models.zip
+fi
+
+echo "Input password for data.zip"
+unzip  data.zip
+if [ -d data ]
+then
+    rm -fr data.zip
+fi
+
+echo "Input password for pickles.zip"
+unzip pickles.zip
+
+if [ -d pickles ]
+then   
+    mv pickles notebooks
+    rm -fr pickles.zip
+fi
+
 echo "Done."
