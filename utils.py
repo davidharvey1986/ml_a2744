@@ -18,7 +18,8 @@ def parse_args():
     parser.add_argument("--source_domain", type=str, default="bahamas")
     parser.add_argument("--target_domain", type=str, default="darkskies")
     parser.add_argument("--train_split", type=float, default=0.8)
-    parser.add_argument("--image_size", type=int, default=50)
+    parser.add_argument("--image_size", type=int, default=100)
+    parser.add_argument("--downsample",type=int, default=1)
     parser.add_argument("--use_log_transform", action="store_true", default=False)
     parser.add_argument("--use_normalization", action="store_true", default=False)
     parser.add_argument("--device", type=str, default="MPS")
@@ -28,6 +29,7 @@ def parse_args():
     parser.add_argument("--mass_index", type=int, default=2) #e1, e2, total, dark, gas, stellar
     parser.add_argument("--apply_mask", action="store_true", default=False)
     parser.add_argument("--apply_shape_measurement_bias", action="store_true", default=False)
+    parser.add_argument("--cluster_member_contamination", type=float, default=0.)
     parser.add_argument("--zl", type=float, default=0.305)
     parser.add_argument("--zs", type=float, default=1.36)
     parser.add_argument("--jwst_filter", type=str, default='concat')

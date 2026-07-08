@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from lenspack.image.inversion import ks93inv, ks93
 from lenspack.utils import sigma_critical, bin2d
 from glob import glob
@@ -12,6 +14,7 @@ from pyRRG.calc_shear import calc_shear
 from RRGtools import run_match
 import os
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
+import numpy.lib.recfunctions as rfn
 
 def get_boxsize(set_name, return_units=units.pc, h=0.7):
     if ('bahamas' in set_name) or ('tng' in set_name) or ('flamingo' in set_name):
@@ -27,12 +30,12 @@ def crop_center(img,cropx,cropy):
     return img[starty:starty+cropy,startx:startx+cropx]
 
 def main( 
-    search_path="data/convergence/*.pkl", 
+    search_path="data/100/convergence/*.pkl", 
     filter_list = ['concat'],
     thresh_k = 0.9, 
     h=0.7, 
     sample_data=True,
-    data_dir="data/a2744",
+    data_dir="data/100/a2744",
     reduce_shear=True,
     zs = {'f115w':1.6, 'f150w':1.65,'concat':1.65},
     zl = 0.305
@@ -63,13 +66,17 @@ def main(
             
             meta, data = pkl.load( open( idata_set, "rb"))
             new_data_set = idata_set.replace("convergence","shear")
+
+            if os.path.isfile(new_data_set):
+                print(f"Already found {new_data_set}, skipping")
+                continue
             new_data_path = os.path.dirname(new_data_set)      
     
             if ('darkskies' in idata_set) | ('flamingo' in idata_set):
                 meta['norms'] /= 4.*h
                 
             if 'redshift' not in meta.keys():
-                meta['redshift'] = np.repeat(np.arange(5)/10., data.shape[0]//5)
+                meta['redshift'] = np.full(data.shape[0], 0.250, dtype=np.float64)
                 
             e1, e2, kappa = data_to_shear( 
                     data[:,0], meta['norms'][:,0], 
@@ -95,7 +102,10 @@ def main(
     ### This is for the final masked models
     for ifx, ifilter in enumerate(filter_list):
         
-        obs_data = get_obs_data( ifilter, data_dir=data_dir)
+        obs_data = get_obs_data( 
+            ifilter, data_dir=data_dir,
+            photoz=True, default_zs=zs['concat']
+        )
    
         ra_0 = np.median(obs_data['x']) 
         dec_0 = np.median(obs_data['y']) 
@@ -123,7 +133,12 @@ def main(
         for idata_set in tqdm(all_data_sets):
             
             new_file_name = idata_set.replace('convergence',f'obs/{ifilter}')
-            new_data_path = os.path.dirname(new_file_name)  
+            new_data_path = os.path.dirname(new_file_name)
+            
+            if os.path.isfile(new_file_name):
+                print(f"Already found {new_file_name}, skipping")
+                continue
+            
             if not os.path.isdir( new_data_path ):
                 os.system(f"mkdir -p {new_data_path}") 
 
@@ -132,12 +147,12 @@ def main(
                 meta['norms'] /= 4.*h
                 
             if 'redshift' not in meta.keys():
-                meta['redshift'] = np.repeat(np.arange(5)/10., data.shape[0]//5)
+                meta['redshift'] = np.full(data.shape[0], 0.305, dtype=np.float64)
 
             #Interpolate the non reduced shear then reduce it later.
             e1_ideal, e2_ideal, kappa = data_to_shear( 
                     data[:,0], meta['norms'][:,0], 
-                    meta['redshift']*0.+0.305, 
+                    meta['redshift'], 
                     get_boxsize(idata_set),
                     zs=zs['concat'], 
                     zl=zl, **{'ngal_per_sq_arcmin':200.},
@@ -323,9 +338,15 @@ def data_to_shear( images, norms, redshifts, boxsize,
     return np.array(all_e1), np.array(all_e2), np.array(all_converge)
 
 
-
-
-def get_obs_data( ifilter, cuts=None, data_dir='data/' ):
+def get_obs_data( 
+    ifilter, 
+    cuts=None, 
+    data_dir='data/100/a2744', 
+    photoz=False, 
+    default_zs=1.65, 
+    remove_members=True 
+    ):
+    
     
     # Cuts already taken during the WL process - verified.
     cuts = {
@@ -337,12 +358,38 @@ def get_obs_data( ifilter, cuts=None, data_dir='data/' ):
     }     
     
     if ifilter == 'concat':
-
         cat_a_name =     f"{data_dir}/a2744_f115w_filtered.fits"
         cat_b_name =     f"{data_dir}/a2744_f150w_filtered.fits"
         obs_data = combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' )
-        fits.writeto(  f"{data_dir}/a2744_concat_filtered.fits", obs_data, overwrite=True) 
-        
+        concat_name =  f"{data_dir}/a2744_concat_filtered.fits"
+
+        fits.writeto(  concat_name, obs_data, overwrite=True) 
+
+  
+        if remove_members:
+            for cat in [cat_a_name+".photoz", cat_b_name+".photoz"]:
+                if not os.path.isfile( cat ):
+                    this_filter = cat.split('/')[-1].split('_')[1]
+                    shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{this_filter}-clear_drc_sci_clean.shears.photoz"
+                    obs_data = fits.open(shear_cat)[1].data
+
+                    calc_shear(
+                        obs_data, 
+                        f"{data_dir}/a2744_{this_filter}_filtered.fits.photoz", 
+                        **cuts
+                    )
+                
+            obs_data = combine_catalogues( cat_a_name+".photoz", cat_b_name+".photoz", identifier='NUMBER' )
+            concat_name_photoz =  f"{data_dir}/a2744_concat_filtered.fits.photoz"
+            fits.writeto( concat_name_photoz, obs_data,overwrite=True)
+
+
+
+            obs_data =    remove_cluster_members( concat_name, concat_name_photoz)
+
+            fits.writeto( concat_name, obs_data, overwrite=True)
+
+
     else:
         shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears"
         obs_data = fits.open(shear_cat)[1].data
@@ -357,8 +404,53 @@ def get_obs_data( ifilter, cuts=None, data_dir='data/' ):
             f"{data_dir}/a2744_{ifilter}_filtered.fits"
         )[1].data
         
+    if photoz:
+        photo_z_matched = run_match(
+            f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
+            f"{data_dir}/a2744_{ifilter}_filtered.fits"
+        )[1].data
+        
+        redshift = np.full(obs_data.shape[0], default_zs, dtype=np.float64)
+
+        # build lookup table
+        z_lookup = dict(zip(photo_z_matched['NUMBER'],
+                            photo_z_matched['z_ml']))
+
+        # fill values
+        for j, number in enumerate(obs_data['NUMBER']):
+            if number in z_lookup:
+                redshift[j] = z_lookup[number]
+
+        # append field
+        obs_data = rfn.append_fields(
+            obs_data,
+            names='redshift',
+            data=redshift,
+            dtypes=np.float64,
+            usemask=False,
+            asrecarray=True
+        )
+
     return obs_data
+ 
+def remove_cluster_members( cat_raw, photoz, z_limit=0.4):
     
+    combined = run_match( cat_raw, photoz)
+
+    all_cat = fits.open(cat_raw)[1].data
+    
+
+    cluster_numbers = combined[1].data['NUMBER_1'][ combined[1].data['z'] < z_limit]
+    
+    all_numbers = all_cat['NUMBER']
+    
+    keep_numbers = np.array([ np.where(i==all_numbers)[0][0] for i in all_numbers if i not in cluster_numbers ])
+    
+    nremove = cluster_numbers.shape[0]
+    print(f"REMOVING {nremove} GALAXIES")
+
+    return all_cat[ keep_numbers ]
+
 def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
     
     cat_a = fits.open(cat_a_name)[1].data
@@ -428,17 +520,28 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
     ])  
     
     final_ra = np.concatenate([
-        concat_e_2,
+        matched_cat['ra_1'],
         cat_a['ra'][ extra_cat_a ],
         cat_b['ra'][ extra_cat_b ]
     ])  
         
     final_dec = np.concatenate([
-        concat_e_2,
+        matched_cat['dec_1'],
         cat_a['dec'][ extra_cat_a ],
         cat_b['dec'][ extra_cat_b ]
     ]) 
     
+    final_mag = np.concatenate([
+        matched_cat['MAG_AUTO_1'],
+        cat_a['MAG_AUTO'][ extra_cat_a ],
+        cat_b['MAG_AUTO'][ extra_cat_b ]
+    ]) 
+    final_size = np.concatenate([
+        matched_cat['gal_size_1'],
+        cat_a['gal_size'][ extra_cat_a ],
+        cat_b['gal_size'][ extra_cat_b ]
+    ]) 
+            
     if 'z_1' in list(matched_cat.dtype.names):
         final_z = np.concatenate([
             z,
@@ -458,8 +561,9 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
                 'RA':final_ra,
                 'DEC':final_dec,
                     'z':final_z,
-                'NUMBER':np.arange(final_dec.shape[0])+1
-
+                'NUMBER':np.arange(final_dec.shape[0])+1,
+                'MAG':final_mag,
+                'SIZE':final_size,
                }
 
     else:
@@ -475,7 +579,9 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
                 'e2':final_e2,
                 'RA':final_ra,
                 'DEC':final_dec,
-                'NUMBER':np.arange(final_dec.shape[0])+1
+                'NUMBER':np.arange(final_dec.shape[0])+1,
+                'MAG':final_mag,
+                'SIZE':final_size,
                }   
     new_cols = []
     for ikey in obs_data.keys():
@@ -490,9 +596,168 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
         
     return hdu.data
 
+def bin_obs_data( in_obs_data, image_size = 100, npix=100 ):
+    
+    obs_data = in_obs_data.copy()
+    
+    g = np.sqrt( obs_data['gamma1']**2 + obs_data['gamma2']**2)
+
+    ell = 2.*g/(1+g**2)
+
+    obs_data['gamma1'] = 2.*obs_data['gamma1']/(1.+g**2)
+    obs_data['gamma2'] = 2.*obs_data['gamma2']/(1.+g**2)
+
+    
+
+    delta_ra, delta_dec = ra_dec_to_simulation_image_pos( obs_data )
+
+
+    e1_radec, e2_radec = bin2d( 
+                delta_ra, delta_dec, 
+                v=(obs_data['gamma1'], obs_data['gamma2']),
+                npix=npix,
+                extent=[
+                    -image_size//2,image_size//2,-image_size//2,image_size//2
+                ]
+            )
+
+    ngal = bin2d( 
+                delta_ra, delta_dec, 
+                v=None,
+                npix=npix,
+                extent=[
+                    -image_size//2,image_size//2,-image_size//2,image_size//2
+                ]
+            )
+
+    max_val = np.max([
+        e1_radec, e2_radec
+    ])
+    min_val = np.min([
+        e1_radec, e2_radec
+    ])
+    e1_radec -= min_val 
+    e1_radec /= max_val 
+
+    e2_radec -= min_val 
+    e2_radec /= max_val 
+
+    return {'e1':e1_radec, 'e2':e2_radec, 'ngal':ngal,'delta_ra':delta_ra,'delta_dec':delta_dec}
+
+
+def ra_dec_to_simulation_image_pos( 
+    obs_data, 
+    fov_sim=2e3*units.kpc, 
+    jwst_pixel_size = 0.02*units.arcsecond, 
+    zl = 0.305,
+    pixel_size_kpc = 20.*units.kpc,
+    image_size = 100,
+    ra_0=None, dec_0=None,
+    ):
+    
+
+
+    conversion = (1.*units.radian.to(units.arcsecond)/Planck18.angular_diameter_distance(zl).to(units.kpc))
+    
+    pixel_size_arc = conversion*pixel_size_kpc
+
+    fov_sim_arcsec = fov_sim * conversion / 2.
+    
+    if ra_0 is None:
+        ra_0 = np.median(obs_data['x']) 
+    if dec_0 is None:
+        dec_0 = np.median(obs_data['y']) 
+    delta_ra = (obs_data['x'] - ra_0)*jwst_pixel_size 
+    delta_dec = (obs_data['y'] - dec_0)*jwst_pixel_size
+
+    #rescale them to be between 0 and 2 Mpc
+    delta_ra /= fov_sim_arcsec / (image_size//2)
+    delta_dec /= fov_sim_arcsec / (image_size//2)
+    
+    return delta_ra.value, delta_dec.value
+
+
+def rebin(arr, Q):
+    """
+    Rebin an array of shape (N, M, P, P) to (N, M, Q, Q)
+    using block-wise averaging.
+
+    Parameters
+    ----------
+    arr : ndarray
+        Input array of shape (N, M, P, P).
+    Q : int
+        Desired output size of the last two dimensions.
+
+    Returns
+    -------
+    ndarray
+        Rebinned array of shape (N, M, Q, Q).
+    """
+    N, M, P1, P2 = arr.shape
+    if P1 != P2:
+        raise ValueError("Last two dimensions must be square.")
+    if P1 % Q != 0:
+        raise ValueError("P must be divisible by Q.")
+
+    factor = P1 // Q
+
+    coarse =  arr.reshape(
+        N, M,
+        Q, factor,
+        Q, factor
+    ).mean(axis=(3, 5))
+
+    return np.repeat(
+        np.repeat(coarse, factor, axis=2),
+        factor, axis=3
+    )
+
+def resize_data( 
+    new_resolution, 
+    fiducual_res=100,
+    dir_path="/Users/davidharvey/Work/Dark_Matter_DA/code_nature/data/"
+    ):
+    '''
+    A referee asked to see depenence on the resolution of the image
+    so i need to rebin the images. but i want to do this at the last stage
+    so i dont FFT on low res images
+    '''
+
+        
+    
+    # Only create data that i have to
+    for root, _, files in os.walk(dir_path):
+        if not 'convergence' in root:
+            if len(files) == 0:
+                continue
+            for ifile in files:
+                
+                newroot = root.replace("code_nature/data",f"code/data/{int(new_resolution)}")
+                
+                if not os.path.isdir(f"{newroot}"):
+                    os.system(f"mkdir -p {newroot}")    
+                
+                if 'pkl' in ifile:
+                    old_path = f"{root}/{ifile}"
+                    meta, data = pkl.load(open(old_path,"rb"))
+                    new_data = rebin( data, new_resolution)
+
+                    new_path = f"{newroot}/{ifile}"
+                    
+                    if new_path == old_path:
+                        raise ValueError("Overwriting original data")
+                        
+                    pkl.dump([meta, new_data], 
+                             open(new_path, "wb")
+                            )
+                    
+
+    
+    
 if __name__ == "__main__":
     #Base models - h=1 since we want them statistically the same
-    main( search_path="data/convergence/*.pkl", h=0.7, sample_data=False )
+    main( search_path="data/100/convergence/*.pkl", h=0.7, sample_data=False )
     #Final data, h=0.7 so that the data is correct for final outputs
-    main( search_path="data/convergence/*.pkl", h=0.7, sample_data=True, data_dir='data/a2744' )
+    main( search_path="data/100/convergence/*.pkl", h=0.7, sample_data=True, data_dir='data/100/a2744' )
    

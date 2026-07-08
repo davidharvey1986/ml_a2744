@@ -10,10 +10,12 @@ from collections import defaultdict
 from lenspack.utils import sigma_critical
 from astropy import cosmology
 from scipy.stats import chi, norm
+from scipy.ndimage import zoom
 
 def get_cross_section_from_filename(filename):
     base_name = os.path.basename(filename)
     name = os.path.splitext(base_name)[0].lower()
+    
     if "cdm" in name or "flamingo" in name:
         return 0.0
     matches = re.findall(r"_(\d+\.\d+|\d+)", name)
@@ -232,22 +234,42 @@ def prepare_dataloaders(args):
     #data/a2744 - all the data from JWST a2744 unconvers data
     
     domain_patterns = {
-        "bahamas":"shear/bahamas*", #idealised simulations that include shear - main source training data
-        "darkskies":"shear/darkskies*", #idealised simulations that include shear - main target data
-        "test":"obs/test_set/*", #independent test sets including tng, flamingo and darkskies 0.07
-        "darkskies_obs":f"obs/{args.jwst_filter}/darkskies*", #idealised simulations projected on to the source galaxy positions of A2744 
-        "bahamas_obs":f"obs/{args.jwst_filter}/bahamas*", #idealised simulations projected on to the source galaxy positions of A2744 
-        "a2744":f"a2744/obs_data_{args.jwst_filter}*", #actual data as measured from a2744 JWST with 1000 rotated noise configurations
-        "highmass":"obs/highmass/darkskies*", # halos with a mass > 8e14
-        "tng_obs":f"obs/{args.jwst_filter}/tng*",
-        "flamingo_obs":f"obs/{args.jwst_filter}/flamingo*",
+        "bahamas":f"{args.image_size}/shear/bahamas*", #idealised simulations that include shear - main source training data
+        "darkskies":f"{args.image_size}/shear/darkskies*", #idealised simulations that include shear - main target data
+        "test":f"{args.image_size}/obs/test_set/*", #independent test sets including tng, flamingo and darkskies 0.07
+        "darkskies_obs":f"{args.image_size}/obs/{args.jwst_filter}/darkskies*", #idealised simulations projected on to the source galaxy positions of A2744 
+        "bahamas_obs":f"{args.image_size}/obs/{args.jwst_filter}/bahamas*", #idealised simulations projected on to the source galaxy positions of A2744 
+        "a2744":f"{args.image_size}/a2744/obs_data_{args.jwst_filter}*", #actual data as measured from a2744 JWST with 1000 rotated noise configurations
+        "highmass":f"{args.image_size}/obs/highmass/darkskies*", # halos with a mass > 8e14
+        "tng_obs":f"{args.image_size}/obs/{args.jwst_filter}/tng*",
+        "flamingo_obs":f"{args.image_size}/obs/{args.jwst_filter}/flamingo*",
+        "flamingo_agn":f"{args.image_size}/obs/{args.jwst_filter}/flamingo_test_hiest.pkl",
+        "flamingo_hires":f"{args.image_size}/obs/{args.jwst_filter}/flamingo_test_hiresdm.pkl",
+        "darkskies_vd":f"{args.image_size}/obs/{args.jwst_filter}/vd_darkskies.pkl",
+        "bahamas_vd":f"{args.image_size}/obs/{args.jwst_filter}/vd_bahamas.pkl"
     }
 
-    if args.source_domain not in domain_patterns or args.target_domain not in domain_patterns:
-        raise ValueError(f"Source and target domains must be one of: {list(domain_patterns.keys())}")
+    if args.source_domain not in domain_patterns:
+        source_pattern = args.source_domain 
+        if args.verbose:
+            print("Source and target not in list, using as input")
+    else:   
+        source_pattern = domain_patterns[args.source_domain]
+        
+        
+    if args.target_domain not in domain_patterns:
+        target_pattern = args.target_domain
+        if args.verbose:
+            print("Source and target not in list, using as input")
+    else:
+        target_pattern = domain_patterns[args.target_domain]
 
-    source_pattern = domain_patterns[args.source_domain]
-    target_pattern = domain_patterns[args.target_domain]
+        
+              
+    
+        #raise ValueError(f"Source and target domains must be one of: {list(domain_patterns.keys())}")
+
+        
 
     if args.aug_rotation_prob > 0:
         train_transform = transforms.Compose([
@@ -279,8 +301,10 @@ def prepare_dataloaders(args):
         
     test_transform = transforms.Compose([
             rescale_lens_source_configuration(args),
+            cluster_member_contamination( args ),
             apply_shape_measurement_bias(args.shape_measurement_bias),
             apply_intrinsic_ell( args.apply_intrinsic_ell,  args.jwst_filter),
+            Downsample(args)
     ])
     
     temp_source_dataset = [
@@ -417,7 +441,7 @@ class apply_intrinsic_ell(object):
                         with scipy
         '''
         
-        home="pickles"
+        home="/Users/davidharvey/Work/Dark_Matter_DA/code/notebooks/pickles"
         #Intrinsic ell here is the intrinsic ellipticity for a single component.
         data_dict = pickle.load( open(f"{home}/ngal_{jwst_filter}.pkl","rb") )
         self.ngal = data_dict['ngal']
@@ -487,10 +511,125 @@ class apply_shape_measurement_bias( object ):
         sample[1] += self.bias['e2']['c'] + self.bias['e2']['m']*sample[1]
         
         return sample
-  
 
+    
+
+import numpy as np
+from scipy.ndimage import zoom
+
+
+import torch
+import torch.nn.functional as F
+
+
+class Downsample:
+    """
+    Downsample an image and then upsample back to the
+    original size.
+
+    Example:
+        128x128 -> 32x32 -> 128x128
+    """
+
+    def __init__(self, args):
+
+        self.image_size = int(args.image_size)
+        self.downsample = int(args.downsample)
+
+        if self.downsample < 1:
+            raise ValueError(
+                "downsample must be >= 1"
+            )
+
+        if self.image_size % self.downsample != 0:
+            raise ValueError(
+                "image_size must be divisible by downsample"
+            )
+
+        self.apply = self.downsample != 1
+
+        self.small_size = (
+            self.image_size // self.downsample
+        )
+
+    def process_image(self, image):
+
+        if not self.apply:
+            return image
+
+        # ensure tensor
+        if not torch.is_tensor(image):
+            image = torch.tensor(
+                image,
+                dtype=torch.float32
+            )
+
+        # add batch + channel dimensions
+        # (H,W) -> (1,1,H,W)
+        image = image.unsqueeze(0).unsqueeze(0)
+
+        # downsample using area averaging
+        image = F.interpolate(
+            image,
+            size=(self.small_size, self.small_size),
+            mode='area'
+        )
+
+        # upsample back
+        image = F.interpolate(
+            image,
+            size=(self.image_size, self.image_size),
+            mode='bilinear',
+            align_corners=False
+        )
+
+        # remove batch + channel dimensions
+        image = image.squeeze(0).squeeze(0)
+
+        return image
+
+    def __call__(self, sample):
+
+        sample[0] = self.process_image(sample[0])
+        sample[1] = self.process_image(sample[1])
+
+        return sample
+
+    
+class cluster_member_contamination( object ):
+    '''
+    Mock cluster member contamination
+    '''
+    
+    def __init__( self, args ):
         
+        if args.cluster_member_contamination > 1.0:
+            raise ValueError("Contimanation cannot be greater than 1")
+            
+        if args.cluster_member_contamination == 0:
+            self.apply = False
+        else:
+            self.cluster_member_contamination = args.cluster_member_contamination
+            self.apply = True
+            
+    def __call__( self, sample ):
         
+        if self.apply:
+            #mag = np.sqrt(sample[0]**2 + sample[1]**2)
+            
+            #dilution = mag/torch.max(mag)*self.cluster_member_contamination
+            
+            dilution = self.cluster_member_contamination
+             
+            sample[0] = sample[0]*(1-dilution)
+            sample[1] = sample[1]*(1-dilution)
+            
+            
+        return sample
+            
+    
+    
+    
 class rescale_lens_source_configuration( object ):
     '''
     When creating the data it assumes that zs=1.36, zl=0.15
@@ -504,7 +643,9 @@ class rescale_lens_source_configuration( object ):
         default_zl = 0.305
         default_zs = 1.65
         
-        if (args.apply_intrinsic_ell == 0) or ( (args.zl==default_zl) & (args.zs==default_zs)):
+        if (args.apply_intrinsic_ell == 0) or ( 
+            (np.atleast_2d(args.zl).min()==default_zl) & 
+                 (np.atleast_2d(args.zs).min()==default_zs)):
             self.apply = False
         else:
             self.apply = True
@@ -513,15 +654,15 @@ class rescale_lens_source_configuration( object ):
             
             sigma_crit = sigma_critical(self.zl, self.zs, cosmology.Planck18).value
             
-            self.rescale = sigma_crit_fid/sigma_crit
+            self.rescale = torch.tensor(
+                sigma_crit_fid/sigma_crit, dtype=torch.float32
+            )
             
             
     def __call__( self, sample):
         
         if self.apply:
-            
             sample *= self.rescale
-            
             return sample
         else:
             return sample
