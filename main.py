@@ -185,7 +185,7 @@ def main(args=None) -> None:
 
             current_target_accuracy = target_test_results.get("target_test_accuracy", 0)
             current_target_f1 = target_test_results.get("target_test_f1", 0)
-            current_align = source_val_results['cdm_threshold'] - target_test_results['cdm_threshold']
+            current_align = torch.abs(source_val_results['cdm_threshold'] - target_test_results['cdm_threshold'])
             print(f"CDM Alignment: {current_align:0.4f}")
                 
             if current_target_accuracy > best_target_accuracy:

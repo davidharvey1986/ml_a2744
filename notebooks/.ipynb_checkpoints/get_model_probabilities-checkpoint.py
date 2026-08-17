@@ -10,6 +10,12 @@ color_ds = \
  '1.00':'grey'
 }
 
+import matplotlib.colors as mcolors
+import matplotlib as mpl
+from matplotlib.patches import FancyArrowPatch
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+from matplotlib import gridspec
 from scipy.optimize import curve_fit
 from matplotlib.path import Path
 import matplotlib.patches as patches
@@ -18,6 +24,8 @@ from scipy.stats import chi, norm, cauchy
 from astropy.io import fits
 from astropy import units
 from astropy.cosmology import Planck18
+from scipy.stats import gaussian_kde
+from matplotlib.ticker import LinearLocator
 
 from getColorFromRange import colourFromRange
 import torch
@@ -30,12 +38,10 @@ from dataset import prepare_dataloaders, get_cross_section_from_filename, sigma_
 from model import create_model
 from train import evaluate, train_epoch
 from utils import parse_args, set_seed, setup_wandb, calculate_class_weights
-from add_shear_to_data import *
-
 
 import numpy as np
 from matplotlib import pyplot as plt
-#from netloader.network import Network
+from netloader.network import Network
 from torchvision.models import (
     ResNet18_Weights, resnet18, ResNet34_Weights, resnet34,
     MobileNet_V3_Small_Weights, mobilenet_v3_small,
@@ -59,12 +65,11 @@ from matplotlib.ticker import FuncFormatter
 
 from pyRRG.calc_shear import calc_shear
 from RRGtools import run_match
-
-zs = {
-    'f115w':1.36,
-    'f150w':1.56,
-    'concat':1.46
-}
+from add_shear_to_data import get_obs_data, bin_obs_data, ra_dec_to_simulation_image_pos, get_source_redshift
+from scipy.stats import binned_statistic_2d,binned_statistic
+from scipy.special import logsumexp
+from scipy.integrate import cumulative_trapezoid
+from scipy.ndimage import zoom
 
 colour_scheme = {
     'darkskies':"#E69F00",  # orange
@@ -77,200 +82,60 @@ vec = np.arange(100)-49.5
 xg, yg = np.meshgrid(vec*20.,vec*20.)
 rgrid = np.sqrt(xg**2 + yg **2)
 
-
-def remove_cluster_members( cat_raw, photoz):
-    
-    combined = run_match( cat_raw, photoz)
-
-    all_cat = fits.open(cat_raw)[1].data
-    
-
-    cluster_numbers = combined[1].data['NUMBER_1'][ combined[1].data['z'] < 0.4]
-    
-    all_numbers = all_cat['NUMBER']
-    
-    keep_numbers = np.array([ np.where(i==all_numbers)[0][0] for i in all_numbers if i not in cluster_numbers ])
-    
-    nremove = cluster_numbers.shape[0]
-    
-
-    
-
-
-    return all_cat[ keep_numbers ]
-    
-    
-    
-def ta( ifilter, cuts=None, data_dir='data/' ):
-    
-    # Cuts already taken during the WL process - verified.
-    cuts = {
-        'size_cut':[2,200],
-        'signal_noise_cut':0,
-        'stat_type':'median',
-        'mag_cut':[0,30],
-        'verbose':False
-    }     
-    
-    if ifilter == 'concat':
-
-        cat_a_name =     f"{data_dir}/a2744_f115w_filtered.fits"
-        cat_b_name =     f"{data_dir}/a2744_f150w_filtered.fits"
-        obs_data = combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' )
-        fits.writeto(  f"{data_dir}/a2744_concat_filtered.fits", obs_data, overwrite=True) 
-        
-    else:
-        shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears"
-        obs_data = fits.open(shear_cat)[1].data
-
-        calc_shear(
-            obs_data, 
-            f"{data_dir}/a2744_{ifilter}_filtered.fits", 
-            **cuts
-        )
-
-        obs_data = fits.open(
-            f"{data_dir}/a2744_{ifilter}_filtered.fits"
-        )[1].data
-        
-    return obs_data
-def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
-    
-    cat_a = fits.open(cat_a_name)[1].data
-    cat_b = fits.open(cat_b_name)[1].data
-   
-    matched_cat = run_match(cat_a_name, cat_b_name)[1].data
-
-    extra_cat_a =  np.array([
-        i for i in range(cat_a.shape[0]) if cat_a['NUMBER'][i] not in matched_cat['NUMBER_1'] 
-    ])
-    extra_cat_b =  np.array([
-        i for i in range(cat_b.shape[0]) if cat_b['NUMBER'][i] not in matched_cat['NUMBER_2'] 
-    ]) 
-    
-
-    
-    concat_gamma_1 = ( matched_cat['gamma1_1'] +matched_cat['gamma1_2'])/2. 
-    concat_gamma_2 = ( matched_cat['gamma2_1'] +matched_cat['gamma2_2'])/2. 
-    
-    concat_e_1 = ( matched_cat['e1_1'] +matched_cat['e1_2'])/2. 
-    concat_e_2 = ( matched_cat['e2_1'] +matched_cat['e2_2'])/2. 
-    
-    
-    
-    if 'z_1' in list(matched_cat.dtype.names):
-        z = matched_cat['z_1']
-    
-    
-    ra = matched_cat['ra_1']
-    dec = matched_cat['dec_1']
-    
-    final_x = np.concatenate([
-        matched_cat['x_1'],
-        cat_a['x'][ extra_cat_a ],
-        cat_b['x'][ extra_cat_b ]
-    ])
-    
-      
-    final_y = np.concatenate([
-        matched_cat['y_1'],
-        cat_a['y'][ extra_cat_a ],
-        cat_b['y'][ extra_cat_b ]
-    ])
-        
-    final_g1 = np.concatenate([
-        concat_gamma_1,
-        cat_a['gamma1'][ extra_cat_a ],
-        cat_b['gamma1'][ extra_cat_b ]
-    ])
-    
-    final_g2 = np.concatenate([
-        concat_gamma_2,
-        cat_a['gamma2'][ extra_cat_a ],
-        cat_b['gamma2'][ extra_cat_b ]
-    ])
-    
-    final_e1 = np.concatenate([
-        concat_e_1,
-        cat_a['e1'][ extra_cat_a ],
-        cat_b['e1'][ extra_cat_b ]
-    ])
-    
-    final_e2 = np.concatenate([
-        concat_e_2,
-        cat_a['e2'][ extra_cat_a ],
-        cat_b['e2'][ extra_cat_b ]
-    ])  
-    
-    final_ra = np.concatenate([
-        concat_e_2,
-        cat_a['ra'][ extra_cat_a ],
-        cat_b['ra'][ extra_cat_b ]
-    ])  
-        
-    final_dec = np.concatenate([
-        concat_e_2,
-        cat_a['dec'][ extra_cat_a ],
-        cat_b['dec'][ extra_cat_b ]
-    ]) 
-    
-    if 'z_1' in list(matched_cat.dtype.names):
-        final_z = np.concatenate([
-            z,
-            cat_a['z'][ extra_cat_a ],
-            cat_b['z'][ extra_cat_b ]
-        ]) 
-        
+class args:
+    pretrained=True
+    in_channels=2
+    adaptation='cdan'
+    use_mixup=False
+    mixup_strategy=False
+    weighting_scheme='inverse_frequency'
+    aug_h_flip_prob=0.5
+    aug_v_flip_prob=0.5
+    aug_rotation_degrees=360
+    aug_rotation_prob=1.
+    image_size=100
+    aug_crop_scale_min=0.9
+    aug_crop_scale_max=1.1
+    data_dir='../data/'
+    aug_crop_prob=0.5
+    use_log_transform=False
+    use_normalization=False
+    train_split=0.8
+    batch_size=32
+    num_workers=0
+    cnn_base_channels=32
+    mass_index=0
+    dtypes=['image']
+    meta_names=[]
+    device="MPS"
+    num_avgpool_head=1
+    domain_discriminator=None
+    num_avgpool_head=1
+    source_domain='a2744'
+    target_domain='darkskies_obs'
+    model="squeezenet1_1"
+    verbose=False
+    shape_measurement_bias = {
+        'e1':{'c':0, 'm':0},
+        'e2':{'c':0, 'm':0}
+    }
+    seed=10
+    zl=0.305
+    apply_intrinsic_ell=1
+    jwst_filter='concat'
+    med_norm = -1
+    ignore_dataset=['']
+    unbalance=False
+    log_mass_cut=0
+    downsample=1
+    cluster_member_contamination=0.
+    zs=get_source_redshift(jwst_filter)
+    default_zl = 0.305
+    default_zs = 1.77
+    print(f"Source redshift:{zs}")
 
 
 
-
-
-        obs_data = {'x':final_x, 
-                'y':final_y, 
-                'gamma1':final_g1, 
-                'gamma2':final_g2,
-                'e1':final_e1, 
-                'e2':final_e2,
-                'RA':final_ra,
-                'DEC':final_dec,
-                    'z':final_z,
-                'NUMBER':np.arange(final_dec.shape[0])+1
-
-               }
-
-    else:
-        
-
-
-
-
-
-        obs_data = {'x':final_x, 
-                'y':final_y, 
-                'gamma1':final_g1, 
-                'gamma2':final_g2,
-                'e1':final_e1, 
-                'e2':final_e2,
-                'RA':final_ra,
-                'DEC':final_dec,
-                'NUMBER':np.arange(final_dec.shape[0])+1
-               }   
-    new_cols = []
-    for ikey in obs_data.keys():
-            new_cols.append(
-                fits.Column(
-                    name=ikey,
-                    format=obs_data[ikey].dtype,
-                    array=obs_data[ikey]
-                ))
-    hdu = fits.BinTableHDU.from_columns(new_cols)
-        
-        
-    return hdu.data
-    
-    
-    
     
 def get_probabilities( 
         target_domain,
@@ -328,11 +193,18 @@ def get_probabilities(
 
                 data = [ i[idx] for i in all_data ]
 
-            
+                if data[0].shape[0] == 1:
+                    if args.verbose:
+                        print("Only 1 sample skipping batch")
+                    continue
+                else:
+                    if args.verbose:
+                        print(f"Testting {data[0].shape[0]} in batch ")
 
-
-                outputs_dict = imodel(data)
-
+                try:
+                    outputs_dict = imodel(data)
+                except:
+                    raise ValueError(f"Data issue - what is the shape? {data[0].shape}")
                 
                 binary_labels = binary_labels.to(device)
                 targets = binary_labels
@@ -436,6 +308,7 @@ def plot_predictions(
                 torch.mean(prob[:,0]),
                 torch.mean(prob[:,0])
             ],[0,2*ax.get_ylim()[1]],'k--')
+            print(f"{icross}: {torch.mean(prob[:,0])}")
             ax.plot([
                     0.5, 0.5
             ],[0,2*ax.get_ylim()[1]],'k:')
@@ -477,59 +350,12 @@ def get_temp_args(noisey=True):
         args.intrinsic_ell = 0.
         return args
     
-class args:
-    pretrained=True
-    in_channels=2
-    adaptation='cdan'
-    use_mixup=False
-    mixup_strategy=False
-    weighting_scheme='inverse_frequency'
-    aug_h_flip_prob=0.5
-    aug_v_flip_prob=0.5
-    aug_rotation_degrees=360
-    aug_rotation_prob=1.
-    image_size=100
-    aug_crop_scale_min=0.9
-    aug_crop_scale_max=1.1
-    data_dir='../data/'
-    aug_crop_prob=0.5
-    use_log_transform=False
-    use_normalization=False
-    train_split=0.8
-    batch_size=32
-    num_workers=0
-    cnn_base_channels=32
-    mass_index=0
-    dtypes=['image']
-    meta_names=[]
-    device="MPS"
-    num_avgpool_head=1
-    domain_discriminator=None
-    num_avgpool_head=1
-    source_domain='a2744'
-    target_domain='darkskies_obs'
-    model="squeezenet1_1"
-    verbose=False
-    shape_measurement_bias = {
-        'e1':{'c':0, 'm':0},
-        'e2':{'c':0, 'm':0}
-    }
-    seed=10
-    zl=0.305
-    zs=1.36
-    apply_intrinsic_ell=1
-    jwst_filter='concat'
-    med_norm = -1
-    ignore_dataset=['']
-    unbalance=False
-    log_mass_cut=0
-    
 
           
     
 def get_threshold_for_cross( results_list, dataset=None, function=np.mean,  
                             mass_cut=None, quiet=True, integrated_mass=False, 
-                            mass_weights=None, h=0.7):
+                            mass_weights=None, h=0.7, ncomponents=None):
     '''
     For the output of 
     get_probabilities
@@ -553,11 +379,12 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
         
         if integrated_mass:
             zl = 0.305
-            zs = 1.65
+            zs = get_source_redshift('concat')
             
             critical_kappa = lenspack.utils.sigma_critical(zl, zs, Planck18).to(units.Msun/units.kpc/units.kpc)
             
-            
+    components = {}
+        
     for ir, results in enumerate(results_list):
         unique_cross =  torch.unique(results['all_cross_sections'])
         thresholds = []
@@ -574,15 +401,8 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
                 if mass_cut is not None:
                     icross_lab = str(icross)
                     if icross_lab not in list(mass_data.keys()):
-                        if icross != 0:
-                            pklfile = glob(f"../data/shear/{dataset}_{icross:0.1g}*.pkl")[0]
-
-                        elif dataset in ['flamingo','tng']:
-                            pklfile = f"../data/shear/{dataset}.pkl"
-                        else:
-                            pklfile = f"../data/shear/{dataset}_cdm.pkl"
-
-                        meta, data = pkl.load(open(pklfile,'rb'))
+                              
+                        meta, data = get_dataset_meta(dataset, icross)
 
                         if integrated_mass:
                             pixelsize=20e-2
@@ -592,17 +412,34 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
                         else:
                             mass_data[icross_lab] = meta['mass']
                         
-                    
+                        components[ icross_lab ] = meta['ncomponents']
+                        
                     mass = mass_data[icross_lab][ results['indexes'][(icross == results['all_cross_sections'][0])]]
-                    
-                    mass_indexes = (mass > mass_cut[0]) & (mass < mass_cut[1])
+    
+                    this_components = components[ icross_lab ][ results['indexes'][(icross == results['all_cross_sections'][0])]]
+  
+                    if ncomponents is not None:
+                        mass_indexes = (mass > mass_cut[0]) & (mass < mass_cut[1]) & (this_components > ncomponents)
+                    else:
+                        mass_indexes = (mass > mass_cut[0]) & (mass < mass_cut[1])
+                elif ncomponents is not None:
+                    icross_lab = str(icross)
 
+                    if icross_lab not in list(components.keys()):
+                        meta, data = get_dataset_meta( dataset, icross)
+                        
+                        components[ icross_lab ] = meta['ncomponents']
+                               
+                    this_components = components[ icross_lab ][ results['indexes'][(icross == results['all_cross_sections'][0])]]
+                    
+                    mass_indexes =  this_components > ncomponents
+  
                 else:
                     mass_indexes = np.ones(results['indexes'][(icross == results['all_cross_sections'][0])].shape[0])==1
-                
+                    
+         
                 prob =  results['probabilities'][ icross == results['all_cross_sections'], : ][mass_indexes,:]
                 
-        
                 probs  = prob[:,0].detach().numpy()
 
                 
@@ -641,36 +478,19 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
             'indexes':all_indexes
             }
 
-
-def ra_dec_to_simulation_image_pos( 
-    obs_data, 
-    fov_sim=2e3*units.kpc, 
-    jwst_pixel_size = 0.02*units.arcsecond, 
-    zl = 0.305,
-    pixel_size_kpc = 20.*units.kpc,
-    image_size = 100
-    ):
+def get_dataset_meta( dataset, icross ):
+    if dataset.endswith('vd'):
+        pklfile = f"../data/100/shear/vd_{dataset[:-2]}.pkl"
+    elif icross != 0:
+        pklfile = f"../data/100/shear/{dataset}_{icross:0.1g}.pkl"
+    elif dataset in ['flamingo','tng']:
+        pklfile = f"../data/100/shear/{dataset}.pkl"
+    else:
+        pklfile = f"../data/100/shear/{dataset}_cdm.pkl"
     
+    return pkl.load(open(pklfile,'rb'))
 
-
-    conversion = (1.*units.radian.to(units.arcsecond)/Planck18.angular_diameter_distance(zl).to(units.kpc))
-    
-    pixel_size_arc = conversion*pixel_size_kpc
-
-    fov_sim_arcsec = fov_sim * conversion / 2.
-    
-
-    ra_0 = np.median(obs_data['x']) 
-    dec_0 = np.median(obs_data['y']) 
-    delta_ra = (obs_data['x'] - ra_0)*jwst_pixel_size 
-    delta_dec = (obs_data['y'] - dec_0)*jwst_pixel_size
-
-    #rescale them to be between 0 and 2 Mpc
-    delta_ra /= fov_sim_arcsec / (image_size//2)
-    delta_dec /= fov_sim_arcsec / (image_size//2)
-    
-    return delta_ra.value, delta_dec.value
-
+   
 def get_kappa( all_cats, smooth=1, extent=None, correct_for_ngal=False):
 #set the resolution of the map 
 
@@ -679,7 +499,7 @@ def get_kappa( all_cats, smooth=1, extent=None, correct_for_ngal=False):
 
     e1_radec, e2_radec = lenspack.utils.bin2d( 
         all_cats['x'], all_cats['y'], 
-        v=(all_cats['gamma1'], all_cats['gamma2']),
+        v=(2.*all_cats['gamma1'], 2.*all_cats['gamma2']),
         npix=npix, extent=extent
     )
     
@@ -694,55 +514,13 @@ def get_kappa( all_cats, smooth=1, extent=None, correct_for_ngal=False):
    
     
     ke_radec, kb_radec = lenspack.image.inversion.ks93( e1_radec, e2_radec)
+    if smooth > 0:
+        kappa_e_map = gaussian_filter(ke_radec,smooth)
+        kappa_b_map = gaussian_filter(kb_radec,smooth)
+        return kappa_e_map, kappa_b_map
+    else:
+        return ke_radec, kb_radec
 
-    kappa_e_map = gaussian_filter(ke_radec,smooth)
-    kappa_b_map = gaussian_filter(kb_radec,smooth)
-    return kappa_e_map, kappa_b_map
-
-
-def get_src_target_thresholds( jwst_filter, list_of_models=None ):
-    
-    if list_of_models is None:
-        list_of_models = np.sort(glob(
-            f"../models/{jwst_filter}/cdan_adapt_pre_squeezenet1_aw_4.0_pad_rot_1_shear_avgpool_gauss_seed_*_final_ft_70_best_finetuned.pth"
-        ))
-
-    if len(list_of_models) == 0:
-        raise ValueError("No models found for this jwst_filter")
-        
-    filter_stats = {
-        'f150w':{'zl':1.56, 'intrinsic_ell':0.25},
-        'f115w':{'zl':1.36, 'intrinsic_ell':0.25},
-        'concat':{'zl':1.46, 'intrinsic_ell':0.25}
-    }
-    
-    if jwst_filter not in list(filter_stats.keys()):
-        raise ValueError("No stats for this jwst_filter")
-        
-    args.intrinsic_ell = 0.25
-    args.jwst_filter = jwst_filter
-    
-    test_domain = "darkskies_obs"
-    tgt_results = get_probabilities( 
-                test_domain,
-                list_of_models,
-                args
-    )
-    tgt = get_threshold_for_cross(tgt_results, function=np.mean)
-
-    test_domain = "bahamas_obs"
-    src_results = get_probabilities( 
-                test_domain,
-                list_of_models,
-                args
-    )
-
-    
-    src = get_threshold_for_cross(src_results, function=np.mean)
-
-    return {'src_results':src_results, 'src_thresholds':src,
-            'tgt_results':tgt_results, 'tgt_thresholds':tgt
-           }
 
 def get_nsigma( value, dist, statistic='median'):
     xcum = np.sort( dist)
@@ -852,10 +630,11 @@ def plot_observations( filename, ifilter,
             nsigma=3.
         
         err = [error*nsigma + means, means - error*nsigma ]
-
+        print(err)
+        
         if ifilter == 'concat':
             if not noise:
-                ax.text( 0.002,means,"A2744 UNCOVERS DATA", ha='left',va='bottom', fontsize=12)
+                ax.text( 0.002,means,"A2744 UNCOVER DATA", ha='left',va='bottom', fontsize=12)
                 ax.text( 0.002,err[1],f"{iunc}\% Uncertainty", ha='left',va='bottom', fontsize=12)
 
         if not noise:
@@ -868,7 +647,11 @@ def plot_observations( filename, ifilter,
         ax.legend()
         
 def get_latent_space( model_list,
-                    quiet=False):
+                     bias=[0,0],
+                    quiet=False,
+                    args=None,
+                    targets=['source_val','target_test'],
+                    ):
     
     if not isinstance(model_list, list):
         model_list = [model_list]
@@ -883,9 +666,13 @@ def get_latent_space( model_list,
         
     args.source_domain = 'bahamas_obs'
     args.target_domain = 'darkskies_obs'
+    args.apply_intrinsic_ell = 1.0
+    obs_meta, obs_data = pkl.load(open(f"../data/100/a2744/obs_data_concat.pkl","rb"))
+        
+    obs_data[0,0,:,:] += bias[0]
+    obs_data[0,1,:,:] += bias[1]
+  
     
-    obs_meta, obs_data = pkl.load(open(f"../data/a2744/obs_data_concat.pkl","rb"))
-
     this_latent = []
     this_cross = []
             
@@ -909,24 +696,25 @@ def get_latent_space( model_list,
         
             dataloaders = prepare_dataloaders(args)
 
-            for test_set in ['source_val','target_test']:
-
-                all_data = [ [ j[0] for j in i ] for i in dataloaders[test_set]  ]
+            for test_set in targets:
+                target_latent = []
+                target_cross = []
 
                 for idx, batch_data in enumerate(dataloaders[test_set][0]):
 
                     data, cross_sections, binary_labels, file_idx, image_idx = batch_data
 
+                    
+                    target_latent.append(imodel.backbone(data)[:,:,0,0])
+                    target_cross.append(cross_sections.cpu())
+                this_latent.append(torch.cat(target_latent))
+                this_cross.append(torch.cat(target_cross))
 
-                    this_latent.append(imodel.backbone(data)[:,:,0,0])
-                    this_cross.append(cross_sections.cpu())
 
 
+            latent_spaces.append(this_latent)
 
-
-            latent_spaces.append(torch.cat(this_latent))
-
-            all_cross.append(torch.cat(this_cross))
+            all_cross.append(this_cross)
 
     return {
         "all_cross_sections" : all_cross ,
@@ -964,16 +752,136 @@ def get_mass_cut( ifilter, zl=0.305, zs=1.6, thresh = 0., nsigma=2, study='harve
     positive_mass = np.sum(gaussian_filter(ke[ke/np.std(kb)>thresh],2) * critical_density * (20*units.kpc)**2 )
     err_mass_per_pixel = np.std(gaussian_filter(kb[ke/np.std(kb)>thresh],2) * critical_density * (20*units.kpc)**2 ).value
 
-
-
-
     err_mass = len(kb[ke/np.std(kb)>thresh])*err_mass_per_pixel
     mass_cut = [ 
-        np.log10(positive_mass.value - err_mass/2.),
-        np.log10(positive_mass.value + err_mass/2.)
+        np.log10(positive_mass.value - err_mass),
+        np.log10(positive_mass.value + err_mass)
     ]
     
     return np.log10(positive_mass.value), mass_cut
+
+def gp_invert( gp, threshold):
+    sigma_grid = np.logspace(-6, 2, 10000)
+
+    X_grid = np.log10(sigma_grid).reshape(-1,1)
+
+    y_pred, y_std = gp.predict(
+        X_grid,
+    return_std=True
+    )
+
+    if isinstance(threshold, float):
+        loglike = norm.logpdf(
+                threshold,
+                loc=y_pred,
+                scale=y_std*2
+            )
+        
+    else:
+        loglike= []
+        for i in threshold.flatten():
+            loglike.append(norm.logpdf(
+                i,
+                loc=y_pred,
+                scale=y_std*2
+            ))
+        loglike = np.array(loglike)
+            
+
+    return sigma_grid, loglike
+
+from sklearn.gaussian_process.kernels import (
+    ConstantKernel,
+    Matern,
+    WhiteKernel
+)
+from sklearn.gaussian_process import GaussianProcessRegressor
+
+def get_gaussian_process():
+    
+    kernel = (
+        ConstantKernel(1.0, (1e-3, 1e3))
+        *
+        Matern(
+            length_scale=0.3,
+            length_scale_bounds=(1e-2, 10),
+            nu=1.5
+        )
+        +
+        WhiteKernel(
+            noise_level=1e-3,
+            noise_level_bounds=(1e-6, 1e-1)
+        )
+    )
+
+    gp = GaussianProcessRegressor(
+        kernel=kernel,
+        alpha=1e-4
+    )
+
+    return gp
+
+def thresh_to_cross( thresh, ifilter='concat' ):
+    
+    models, probs = pkl.load(open("pickles/probs_for_cross_concat_nob1.pkl","rb"))
+    models, probabilities, probabilities_noise =pkl.load(open("pickles/model_on_data.pkl","rb"))
+    nmodels = probabilities[ifilter].shape[0]
+
+    gp = get_gaussian_process()
+    
+    all_thresholds = []
+    for imodel in range(nmodels):
+        #Get the X and y values for a given model
+        all_thresholds.append(1.-np.array([ np.mean(probs[i][imodel]) for i in probs.keys()]))
+
+    all_thresholds = np.array(all_thresholds)
+    thresholds = np.mean(all_thresholds,axis=0)
+    err = np.std(all_thresholds,axis=0)
+
+    cross = np.array([float(i) for i in probs.keys() ])
+
+    cdm_thresh = thresholds[ cross == 0]
+
+    err = err[ cross != 0 ]
+    thresholds = thresholds[ cross != 0 ]
+    cross = cross[ cross != 0]
+
+    #cross[cross==0] = 1e-3
+    cross = np.log10(cross)
+
+
+    gp.fit(cross.reshape(-1, 1), thresholds)
+    
+    
+    sigma_grid, loglike = gp_invert( gp, thresh )
+    
+    if isinstance(thresh, float):
+        
+        return sigma_grid[ np.argmax( loglike ) ]
+    else:
+        dim = thresh.shape
+        return np.array([ sigma_grid[ np.argmax( i ) ] for i in loglike ]).reshape(dim)
+
+    
+import umap
+import matplotlib.pyplot as plt
+
+
+def get_density( x,y):
+
+    kde = gaussian_kde(np.vstack([x, y]))
+
+    xmin, xmax = x.min(), x.max()
+    ymin, ymax = y.min(), y.max()
+
+    xx, yy = np.mgrid[
+        xmin:xmax:200j,
+        ymin:ymax:200j
+    ]
+
+    positions = np.vstack([xx.ravel(), yy.ravel()])
+    density = kde(positions).reshape(xx.shape)
+    return xx, yy, density
 
 
 def curly_brace(ax, x1, x2, y, height, upward=True):
@@ -1006,3 +914,4 @@ def curly_brace(ax, x1, x2, y, height, upward=True):
     path = Path(verts, codes)
     patch = patches.PathPatch(path, fill=False, lw=2)
     ax.add_patch(patch)
+    

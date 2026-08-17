@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import transforms
 from collections import defaultdict
-from lenspack.utils import sigma_critical
+from lenspack.utils import sigma_critical, bin2d
 from astropy import cosmology
 from scipy.stats import chi, norm
 from scipy.ndimage import zoom
@@ -274,7 +274,7 @@ def prepare_dataloaders(args):
     if args.aug_rotation_prob > 0:
         train_transform = transforms.Compose([
             rescale_lens_source_configuration(args),
-            apply_intrinsic_ell( args.apply_intrinsic_ell, args.jwst_filter),
+            apply_intrinsic_ell( args ),
             transforms.RandomHorizontalFlip(args.aug_h_flip_prob),
             transforms.RandomVerticalFlip(args.aug_v_flip_prob),
             transforms.Pad( int( args.image_size//2*(np.sqrt(2)-1)), padding_mode='reflect'),
@@ -289,7 +289,7 @@ def prepare_dataloaders(args):
     else:
         train_transform = transforms.Compose([
             rescale_lens_source_configuration(args),
-            apply_intrinsic_ell(  args.apply_intrinsic_ell, args.jwst_filter),
+            apply_intrinsic_ell( args ),
             transforms.RandomHorizontalFlip(args.aug_h_flip_prob),
             transforms.RandomVerticalFlip(args.aug_v_flip_prob),
             transforms.RandomApply([
@@ -303,7 +303,7 @@ def prepare_dataloaders(args):
             rescale_lens_source_configuration(args),
             cluster_member_contamination( args ),
             apply_shape_measurement_bias(args.shape_measurement_bias),
-            apply_intrinsic_ell( args.apply_intrinsic_ell,  args.jwst_filter),
+            apply_intrinsic_ell( args),
             Downsample(args)
     ])
     
@@ -427,7 +427,7 @@ def prepare_dataloaders(args):
 class apply_intrinsic_ell(object):
     
     
-    def __init__(self, apply, jwst_filter):
+    def __init__(self,  args):
         '''
         This is NOT A GAUSSIAN - it is s fitted chi in ellpiticituy
         then randomly select rotations
@@ -443,11 +443,13 @@ class apply_intrinsic_ell(object):
         
         home="/Users/davidharvey/Work/Dark_Matter_DA/code/notebooks/pickles"
         #Intrinsic ell here is the intrinsic ellipticity for a single component.
-        data_dict = pickle.load( open(f"{home}/ngal_{jwst_filter}.pkl","rb") )
+        data_dict = pickle.load( open(f"{home}/ngal_{args.jwst_filter}.pkl","rb") )
         self.ngal = data_dict['ngal']
         self.chi_fit = data_dict['chi_fit_function']
-        self.apply = apply
-
+        self.apply = args.apply_intrinsic_ell
+        self.binned_data = data_dict['binned_data']
+        self.default_image_size = 100
+        self.image_size = args.image_size
         
     def __call__( self, sample):
         #assume a-b/a+b
@@ -456,26 +458,48 @@ class apply_intrinsic_ell(object):
         
             # Techincally it doesnt go as 1/sqrt(N) but in add_shear_to_data.ipynb 
             # i boost the galaxy density by the factor**2 so here it is simple 1/sqrt(N)
-            scale = self.chi_fit[2]/np.sqrt(self.ngal)*self.apply 
-        
+            scale = self.chi_fit[2]*self.apply * self.image_size / self.default_image_size 
+
+            #  /np.sqrt(self.ngal)*self.apply 
+            ngalaxies = self.binned_data['delta_ra'].shape[0]
             source_ell = torch.tensor( chi.rvs( 
                 df=self.chi_fit[0], 
                 loc=self.chi_fit[1], 
-                scale=scale
+                scale=scale,
+                size=ngalaxies
             ), dtype=torch.float32)
-        
-            source_chi = 2.*source_ell / (1+source_ell**2) # do everything in chi not epsilon
             
+            
+            source_chi = 2.*source_ell / (1+source_ell**2) # do everything in chi not epsilon
             source_the = torch.rand(
-                sample[0].shape
+                ngalaxies
             )*np.pi
         
-            source_chi[ self.ngal ==0 ] = 0
+            #source_chi[ self.ngal ==0 ] = 0
     
-            source_shape = torch.cat(
-                [source_chi[None,:,:]*np.cos(2.*source_the[None,:,:]),
-                 source_chi[None,:,:]*np.sin(2.*source_the[None,:,:])]
-            )
+            e1_sim = source_chi*np.cos(2*source_the)
+            e2_sim = source_chi*np.sin(2*source_the)
+            
+            # Number of objects in each pixel
+            count_map = np.bincount(
+                self.binned_data['flat_bin'],
+                minlength=self.default_image_size * self.default_image_size
+            )  
+            source_shape = []
+            for comp in [e1_sim, e2_sim]:
+                sum_map = np.bincount(
+                        self.binned_data['flat_bin'],
+                        weights=comp[self.binned_data['valid']],
+                        minlength=self.default_image_size * self.default_image_size
+                    )
+
+  
+                # Mean (matches bin2d with w=None)
+                mean_map = (sum_map / np.where(count_map == 0, np.inf, count_map))
+                mean_map = mean_map.reshape(self.default_image_size, self.default_image_size)
+                source_shape.append(torch.tensor(mean_map[None,:,:], dtype=torch.float32))
+
+            source_shape = torch.cat(source_shape)            
         else:
             source_shape = sample * 0.
             
@@ -496,6 +520,7 @@ class apply_intrinsic_ell(object):
                 
 
         return_sample[ (sample == 0) ] = 0
+    
 
         return return_sample
         
@@ -632,7 +657,7 @@ class cluster_member_contamination( object ):
     
 class rescale_lens_source_configuration( object ):
     '''
-    When creating the data it assumes that zs=1.36, zl=0.15
+    When creating the data it assumes that zs=1.72, zl=0.305
     '''
     def __init__(self, args ):
         self.zl = args.zl
@@ -640,8 +665,8 @@ class rescale_lens_source_configuration( object ):
         
         if args.verbose:
             print(f"SOURCE REDSHIFT: {args.zs}")
-        default_zl = 0.305
-        default_zs = 1.65
+        default_zl = args.default_zl
+        default_zs = args.default_zs
         
         if (args.apply_intrinsic_ell == 0) or ( 
             (np.atleast_2d(args.zl).min()==default_zl) & 
@@ -650,14 +675,13 @@ class rescale_lens_source_configuration( object ):
         else:
             self.apply = True
             
-            sigma_crit_fid = 2354. # hard coded to speed up
+            sigma_crit_fid = 2334. # hard coded to speed up
             
             sigma_crit = sigma_critical(self.zl, self.zs, cosmology.Planck18).value
             
             self.rescale = torch.tensor(
                 sigma_crit_fid/sigma_crit, dtype=torch.float32
             )
-            
             
     def __call__( self, sample):
         

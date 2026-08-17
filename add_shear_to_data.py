@@ -16,6 +16,8 @@ import os
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
 import numpy.lib.recfunctions as rfn
 
+from model import create_model
+
 def get_boxsize(set_name, return_units=units.pc, h=0.7):
     if ('bahamas' in set_name) or ('tng' in set_name) or ('flamingo' in set_name):
         boxsize= 10./h*units.Mpc
@@ -37,8 +39,8 @@ def main(
     sample_data=True,
     data_dir="data/100/a2744",
     reduce_shear=True,
-    zs = {'f115w':1.6, 'f150w':1.65,'concat':1.65},
-    zl = 0.305
+    zl = 0.305,
+    add_ncomps=True
     ):
     
     
@@ -63,26 +65,29 @@ def main(
         for idx in tqdm(range(len(all_data_sets))):
             
             idata_set = all_data_sets[idx]
-            
             meta, data = pkl.load( open( idata_set, "rb"))
             new_data_set = idata_set.replace("convergence","shear")
-
-            if os.path.isfile(new_data_set):
-                print(f"Already found {new_data_set}, skipping")
-                continue
             new_data_path = os.path.dirname(new_data_set)      
-    
+            
+            if add_ncomps:
+                ncomponents = get_num_merging_components(
+                    idata_set
+                )
+                meta['ncomponents'] = ncomponents
+            
             if ('darkskies' in idata_set) | ('flamingo' in idata_set):
                 meta['norms'] /= 4.*h
                 
+                
             if 'redshift' not in meta.keys():
                 meta['redshift'] = np.full(data.shape[0], 0.250, dtype=np.float64)
+
                 
             e1, e2, kappa = data_to_shear( 
                     data[:,0], meta['norms'][:,0], 
                     meta['redshift']*0.+0.305, 
                     get_boxsize(idata_set),
-                    zs=zs['concat'], 
+                    zs=get_source_redshift('concat',data_dir=data_dir),
                     zl=zl, **{'ngal_per_sq_arcmin':200.},
                     reduce_shear=reduce_shear,
             )
@@ -104,7 +109,7 @@ def main(
         
         obs_data = get_obs_data( 
             ifilter, data_dir=data_dir,
-            photoz=True, default_zs=zs['concat']
+            photoz=True
         )
    
         ra_0 = np.median(obs_data['x']) 
@@ -133,14 +138,6 @@ def main(
         for idata_set in tqdm(all_data_sets):
             
             new_file_name = idata_set.replace('convergence',f'obs/{ifilter}')
-            new_data_path = os.path.dirname(new_file_name)
-            
-            if os.path.isfile(new_file_name):
-                print(f"Already found {new_file_name}, skipping")
-                continue
-            
-            if not os.path.isdir( new_data_path ):
-                os.system(f"mkdir -p {new_data_path}") 
 
             meta, data = pkl.load( open( idata_set, "rb"))
             if ('darkskies' in idata_set) | ('flamingo' in idata_set):
@@ -154,7 +151,7 @@ def main(
                     data[:,0], meta['norms'][:,0], 
                     meta['redshift'], 
                     get_boxsize(idata_set),
-                    zs=zs['concat'], 
+                    zs=get_source_redshift('concat'), 
                     zl=zl, **{'ngal_per_sq_arcmin':200.},
                     reduce_shear=False,
             )
@@ -164,8 +161,6 @@ def main(
             e2_obs = []
             remove = []
             for icluster in range(data.shape[0]):
-
-
 
                 fill_value = np.median(e1_ideal[icluster][ e1_ideal[icluster] !=0])
 
@@ -234,7 +229,19 @@ def main(
 
             pkl.dump([ meta, new_data], open(new_file_name,"wb"))
 
-
+def get_num_merging_components(
+                dataset, 
+                mass_ratio_limit=10,
+    ):
+    
+    extracted_components = pkl.load(open(f"notebooks/pickles/{dataset.split('/')[-1]}.comps","rb"))
+    ncomponents = []
+    for icomp in extracted_components:
+        mass_ratio = icomp['FLUX_AUTO'].max() / icomp['FLUX_AUTO']
+        
+        icomp = icomp[ mass_ratio < mass_ratio_limit ]
+        ncomponents.append( icomp.shape[0])
+    return np.array(ncomponents)
 
 def data_to_shear( images, norms, redshifts, boxsize, 
                   reduce_shear=True, 
@@ -338,24 +345,56 @@ def data_to_shear( images, norms, redshifts, boxsize,
     return np.array(all_e1), np.array(all_e2), np.array(all_converge)
 
 
+
+
 def get_obs_data( 
     ifilter, 
-    cuts=None, 
+    cuts={}, 
     data_dir='data/100/a2744', 
     photoz=False, 
-    default_zs=1.65, 
-    remove_members=True 
-    ):
-    
-    
+    remove_members=True,
+    redshift_cut=0.305+0.05*3):
+        
     # Cuts already taken during the WL process - verified.
-    cuts = {
-        'size_cut':[2,200],
-        'signal_noise_cut':0,
-        'stat_type':'median',
-        'mag_cut':[0,30],
-        'verbose':False
-    }     
+    fid_cuts = {
+            'size_cut':[2,200],
+            'signal_noise_cut':0,
+            'stat_type':'median',
+            'mag_cut':[0,30],
+            'verbose':False
+        } 
+        
+    for this_filter in ['f115w','f150w']:
+        if this_filter not in list(cuts.keys()):
+            print(f"Missing {this_filter} in cuts dict referring to default")
+            cuts[this_filter] = {}
+        for ikey in fid_cuts.keys():
+            if ikey not in list(cuts[this_filter].keys()):
+                cuts[this_filter][ikey] = fid_cuts[ikey]
+
+        shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{this_filter}-clear_drc_sci_clean.shears"
+        obs_data = fits.open(shear_cat)[1].data  
+
+        calc_shear(
+            obs_data, 
+            f"{data_dir}/a2744_{this_filter}_filtered.fits", 
+            **cuts[this_filter]
+            )      
+
+        if remove_members:
+            obs_data = remove_cluster_members( 
+                f"{data_dir}/a2744_{this_filter}_filtered.fits", 
+                f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
+                redshift_cut=redshift_cut
+            )
+
+        fits.writeto(
+             f"{data_dir}/a2744_{this_filter}_filtered.fits", 
+            obs_data, overwrite=True
+        )
+            
+
+ 
     
     if ifilter == 'concat':
         cat_a_name =     f"{data_dir}/a2744_f115w_filtered.fits"
@@ -365,40 +404,7 @@ def get_obs_data(
 
         fits.writeto(  concat_name, obs_data, overwrite=True) 
 
-  
-        if remove_members:
-            for cat in [cat_a_name+".photoz", cat_b_name+".photoz"]:
-                if not os.path.isfile( cat ):
-                    this_filter = cat.split('/')[-1].split('_')[1]
-                    shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{this_filter}-clear_drc_sci_clean.shears.photoz"
-                    obs_data = fits.open(shear_cat)[1].data
-
-                    calc_shear(
-                        obs_data, 
-                        f"{data_dir}/a2744_{this_filter}_filtered.fits.photoz", 
-                        **cuts
-                    )
-                
-            obs_data = combine_catalogues( cat_a_name+".photoz", cat_b_name+".photoz", identifier='NUMBER' )
-            concat_name_photoz =  f"{data_dir}/a2744_concat_filtered.fits.photoz"
-            fits.writeto( concat_name_photoz, obs_data,overwrite=True)
-
-
-
-            obs_data =    remove_cluster_members( concat_name, concat_name_photoz)
-
-            fits.writeto( concat_name, obs_data, overwrite=True)
-
-
     else:
-        shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears"
-        obs_data = fits.open(shear_cat)[1].data
-
-        calc_shear(
-            obs_data, 
-            f"{data_dir}/a2744_{ifilter}_filtered.fits", 
-            **cuts
-        )
 
         obs_data = fits.open(
             f"{data_dir}/a2744_{ifilter}_filtered.fits"
@@ -407,8 +413,13 @@ def get_obs_data(
     if photoz:
         photo_z_matched = run_match(
             f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
-            f"{data_dir}/a2744_{ifilter}_filtered.fits"
+            f"{data_dir}/a2744_{ifilter}_filtered.fits",
+            search_rad=0.5
         )[1].data
+        
+        default_zs = sig_mean( photo_z_matched['z_ml'] )
+
+        print(f"DEFAULT ZS {default_zs}")
         
         redshift = np.full(obs_data.shape[0], default_zs, dtype=np.float64)
 
@@ -417,10 +428,15 @@ def get_obs_data(
                             photo_z_matched['z_ml']))
 
         # fill values
+        n_missing = 0
         for j, number in enumerate(obs_data['NUMBER']):
             if number in z_lookup:
-                redshift[j] = z_lookup[number]
-
+                if np.isfinite(z_lookup[number] ):
+                    
+                    redshift[j] = z_lookup[number] 
+                else:
+                    redshift[j] = default_zs
+            
         # append field
         obs_data = rfn.append_fields(
             obs_data,
@@ -432,25 +448,22 @@ def get_obs_data(
         )
 
     return obs_data
- 
-def remove_cluster_members( cat_raw, photoz, z_limit=0.4):
+
+def remove_cluster_members( cat_raw, photoz, redshift_cut=0.): #0.305+2*0.06):
     
-    combined = run_match( cat_raw, photoz)
+    combined = run_match( cat_raw, photoz,search_rad=0.5)
 
     all_cat = fits.open(cat_raw)[1].data
     
-
-    cluster_numbers = combined[1].data['NUMBER_1'][ combined[1].data['z'] < z_limit]
+    cluster_numbers = combined[1].data['NUMBER'][ combined[1].data['z_ml'] < redshift_cut]
+        
+    mask = ~np.isin(all_cat['NUMBER'], cluster_numbers)
     
-    all_numbers = all_cat['NUMBER']
+    removed = all_cat[mask]
     
-    keep_numbers = np.array([ np.where(i==all_numbers)[0][0] for i in all_numbers if i not in cluster_numbers ])
-    
-    nremove = cluster_numbers.shape[0]
-    print(f"REMOVING {nremove} GALAXIES")
-
-    return all_cat[ keep_numbers ]
-
+    #print(f"REMOVING {cluster_numbers.shape[0]} GALAXIES")
+    return removed
+       
 def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
     
     cat_a = fits.open(cat_a_name)[1].data
@@ -596,53 +609,76 @@ def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
         
     return hdu.data
 
+
 def bin_obs_data( in_obs_data, image_size = 100, npix=100 ):
     
     obs_data = in_obs_data.copy()
     
     g = np.sqrt( obs_data['gamma1']**2 + obs_data['gamma2']**2)
 
-    ell = 2.*g/(1+g**2)
-
-    obs_data['gamma1'] = 2.*obs_data['gamma1']/(1.+g**2)
-    obs_data['gamma2'] = 2.*obs_data['gamma2']/(1.+g**2)
-
-    
+    obs_data['gamma1'] = 2.*obs_data['gamma1'] / (1.+g**2)
+    obs_data['gamma2'] = 2.*obs_data['gamma2'] / (1.+g**2)
 
     delta_ra, delta_dec = ra_dec_to_simulation_image_pos( obs_data )
 
 
     e1_radec, e2_radec = bin2d( 
                 delta_ra, delta_dec, 
-                v=(obs_data['gamma1'], obs_data['gamma2']),
+                v=(obs_data['gamma1'], 
+                   obs_data['gamma2']),
                 npix=npix,
                 extent=[
                     -image_size//2,image_size//2,-image_size//2,image_size//2
                 ]
             )
+
+    ### TO SPEED UP THE AUGMENTATION ####
+    edges = np.linspace(-image_size//2,image_size//2,npix+1)
+    
+    ix = np.digitize(delta_ra, edges) - 1
+    iy = np.digitize(delta_dec, edges) - 1
+    
+    
+    valid = (
+        (ix >= 0) & (ix < image_size) &
+        (iy >= 0) & (iy < image_size)
+    )
+
+    ix = ix[valid]
+    iy = iy[valid]
+
+    flat_bin = iy * image_size + ix
+    
+    
+    ###################
 
     ngal = bin2d( 
                 delta_ra, delta_dec, 
                 v=None,
                 npix=npix,
                 extent=[
-                    -image_size//2,image_size//2,-image_size//2,image_size//2
+                    -image_size//2,image_size//2,
+                    -image_size//2,image_size//2
                 ]
             )
 
     max_val = np.max([
         e1_radec, e2_radec
     ])
+    
     min_val = np.min([
         e1_radec, e2_radec
     ])
+    
     e1_radec -= min_val 
     e1_radec /= max_val 
 
     e2_radec -= min_val 
     e2_radec /= max_val 
 
-    return {'e1':e1_radec, 'e2':e2_radec, 'ngal':ngal,'delta_ra':delta_ra,'delta_dec':delta_dec}
+    return {'e1':e1_radec, 'e2':e2_radec, 'ngal':ngal,
+            'delta_ra':delta_ra,'delta_dec':delta_dec,
+            'valid':valid, 'flat_bin':flat_bin}
 
 
 def ra_dec_to_simulation_image_pos( 
@@ -753,11 +789,93 @@ def resize_data(
                             )
                     
 
+def get_model_names(
+        ifilter='concat', 
+        model_dir="../models",
+        model='final', 
+        exclude_str=None,
+        include_str=None,
+        load_model_args=None,
+        nmodels=None
+    ):
     
+    list_of_models = glob(
+        f"{model_dir}/{ifilter}/*{model}.pth"
+    )
     
+    if exclude_str is not None:
+        list_of_models  = [ i for i in list_of_models if not exclude_str in i ]
+    
+    if include_str is not None:
+        list_of_models  = [ i for i in list_of_models if include_str in i ]
+     
+    if nmodels is not None:
+        list_of_models = list_of_models[:nmodels]
+        
+    
+    assert len(list_of_models) > 0,f"No models found check path ({model_dir})"
+        
+    #get the seed number index
+    names_in_model = np.array(list_of_models[0].split('/')[-1].split('_'))
+    seed_index  = np.where(names_in_model == 'seed')[0][0] + 1
+    
+    if load_model_args is not None:
+        all_models = []
+        for imodel in list_of_models:
+            load_model_args.checkpoint = imodel
+            this_model = create_model(load_model_args)
+
+            model_name = f"seed_{this_model.args.seed}"
+            #if target_test_accuracy[ifilter][model_name]['target_test_f1'] <0.48:
+            #    continue
+
+            all_models.append(this_model)
+        
+        return np.array(all_models), seed_index
+    return np.array(list_of_models), seed_index
+
+def sig_mean( redshift ):
+    sig = sigma_critical( 0.305, redshift, Planck18).value
+    return np.sum(redshift/sig)/np.sum(1/sig)
+    
+def get_source_redshift( ifilter, data_dir='data/100/a2744', cuts=None ):
+    
+    if cuts is None:
+        cuts= {'f115w':{'signal_noise_cut':0, 'stat_type':'snr'}, 
+       'f150w':{'signal_noise_cut':5, 'stat_type':'snr'}}
+    data = get_obs_data( ifilter, photoz=True , data_dir=data_dir, cuts=cuts)
+
+    #remove artifical redshifts 
+    nz = data['redshift'][ np.abs( data['redshift'] - np.median(data['redshift'])) > 1e-3]
+    
+    source_redshift = sig_mean( nz )
+
+    return source_redshift
+
+
+def return_error_in_mean( all_thresholds, correction=0.18 ):
+    
+    nmodels = all_thresholds.shape[0]
+    
+    std = np.std(all_thresholds,axis=0)
+    
+    return std/all_thresholds.shape[0]**correction
+
 if __name__ == "__main__":
+    
+
+    
     #Base models - h=1 since we want them statistically the same
-    main( search_path="data/100/convergence/*.pkl", h=0.7, sample_data=False )
+    main( 
+        search_path="data/100/convergence/*.pkl", 
+        h=0.7, 
+        sample_data=False, 
+        add_ncomps=False 
+    )
     #Final data, h=0.7 so that the data is correct for final outputs
-    main( search_path="data/100/convergence/*.pkl", h=0.7, sample_data=True, data_dir='data/100/a2744' )
-   
+    main( 
+        search_path="data/100/convergence/*.pkl", 
+        h=0.7, 
+        sample_data=True, 
+        data_dir='data/100/a2744' 
+    )
