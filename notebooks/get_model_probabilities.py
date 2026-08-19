@@ -65,7 +65,7 @@ from matplotlib.ticker import FuncFormatter
 
 from pyRRG.calc_shear import calc_shear
 from RRGtools import run_match
-from add_shear_to_data import get_obs_data, bin_obs_data, ra_dec_to_simulation_image_pos, get_source_redshift
+from add_shear_to_data import get_obs_data, bin_obs_data, ra_dec_to_simulation_image_pos, get_source_redshift,return_error_in_mean
 from scipy.stats import binned_statistic_2d,binned_statistic
 from scipy.special import logsumexp
 from scipy.integrate import cumulative_trapezoid
@@ -129,9 +129,9 @@ class args:
     log_mass_cut=0
     downsample=1
     cluster_member_contamination=0.
-    zs=get_source_redshift(jwst_filter)
+    zs=get_source_redshift(jwst_filter, data_dir="../data/100/a2744")
     default_zl = 0.305
-    default_zs = 1.77
+    default_zs = zs
     print(f"Source redshift:{zs}")
 
 
@@ -189,7 +189,7 @@ def get_probabilities(
             for idx, batch_data in enumerate(dataloaders[test_set][0]):
 
                 data, cross_sections, binary_labels, file_idx, image_idx = batch_data
-
+                
 
                 data = [ i[idx] for i in all_data ]
 
@@ -379,7 +379,7 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
         
         if integrated_mass:
             zl = 0.305
-            zs = get_source_redshift('concat')
+            zs = args.default_zs
             
             critical_kappa = lenspack.utils.sigma_critical(zl, zs, Planck18).to(units.Msun/units.kpc/units.kpc)
             
@@ -437,7 +437,7 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
                 else:
                     mass_indexes = np.ones(results['indexes'][(icross == results['all_cross_sections'][0])].shape[0])==1
                     
-         
+                #print(f"NCLUSTERS TO COMPARE TO: {sum(mass_indexes)}")
                 prob =  results['probabilities'][ icross == results['all_cross_sections'], : ][mass_indexes,:]
                 
                 probs  = prob[:,0].detach().numpy()
@@ -457,12 +457,12 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
                 thresholds.append(this_threshold)
                 threshold_err.append(np.nanquantile(prob[:,0].detach().numpy(), [0.16,0.84])/np.sqrt(prob[:,0].shape[0]))
                 these_indexes.append(   results['indexes'][ icross == results['all_cross_sections'][0] ][mass_indexes])
-                
+    
         all_thresholds.append(thresholds)
         all_threshold_err.append(threshold_err)
         all_probs.append(these_probs)
         all_indexes.append(these_indexes)
-        
+
     all_thresholds = np.mean( np.array(all_thresholds), axis=0)
     
     all_threshold_err = np.mean(all_threshold_err, axis=0)/np.sqrt(len(results_list))
@@ -479,8 +479,9 @@ def get_threshold_for_cross( results_list, dataset=None, function=np.mean,
             }
 
 def get_dataset_meta( dataset, icross ):
-    if dataset.endswith('vd'):
-        pklfile = f"../data/100/shear/vd_{dataset[:-2]}.pkl"
+
+    if 'vd' in dataset:
+        pklfile = f"../data/100/shear/{dataset}.pkl"
     elif icross != 0:
         pklfile = f"../data/100/shear/{dataset}_{icross:0.1g}.pkl"
     elif dataset in ['flamingo','tng']:
@@ -567,7 +568,7 @@ def get_direct_prob( value, dist):
     return np.stack(nsigma)
             
 def plot_observations( filename, ifilter, 
-                      ax=None, correction=2.1, 
+                      ax=None,
                       error_index=0.38,
                       noise=False, 
                       uncertainty=[68],
@@ -600,15 +601,14 @@ def plot_observations( filename, ifilter,
         ax = plt.gca()
     
     means = 1-np.mean(data)
-    error = np.std(data)/nmodels**(error_index)*correction
-    
+    error = return_error_in_mean( data )
     if plotpdf:
         
         xpdf = np.linspace(0.45,0.7, 1000)
 
         ypdf = norm.pdf( xpdf, *(means, error))
-
-        ax.plot(  xpdf, ypdf,
+        
+        ax.plot(  xpdf,ypdf,
                              color=plot_args['color'] )
 
         ax.fill_between( xpdf,
@@ -620,6 +620,9 @@ def plot_observations( filename, ifilter,
     
     ax.plot( np.logspace(-3,1,100), np.zeros(100)+means, **plot_args )
     
+    
+    
+    print(error)
     for iunc in uncertainty:
         
         if iunc == 68:
@@ -646,27 +649,19 @@ def plot_observations( filename, ifilter,
     if legend:
         ax.legend()
         
-def get_latent_space( model_list,
+def get_latent_space( all_models,
                      bias=[0,0],
                     quiet=False,
                     args=None,
                     targets=['source_val','target_test'],
                     ):
-    
-    if not isinstance(model_list, list):
-        model_list = [model_list]
-        
     all_cross =[]
     latent_spaces = []
-    
-    all_models = []
-    for imodel in model_list:
-        args.checkpoint = imodel
-        all_models.append(create_model(args))
-        
     args.source_domain = 'bahamas_obs'
     args.target_domain = 'darkskies_obs'
     args.apply_intrinsic_ell = 1.0
+    args.train_split = 0.05
+    args.verbose=False
     obs_meta, obs_data = pkl.load(open(f"../data/100/a2744/obs_data_concat.pkl","rb"))
         
     obs_data[0,0,:,:] += bias[0]
@@ -679,22 +674,25 @@ def get_latent_space( model_list,
     for imx, imodel in tqdm(enumerate(all_models), disable=quiet):
 
         args.seed = imodel.args.seed
+        data_reform = torch.tensor(obs_data[0][None,:,:,:],dtype=torch.float32)
 
-        this_latent.append(imodel.backbone(torch.tensor(obs_data[0][None,:,:,:],dtype=torch.float32))[:,:,0,0])
+        x_image = imodel.dynamic_pool(data_reform)
+        latent = imodel.backbone( x_image )[:,:,0,0]
+    
+        this_latent.append(latent)
         this_cross.append(torch.tensor([-1]))  
         
     
               
     latent_spaces.append(torch.cat(this_latent))
     all_cross.append(torch.cat(this_cross))      
-    
+    dataloaders = prepare_dataloaders(args)
     with torch.no_grad():
         for imx, imodel in tqdm(enumerate(all_models), disable=quiet):
             this_latent = []
             this_cross = []
             args.seed = imodel.args.seed
         
-            dataloaders = prepare_dataloaders(args)
 
             for test_set in targets:
                 target_latent = []
@@ -703,10 +701,13 @@ def get_latent_space( model_list,
                 for idx, batch_data in enumerate(dataloaders[test_set][0]):
 
                     data, cross_sections, binary_labels, file_idx, image_idx = batch_data
+    
+                    x_image = imodel.dynamic_pool(data)
+                    latent = imodel.backbone( x_image )[:,:,0,0]
 
-                    
-                    target_latent.append(imodel.backbone(data)[:,:,0,0])
+                    target_latent.append(latent)
                     target_cross.append(cross_sections.cpu())
+                    
                 this_latent.append(torch.cat(target_latent))
                 this_cross.append(torch.cat(target_cross))
 
@@ -742,23 +743,31 @@ def get_mass_cut( ifilter, zl=0.305, zs=1.6, thresh = 0., nsigma=2, study='harve
 
     
     return np.log10(est*1e13),[np.log10((est-nsigma*err_lo)*1e13),np.log10((est+nsigma*err_hi)*1e13)]
-        
-    critical_density = sigma_critical(zl, zs, Planck18).to(units.Msun/units.kpc/units.kpc)
 
-    obs_meta, obs_data = pkl.load(open(f"../data/a2744/obs_data_{ifilter}.pkl","rb"))
-    ke, kb = lenspack.image.inversion.ks93(obs_data[0][0], obs_data[0][1])
 
+def get_massfunction_weights( dataset, ifilter='concat' ):
+    '''
+    reweight things to take in to account the different mass funcitons in each sim
+    '''
+    zs = args.default_zs
     
-    positive_mass = np.sum(gaussian_filter(ke[ke/np.std(kb)>thresh],2) * critical_density * (20*units.kpc)**2 )
-    err_mass_per_pixel = np.std(gaussian_filter(kb[ke/np.std(kb)>thresh],2) * critical_density * (20*units.kpc)**2 ).value
+    ### MASS WEIGHTS FOR CALCULATING THE MEAN #####
+    critical_density = sigma_critical(args.zl, zs, Planck18).to(units.Msun/units.kpc/units.kpc)
 
-    err_mass = len(kb[ke/np.std(kb)>thresh])*err_mass_per_pixel
-    mass_cut = [ 
-        np.log10(positive_mass.value - err_mass),
-        np.log10(positive_mass.value + err_mass)
-    ]
+    if dataset in ['bahamas','darkskies']:
+        meta, data = pkl.load(open(f"../data/100/shear/{dataset}_cdm.pkl","rb"))
+    else:
+        meta, data = pkl.load(open(f"../data/100/shear/{dataset}.pkl","rb"))
+  
     
-    return np.log10(positive_mass.value), mass_cut
+    mass = np.log10(np.sum(np.sum(data[:,2],axis=-1)*critical_density* (20*units.kpc)**2, axis=-1).value)
+    
+    mass_function, x = np.histogram(mass, bins=np.linspace(14,15.5,30))
+    mass_function[mass_function==0] = 1
+    
+    return {'x':x, 'y':1./mass_function}
+    #######
+
 
 def gp_invert( gp, threshold):
     sigma_grid = np.logspace(-6, 2, 10000)
@@ -915,3 +924,54 @@ def curly_brace(ax, x1, x2, y, height, upward=True):
     patch = patches.PathPatch(path, fill=False, lw=2)
     ax.add_patch(patch)
     
+    
+def get_variable_redshift_dist(data_dir="../data/100/a2744/", ifilter='concat'):
+    
+    
+    cuts= {'f115w':{'signal_noise_cut':0, 'stat_type':'snr'}, 
+       'f150w':{'signal_noise_cut':5, 'stat_type':'snr'}}
+    
+    
+    obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True)
+    
+    delta_ra, delta_dec = ra_dec_to_simulation_image_pos( obs_data )
+
+    n_z = binned_statistic_2d(
+            delta_ra, delta_dec, obs_data['redshift'], 
+            range=[[-args.image_size//2,args.image_size//2],
+                   [-args.image_size//2,args.image_size//2]],
+            statistic=np.median, bins=args.image_size
+        ).statistic
+
+
+    n_z[ ~np.isfinite(n_z) ] = args.default_zs
+    
+    return n_z
+                               
+                               
+        
+def get_probs_from_results( all_results, target='tgt', **params ):
+    
+    thresholds = []
+    for imodel in all_results.keys():
+
+        if 'seed' not in imodel:
+            continue
+        
+        if isinstance(all_results[imodel],dict):
+
+            tgt = get_threshold_for_cross( 
+                all_results[imodel][target], 
+                quiet=False, **params)
+
+        elif isinstance(all_results[imodel],list):
+            tgt = get_threshold_for_cross( 
+                all_results[imodel], 
+                quiet=False, **params)
+                
+        thresholds.append(1-tgt['thresholds'])
+        
+    means = np.mean(np.array(thresholds), axis=0)
+    errors = return_error_in_mean(  np.array(thresholds))
+
+    return tgt['cross_sections'], means, errors
