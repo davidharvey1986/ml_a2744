@@ -329,7 +329,7 @@ def figure1():
 
     filename = "plots/intrinsic_ell.pdf"
     plt.savefig(filename)
-    os.system("pdfcrop %s %s" % ( filename, filename))
+    os.system(f"pdfcrop {filename} {filename} > /dev/null 2>&1")
 
 
 def figure2():
@@ -693,7 +693,7 @@ def figure3():
 
     filename = "plots/final_model_weighting_with_data.pdf"
     plt.savefig(filename)
-    os.system("pdfcrop %s %s" % ( filename, filename))
+    os.system(f"pdfcrop {filename} {filename} > /dev/null 2>&1")
 
 
 
@@ -748,16 +748,16 @@ def figure4():
     dmlabel = ['Collisionless','SIDM0.2','Observation']
 
     h=0.7
-    kappa_idx = 108
+    a2744_analogue = pkl.load(open("pickles/a2744_analogue.pkl","rb"))
+
+
     for idx in range(sim_probabilities.shape[0]):
         if idx ==0:
-            meta, kappa_data = pkl.load(open("../data/100/shear/subdir/darkskies_cdm_3.pkl","rb"))
-            meta, data = pkl.load(open("../data/100/obs/concat/subdir/darkskies_cdm_3.pkl","rb"))
+            kappa_data = a2744_analogue['cdm']['kappa']
         else:
-            meta, kappa_data = pkl.load(open("../data/100/shear/subdir/darkskies_0.2_3.pkl","rb"))
-            meta, data = pkl.load(open("../data/100/obs/concat/subdir/darkskies_0.2_3.pkl","rb"))
-
-        kappa_e = kappa_data[kappa_idx,2,:,:]/h
+            kappa_data = a2744_analogue['sidm']['kappa']
+        
+        kappa_e = kappa_data/h/h
 
 
 
@@ -853,7 +853,7 @@ def figure4():
     cbar.solids.set_alpha(1)
     fname='plots/sensitivity_map.pdf'
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname}")
+    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
 
     def sidm_sen( y ):
@@ -867,7 +867,7 @@ def figure4():
     corr = {}
     std = {}
     ncomp = 0
-    for dataset in tqdm(["bahamas_cdm","bahamas_0.1","bahamas_0.3","bahamas_1"]):
+    for dataset in ["bahamas_cdm","bahamas_0.1","bahamas_0.3","bahamas_1"]:
         meta, data = pkl.load(open(f"../data/100/obs/concat/{dataset}.pkl","rb"))
 
         meta, sheardata = pkl.load(open(f"../data/100/shear/{dataset}.pkl","rb"))
@@ -939,7 +939,7 @@ def figure4():
     ax.set_ylabel("Fraction of pixels that are sensitive to SIDM", fontsize=11)
     fname="plots/Sensitivty_relation.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname}")
+    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
 
 def figure5():
@@ -1100,10 +1100,10 @@ def figure5():
     fig.align_ylabels()
     filename = "plots/output_to_model.pdf"
     plt.savefig(filename)
-    os.system("pdfcrop %s %s" % ( filename, filename))  
+    os.system(f"pdfcrop {filename} {filename} > /dev/null 2>&1")  
     print(f"${max_like:.2f}^{{+{error[1]:.2f}}}_{{-{error[0]:.2f}}}")
     
-    return log_max_like, log_error
+    return log_max_like, log_like_one_sigma
 
 def figure6( log_max_like, log_error):
     
@@ -1113,11 +1113,11 @@ def figure6( log_max_like, log_error):
         max_like - 10**(log_max_like - log_error[0]),
         10**(log_max_like + log_error[1]) - max_like,  
     ])
-            
+    print(max_like, error)       
             
     markersize = 12
 
-    fig = plt.figure(figsize=(7,4))
+    fig = plt.figure(figsize=(7,4.5))
     ax = plt.gca()
 
 
@@ -1177,10 +1177,10 @@ def figure6( log_max_like, log_error):
                 markersize=20, color='orange', fmt='*', capsize=4, lw=2)
     print(f"$\sigma_{{\\rm DM}}/m={max_like.real:0.2f}_{{-{error[0].real:0.2f}}}^{{+{error[1].real:0.2f}}}$cm$^2$g^{{-1}}")
     # get handles
-    ax.legend()
+    ax.legend(loc=1)
     fname = "plots/particle_physics.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname}")
+    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
 # # Appendix plots
 
@@ -1261,7 +1261,7 @@ def figureA1():
             ax.text(0.1,0.9,f"Model {1+imx}", transform=ax.transAxes, fontsize=15)
     fname="plots/latent_overlap.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname}")
+    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
     ########################################
     ##### Latent space summary distance
@@ -1276,7 +1276,7 @@ def figureA1():
 
     ax = plt.gca()
 
-    obs_distance = pkl.load(open("pickles/obs_latent_distance.pkl","rb"))
+    obs_distance = pkl.load(open(latent_space_dist_name,"rb"))
 
     color=['blue','orange']
     domain = ['BAHAMAS','DARKSKIES']
@@ -1306,7 +1306,7 @@ def figureA1():
     ax.set_xlabel("Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
     fname="plots/goodness_of_fit.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname}")
+    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
 
 def figureA2(log_max_like,log_error):
@@ -1487,7 +1487,7 @@ def figureA2(log_max_like,log_error):
 
     ax[1].set_xlabel("Upper magnitude cut", fontsize=15)
 
-    ax[2].set_xlabel("Size Cut", fontsize=15)
+    ax[2].set_xlabel("Size cut", fontsize=15)
 
 
     ax[0].set_ylabel(r'$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$', fontsize=15
@@ -1546,7 +1546,7 @@ def figureA2(log_max_like,log_error):
     fname='plots/galaxy_selection.pdf'
     plt.savefig(fname)
 
-    os.system(f"pdfcrop {fname} {fname}")
+    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
 
 def figureA3(log_max_like, log_error):
@@ -1752,9 +1752,10 @@ if __name__ == "__main__":
     #figure3()
     #figure4()
     log_max_like, log_error = figure5()
-    figure6(log_max_like, log_error)
-    figureA1()
-    figureA2(log_max_like, log_error)
+    
+    #figure6(log_max_like, log_error)
+    #figureA1()
+    #figureA2(log_max_like, log_error)
     figureA3(log_max_like, log_error)
 
 

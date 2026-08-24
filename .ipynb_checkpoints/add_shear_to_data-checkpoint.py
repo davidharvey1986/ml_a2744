@@ -138,6 +138,10 @@ def main(
         for idata_set in tqdm(all_data_sets):
             
             new_file_name = idata_set.replace('convergence',f'obs/{ifilter}')
+            new_data_path = os.path.dirname(new_file_name)   
+            if not os.path.isdir( new_data_path ):
+                os.system(f"mkdir -p {new_data_path}")
+                
 
             meta, data = pkl.load( open( idata_set, "rb"))
             if ('darkskies' in idata_set) | ('flamingo' in idata_set):
@@ -233,8 +237,11 @@ def get_num_merging_components(
                 dataset, 
                 mass_ratio_limit=10,
     ):
-    
-    extracted_components = pkl.load(open(f"notebooks/pickles/{dataset.split('/')[-1]}.comps","rb"))
+    comp_name =  f"notebooks/pickles/{dataset.split('/')[-1]}.comps"
+    try:
+        extracted_components = pkl.load(open(comp_name,"rb"))
+    except:
+        raise IOError(f"Unable to open {comp_name}")
     ncomponents = []
     for icomp in extracted_components:
         mass_ratio = icomp['FLUX_AUTO'].max() / icomp['FLUX_AUTO']
@@ -865,12 +872,11 @@ if __name__ == "__main__":
     
 
     
-    #Base models - h=1 since we want them statistically the same
     main( 
         search_path="data/100/convergence/*.pkl", 
         h=0.7, 
         sample_data=False, 
-        add_ncomps=False 
+        add_ncomps=True 
     )
     #Final data, h=0.7 so that the data is correct for final outputs
     main( 
