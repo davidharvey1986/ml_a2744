@@ -757,7 +757,7 @@ def figure4():
         else:
             kappa_data = a2744_analogue['sidm']['kappa']
         
-        kappa_e = kappa_data/h/h
+        kappa_e = kappa_data/h
 
 
 
