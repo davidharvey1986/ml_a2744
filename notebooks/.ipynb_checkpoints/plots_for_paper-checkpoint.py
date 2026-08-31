@@ -5,334 +5,28 @@ from add_shear_to_data import combine_catalogues, get_source_redshift, return_er
 from sidm_inference_on_data_and_models import infer_sidm
 import scienceplots
 plt.style.use(["science","grid"])
-
+'''
+Paper Plots
+-----------
+In various notebooks i have carried out some tests, etc, in this notebook, i 
+bring together all the plots that i have done and put the code here for 
+the paper. These include= 
+- Fig1. Examples of the training and test data
+- Fig2. Main figure with the outputs and the CDM comparison
+- Fig3. Sensitivity maps for analogues and the data
+- Fig4. Correlation of sensitivity and convergence
+- Fig5. SIDM inference
+- Fig6. Final plot with literature
+- Appendixes
+    - FigA1. Redshift distributions and various tests on data
+    - FigA2. How correlated are the models
+    - FigA3. Latent space overlap
+    - FigA4. Systematics in the data
+    - FigA5. Systematics in the model
+'''
+    
 
 def figure1():
-
-    nrow = 2 
-    ncol = 3
-    ifilter = 'concat'
-    fig =plt.figure(figsize=(15,10))
-    nbins=50
-    
-    ####################################
-    ##### PLOT 1 Intrinsic ell #####
-    ####################################
-    ax = plt.subplot(nrow,ncol,1)
-
-    obs_data = get_obs_data(
-            ifilter, data_dir="../data/100/a2744/"
-    )
-
-    x = np.linspace(0,1,nbins)
-    data = np.sqrt(obs_data['e1']**2+obs_data['e2']**2)
-
-    ydata, x = np.histogram( data, bins=x,density=True)
-
-
-
-    ax.stairs(
-        ydata,
-        x,
-        facecolor='g',
-        alpha=0.3,
-        fill=True,
-        linewidth=2,
-        color="g",
-        label='Data'
-    )
-    gaussian_assumption = np.sqrt( 
-        norm.rvs( *norm.fit(obs_data['e1']), 2*obs_data['e1'].shape[0])**2 +
-        norm.rvs( *norm.fit(obs_data['e2']), 2*obs_data['e1'].shape[0])**2 
-    )
-
-    y, x = np.histogram(gaussian_assumption,bins=x,density=True)
-
-    xc = (x[1:] + x[:-1])/2.
-
-    ervs = chi.rvs( *chi.fit(data),  int(data.shape[0]))
-
-    theta = np.random.uniform(0,np.pi, int(data.shape[0]))
-    e1 = ervs*np.cos(2.*theta)
-    e2 = ervs*np.sin(2.*theta)
-    g = np.sqrt(e1**2+e2**2)
-    y, x = np.histogram( e1*2/(1+g**2), density=True, bins=np.linspace(-1,1,nbins) )
-
-    obsshear = np.sqrt(obs_data['e1']**2+obs_data['e2']**2)
-
-    ax.plot( xc, chi.pdf(xc, *chi.fit(data)), color='r',label='Chi',lw=2)
-    ax.plot( xc, norm.pdf(xc, *norm.fit(data)), color='b',label='Gaussian',lw=2)
-
-
-
-    ax.set_ylabel("Probability distribution",fontsize=15)
-
-
-    ax.set_xlabel("Absolute ellipiticity",fontsize=15)
-    ax.set_xlim(0,1.2)
-    ax.legend(fontsize=15)
-
-    ####################################
-    ##### PLOT 2 Ngalaxies per bin #####
-    ####################################
-
-    ax = plt.subplot(nrow,ncol,2)
-
-    nmonte = 10000
-    intrinsic_ell = []
-    ngal_range = np.arange(20)+1
-    for ngal in ngal_range:
-        rdn_ells = []
-        for imonte in range(nmonte):
-            rdn_idx = np.random.choice(
-                np.arange(obs_data['e1'].shape[0]),
-                size=ngal
-            )
-
-            e1rdn = np.mean(obs_data['e1'][rdn_idx])
-            e2rdn = np.mean(obs_data['e2'][rdn_idx])
-
-
-
-            rdn_ells.append(np.sqrt(e1rdn**2+e2rdn**2))
-
-        fit = chi.fit(rdn_ells)[2]
-
-        intrinsic_ell.append(fit)
-    intrinsic_ell = np.array(intrinsic_ell)
-    ax.plot(
-        ngal_range, intrinsic_ell, '-o', label='Measured'
-    )
-    ax.plot(
-        ngal_range, intrinsic_ell[0]/np.sqrt(ngal_range), '-',label='1/sqrt(N)', lw=2
-    )
-
-
-    ax.set_xlabel("Number of galaxies in a bin",fontsize=15)
-    ax.set_ylabel("Fitted intrinsic ell of chi fit",fontsize=15)
-    ratio =  (intrinsic_ell[0]/np.sqrt(ngal_range)) / intrinsic_ell
-
-
-
-    def g1_func( snr, a, b, c, d):
-
-        return a + b*np.arctan( ( snr - c)/d)
-
-
-
-    popt, pcov = curve_fit(
-                    g1_func,
-                    ngal_range,
-                    ratio)
-
-
-    ax.plot(
-        ngal_range, intrinsic_ell[0]/(g1_func( ngal_range, *popt)*np.sqrt(ngal_range)), label='Fit', lw=2
-    )
-    ax.legend(fontsize=15)
-    ax.set_ylabel("Probabilitiy distribution",fontsize=15)
-
-    ####################################
-    ##### PLOT 3 Source redshift #####
-    ####################################
-
-
-    ax = plt.subplot(nrow,ncol,3)
-    ax.set_ylabel("Probabilitiy distribution",fontsize=15)
-
-    obs_data = get_obs_data(
-                ifilter, data_dir="../data/100/a2744/", photoz=True, remove_members=True)
-
-    UNCOVER_ERROR=0.06
-    kde = gaussian_kde(
-        obs_data['redshift'][ np.abs(obs_data['redshift']-args.default_zs) > 1e-2],
-        UNCOVER_ERROR
-    )
-    xpdf = np.linspace(0,10,1000)
-    ypdf =  kde.pdf(xpdf)
-
-
-
-    ax.plot(xpdf,
-            ypdf, color='k', label='n(z)'
-            )
-    ax.fill_between(
-        xpdf, ypdf, alpha=0.6, color='k'
-    )
-    ax.plot(
-        [args.default_zs]*2,
-        [0,1.0],
-        'k--', label=f"$\langle z\\rangle={args.default_zs:0.2f}$")
-    ax.legend(fontsize=15)
-    ax.set_xlabel("Galaxy source redshift", fontsize=15)
-    ax.set_ylim(0,0.7)
-    ax.set_xlim(0,10)
-
-    ####################################
-    ##### PLOT 4 Susceptibility tnsor #####
-    ####################################
-
-    ax = plt.subplot(nrow,ncol,4)
-
-
-    def std_err( x ):
-        return np.std(x)/np.sqrt(x.shape[0])
-
-    cuts= {'f115w':{'signal_noise_cut':4, 'stat_type':'snr'}, 
-           'f150w':{'signal_noise_cut':5, 'stat_type':'snr'}}
-    fid_cut = {
-                'size_cut':[2,200],
-                'signal_noise_cut':5,
-                'stat_type':'snr',
-                'mag_cut':[0,30],
-                'verbose':False
-            }
-
-    xbins = np.linspace(0,20,30)
-
-
-
-    color={'f115w':'b','f150w':'r'}
-    for ifilter in ['f115w','f150w']:
-        obs_data = fits.open(f"../data/100/a2744/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears")[1].data
-        this_cut = fid_cut.copy()
-
-        for icut in cuts[ifilter].keys():
-            this_cut[icut] = cuts[ifilter][icut]
-
-        calc_shear(
-                    obs_data, 
-                    "test.fits", 
-                    **this_cut
-        )
-        data = fits.open("test.fits")[1].data
-
-        y, x, n = binned_statistic(
-            data['snr'],data['g1_gal'], 
-            bins=xbins
-        )
-        stdy, x, n = binned_statistic(
-            data['snr'],data['g1_gal'], 
-            bins=xbins,
-            statistic=std_err
-        )
-        xc = (x[1:]+x[:-1])/2.
-
-        ax.errorbar(xc, y, stdy, capsize=2,fmt='o',label=ifilter, color=color[ifilter] )
-        ax.plot(np.sort(data['snr']), data['g1_model'][np.argsort(data['snr'])],'--', color=color[ifilter])
-        ax.set_xlim(3,20)
-    ax.set_xlabel('Detection signal-to-noise',fontsize=15)
-    ax.set_ylabel('Lensing susceptibility tensor',fontsize=15)
-    ax.legend(fontsize=15)
-
-
-    ####################################
-    ##### PLOT 5 B MODES #####
-    ####################################
-
-    ax = plt.subplot(nrow,ncol,5)
-
-
-    stacked_rotated_modes,obs_kappa_b = pkl.load(open("pickles/bmode_check.pkl","rb"))
-    bins = np.linspace(-1,1,50)
-
-    y_noise_floor, x =np.histogram(stacked_rotated_modes,bins=bins, density=True)
-    y_b_modes, x =np.histogram(obs_kappa_b,bins=bins, density=True)
-
-    xc = (x[1:] + x[:-1])/2.
-
-    ax.stairs(
-        y_noise_floor,
-        x,
-        fill=False,
-        linewidth=2,
-        color="k",
-        ls='--',
-        label='Sys-free B-Modes'
-    )
-
-    ax.stairs(
-        y_b_modes,
-        x,
-        fill='red',
-        alpha=0.3,
-        linewidth=2,
-        color="k",
-         label='Measured B-Modes'
-    )
-
-    residual_b = np.std(stacked_rotated_modes.flatten()) - np.std(obs_kappa_b.flatten())
-    ax.text(0.1, 0.69, f"Residual B-mode={residual_b:0.3f}", 
-            bbox=dict(
-            facecolor="white",
-            edgecolor="lightgrey",
-            boxstyle="square,pad=0.2",   # or "round,pad=0.3"
-            linewidth=1,
-        ),
-            transform=ax.transAxes, ha='left', fontsize=15)
-    ax.set_xlabel(r"Convergence, $\kappa$",fontsize=15)
-    ax.legend(loc=1,fontsize=15)
-    ax.set_ylim(0,6)
-    ax.set_ylabel("Probabilitiy distribution",fontsize=15)
-
-    ####################################
-    ##### PLOT 6 GALAXY DENSITY #####
-    ####################################
-
-    ax = plt.subplot(nrow,ncol,6)
-
-
-    obs_cat = get_obs_data( 'concat', data_dir="../data/100/a2744/")
-    binned_data = bin_obs_data(obs_cat)
-    ngal = binned_data['ngal']
-    if np.max(obs_cat['x']) > 1000:
-        ra,dec = ra_dec_to_simulation_image_pos( obs_cat)
-        obs_cat['x'] = ra
-        obs_cat['y'] = dec
-    image_size  = 100
-    obs_kappa_e, obs_kappa_b = get_kappa(
-        obs_cat, smooth=1.5, extent=[
-                        -image_size//2,image_size//2,-image_size//2,image_size//2
-                    ]
-    )
-
-    kappa_filtered = obs_kappa_e[ ngal > 0 ].flatten()
-    ngal_filtered = ngal[ ngal > 0 ].flatten()
-
-
-    bins = 20
-    y,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic=np.mean )
-    stdy,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic=np.std )
-    cy,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic='count')
-
-    xc = (x[1:]+x[:-1])/2.
-    fractional_change = y/np.mean(ngal_filtered)
-    fraction_err = stdy/np.sqrt(cy)/np.mean(ngal_filtered)
-
-    ax.errorbar(xc,fractional_change,fraction_err, capsize=2, fmt='o-',color='k')
-
-
-    def lin_func( x, a, b):
-        return x*0+a 
-
-    popt, pope = curve_fit(
-        lin_func, xc[ xc>0], fractional_change[xc>0],sigma=fraction_err[xc>0]
-    )
-
-    ax.plot( np.array([-1,1]), lin_func(np.array([-1,1]), *popt),'r--',label=f'N$_{{cont}}={popt[0]:0.2f}$')
-    ax.set_xlim(-0.4,0.8)
-    ax.set_xlabel("Weak lensing convergence, $\kappa$", fontsize=15)
-    ax.set_ylabel("$N_{\\rm gal}$ / $\langle N_{\\rm gal}\\rangle$", fontsize=15)
-    ax.legend()
-
-
-
-    filename = "plots/intrinsic_ell.pdf"
-    plt.savefig(filename)
-    os.system(f"pdfcrop {filename} {filename} > /dev/null 2>&1")
-
-
-def figure2():
     # ## Postage stamp examples
 
     # ### Get the ideal data
@@ -515,7 +209,7 @@ def figure2():
     filename = "plots/data_examples.png"
     plt.savefig(filename)
 
-def figure3():
+def figure2():
     # # Main figure
 
     cdm = 3e-3
@@ -542,7 +236,6 @@ def figure3():
 
     ]
 
-    tng_flamingo = f"pickles/flamingo_tng_alignbest_results.pkl"
     fiducial = f"pickles/all_models_{ifilter}_nz_alignbest_results.pkl"
 
     colors = {
@@ -557,7 +250,7 @@ def figure3():
     xpdf = np.linspace(0.35,0.7, npts)
     marginalised_pdf = np.zeros(npts)
 
-    for ifx, results_file in enumerate( [ fiducial, tng_flamingo ]):
+    for ifx, results_file in enumerate( [ fiducial ]):
         domain = this_domain[ifx]
 
         all_results= pkl.load(open(results_file,'rb'))
@@ -641,7 +334,7 @@ def figure3():
 
 
             axarr[1].set_xlabel("Model Output", fontsize=15)
-            axarr[1].set_ylabel("Probablity Distribution", fontsize=15)
+            axarr[1].set_ylabel("Probability distribution", fontsize=15)
 
             axarr[1].set_xlim(0.475, 0.65)
 
@@ -693,7 +386,6 @@ def figure3():
 
     filename = "plots/final_model_weighting_with_data.pdf"
     plt.savefig(filename)
-    os.system(f"pdfcrop {filename} {filename} > /dev/null 2>&1")
 
 
 
@@ -714,7 +406,7 @@ def figure3():
     print(f"Inter CDM variance of variance: {np.std(cdm_vals)}, and mean intra CDM variance {np.mean(cdm_val_err)}")
     print(f"Discrepancy of {obsprob.mean()-xpdf[ np.argmax(marginalised_pdf) ]}")
 
-def figure4():
+def figure3and4():
     # # Get sensitivity plots
 
     obs_cat = get_obs_data( 'concat', data_dir="../data/100/a2744/")
@@ -729,19 +421,18 @@ def figure4():
                     ]
     )
 
-
-    segment_size = 3
+    segment_size = 4
     sim_fiducial, sim_probabilities = pkl.load(open(f"pickles/sim_senstivity_{segment_size}_select_moving_av.pkl","rb"))      
     cmap_contour = 'YlOrRd'
     cmap_image = 'viridis'
-    kappa_bins = np.linspace(0.1,0.8,8)
+    kappa_bins = np.linspace(0.05,0.65,8)
 
-    fig, axarr=plt.subplots(1, 3,figsize=(15, 5))
+    fig, axarr=plt.subplots(1, 3, figsize=(15, 5))
     fig.subplots_adjust(wspace=0.1)
 
     kappas = []
     contrast=5
-    vmin = 2
+    vmin = 1
 
     vmax =  contrast
     ref = None
@@ -756,16 +447,12 @@ def figure4():
             kappa_data = a2744_analogue['cdm']['kappa']
         else:
             kappa_data = a2744_analogue['sidm']['kappa']
-        
-        kappa_e = kappa_data/h/h
-
 
 
         relative_prob = np.mean(sim_fiducial[:,idx,0] - sim_probabilities[idx], axis=-1)
 
         relative_prob /= relative_prob.std()
 
-        kappas.append(kappa_e)
         ax = axarr[idx]
 
 
@@ -776,7 +463,7 @@ def figure4():
                          cmap=cmap_image)
         #
 
-        ax.contour(gaussian_filter(kappa_e,1.5), origin='lower', 
+        ax.contour(gaussian_filter(kappa_data,1.5), origin='lower', 
                        extent=[-50,50,-50,50], 
                    cmap=cmap_contour, 
                    levels=np.linspace(0.,1.0,20))
@@ -798,14 +485,10 @@ def figure4():
 
     fiducial, probabilities = pkl.load(open(f"pickles/senstivity_{segment_size}_moving_av.pkl","rb"))
 
-    ax = axarr[-1]
-
-
     obs_probs = np.mean((1-fiducial) - probabilities ,axis=-1)
     obs_probs /= obs_probs.std()
 
-
-
+    ax = axarr[-1]
     prob = ax.imshow(obs_probs, 
                      origin='lower', extent=[-50,50,-50,50],
                      vmin=vmin,vmax=vmax,cmap=cmap_image)
@@ -826,7 +509,7 @@ def figure4():
     ax.plot([90-50, 90-50],[95-50, 85-50], '-', color='white', lw=2)
     ax.text( 85-50, 84-50, 'E', ha='center', va='top', color='white', weight='bold')
     ax.text( 91-50, 90-50, 'N', ha='left', va='center', color='white', weight='bold')
-
+    #fig.patch.set_facecolor('black')
     ax.text( 5-50, 40, 'Observation', color='white', weight='bold', fontsize=20)
 
     fraction = 0.015
@@ -841,7 +524,7 @@ def figure4():
     cbar.ax.set_title('$S$')
 
 
-
+    #cax = divider.append_axes('right', size='5%', pad=0.4)
     cbar = fig.colorbar(
         kappa, 
         ax=axarr, 
@@ -851,29 +534,46 @@ def figure4():
 
     cbar.ax.set_title('$\kappa$')
     cbar.solids.set_alpha(1)
-    fname='plots/sensitivity_map.pdf'
+    fname = "plots/sensitivity_map.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
-
+    os.system(f"pdfcrop {fname} {fname}")
 
     def sidm_sen( y ):
         return np.mean(y>0)
     def sidm_sen_std(y):
         return np.sqrt( np.mean(y>0))
 
+
+    obs_data = get_obs_data('concat', data_dir="../data/100/a2744/")
+
+    obs_cat = bin_obs_data(
+        obs_data
+    )
+    obs_data['x'] = obs_cat['delta_ra']
+    obs_data['y'] = obs_cat['delta_dec']
+    image_size  = 100
+    smooth=1.5
+    obs_kappa_e, obs_kappa_b = get_kappa(
+        obs_data, smooth=smooth, correct_for_ngal=False, extent=[
+                        -image_size//2,image_size//2,-image_size//2,image_size//2
+                    ]
+    )
+
+
+
     segment_size = 1
-    bins = np.linspace(0.,0.8,20)
+    nbins=15
+    bins = np.linspace(0.,0.5,nbins)
 
     corr = {}
     std = {}
     ncomp = 0
-    for dataset in ["bahamas_cdm","bahamas_0.1","bahamas_0.3","bahamas_1"]:
+    for dataset in tqdm(["bahamas_cdm","bahamas_0.1","bahamas_0.3","bahamas_1"]):
         meta, data = pkl.load(open(f"../data/100/obs/concat/{dataset}.pkl","rb"))
+        meta, shear = pkl.load(open(f"../data/100/shear/{dataset}.pkl","rb"))
 
-        meta, sheardata = pkl.load(open(f"../data/100/shear/{dataset}.pkl","rb"))
 
         fiducial, sim_probabilities = pkl.load(open(f"pickles/sim_senstivity_{segment_size}_{dataset}.pkl","rb"))    
-
         new_fiducial = np.median(np.median(sim_probabilities,axis=1),axis=1)
 
         rel_prob = np.array( [ np.mean(new_fiducial[i,:] - sim_probabilities[i], axis=-1) for i in range(sim_probabilities.shape[0]) if meta['ncomponents'][i] > ncomp])
@@ -881,6 +581,9 @@ def figure4():
         indexes = np.array([ i for i in  range(sim_probabilities.shape[0]) if meta['ncomponents'][i] > ncomp])
 
         rel_prob /= rel_prob.std()
+
+        rel_prob = np.array([
+            zoom(i, 100/rel_prob.shape[1]) for i in rel_prob])
 
         meta, data = pkl.load(open(f"../data/100/shear/{dataset}.pkl","rb"))
 
@@ -902,28 +605,63 @@ def figure4():
         count, x, n = binned_statistic( 
             x_bin_me, y_bin_me, bins=bins, statistic="count")
 
-
+        xc_sim = (x[1:]+x[:-1])/2.
         corr[dataset] = ycdm
         std[dataset] = ycdmstd/np.sqrt(count)
 
+    obsfiducial, obsprobabilities = pkl.load(open(f"pickles/senstivity_2.pkl","rb"))
 
+    obs_probs = np.mean((1-obsfiducial) - obsprobabilities ,axis=-1)
+    obs_probs /= obs_probs.std()
+
+    obs_probs = zoom(obs_probs, 100/obs_probs.shape[0])
+
+    x_bin_me = obs_kappa_e.flatten()
+    y_bin_me = obs_probs.flatten()
+
+
+
+    y_bin_me = y_bin_me/np.abs(y_bin_me)
+    keep = np.isfinite(y_bin_me) 
+
+    y_bin_me = y_bin_me[keep]
+    x_bin_me = x_bin_me[keep]
+
+    nbins=20
+    bins = np.linspace(0.,0.5,nbins)
+
+    yobs, x, n = binned_statistic(
+        x_bin_me, y_bin_me, bins=bins, statistic=sidm_sen)
+    yobsstd, x, n = binned_statistic(
+        x_bin_me,y_bin_me, bins=bins, statistic=sidm_sen_std)
+    yobsn, x, n = binned_statistic(
+        x_bin_me,y_bin_me, bins=bins, statistic='count')
+    #yobs +=0.5
+    yobsstd /= np.sqrt(yobsn)
+    xc_obs = (x[1:]+x[:-1])/2.
+    yobsstd_monte = []
+    for imonte in range(1000):
+        np.random.shuffle(x_bin_me)
+        yobsstd_monte.append( binned_statistic(
+        x_bin_me, y_bin_me, bins=bins, statistic=np.mean)[0])
+    yobsstd = np.std(np.array(yobsstd_monte), axis=0)
 
     fig = plt.figure(figsize=(6,4))
     xc = (x[1:] + x[:-1]) / 2.
     ax = plt.gca()
 
     for dataset in corr.keys():
-        ax.errorbar(xc, corr[dataset],
+        ax.errorbar(xc_sim, corr[dataset],
                     std[dataset], fmt='o-', capsize=2,
                 lw=2, label=' '.join(dataset.split('_')).upper())
 
+    ax.errorbar( xc_obs, yobs, yobsstd, fmt='o', color='k', label="Observation", capsize=2)
     leg = ax.legend()
     frame = leg.get_frame()
     frame.set_edgecolor("black")
     frame.set_linewidth(1.0)
-    ax.set_xlabel(r'Weak lensing convergence, $\kappa$', fontsize=15)
-    ax.set_xlim(0,0.8)
-    ax.set_ylim(0.,1)
+    ax.set_xlabel(r'Weak lensing convergence, $\kappa$')
+
     ax.fill_between(
         [0.0,1.0],
         [0.5]*2, [1]*2,
@@ -935,19 +673,20 @@ def figure4():
         color='k', alpha=0.2)
 
     ax.text(0.05, 0.9, "Regions sensitive to SIDM", transform=ax.transAxes, fontsize=15)
-    ax.text(0.05, 0.1, "Regions sensitive to CDM", transform=ax.transAxes, fontsize=15)
-    ax.set_ylabel("Fraction of pixels that are sensitive to SIDM", fontsize=11)
-    fname="plots/Sensitivty_relation.pdf"
+    ax.text(0.4, 0.1, "Regions sensitive to CDM", transform=ax.transAxes, fontsize=15)
+    ax.set_ylabel("Fraction of pixels that are sensitive to SIDM")
+    ax.set_xlim(0,0.5)
+    ax.set_ylim(0.,1)
+    fname = "plots/Sensitivty_relation.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
+    os.system(f"pdfcrop {fname} {fname}")
+
 
 
 def figure5():
     # Particle physics inference
 
-
-    ifilter='concat'
-
+    ifilter = 'concat'
     models, probs = pkl.load(open("pickles/probs_for_cross_concat_nob1.pkl","rb"))
     models, probabilities, probabilities_noise =pkl.load(open("pickles/model_on_data.pkl","rb"))
     nmodels = probabilities[ifilter].shape[0]
@@ -960,7 +699,7 @@ def figure5():
 
     all_thresholds = np.array(all_thresholds)
     thresholds = np.mean(all_thresholds,axis=0)
-    err = np.std(all_thresholds,axis=0)
+    err = return_error_in_mean(all_thresholds)
 
     cross = np.array([float(i) for i in probs.keys() ])
 
@@ -968,6 +707,8 @@ def figure5():
         probabilities['concat'],
         { icross:thresholds[icx] for icx, icross in enumerate(cross)},
         return_all=True)
+
+
 
     gp = est['gp']
 
@@ -1007,12 +748,10 @@ def figure5():
 
     xpdf = np.linspace(0.4,0.8,1000)
     thresh = 1-probabilities['concat']
-    correction = 2.08
-    corr = correction*nmodels**0.5/nmodels**0.38
 
     ax = axarr[0].twiny()
 
-    ypdf = np.prod([ norm.pdf(xpdf, i, corr*np.std(probabilities['concat'])) for i in thresh ],axis=0)
+    ypdf = norm.pdf(xpdf, 1-np.mean(probabilities['concat']), return_error_in_mean(probabilities['concat']))
     ypdf /= np.sum(ypdf)*(xpdf[1]-xpdf[0])
 
     ax.plot(ypdf[::-1], xpdf[::-1], 'k-')
@@ -1021,7 +760,7 @@ def figure5():
     ax.set_ylim(0.45, 0.75)
     ax.set_xticklabels([])
     ax.grid(False)
-    ax.legend(handles=handles)
+    ax.legend(handles=handles,loc=2)
     #####################
 
 
@@ -1030,12 +769,11 @@ def figure5():
     #####################
 
 
-    kde = gaussian_kde( est['estimates'] )
+    kde = gaussian_kde( est['estimates'])
     xpdf = np.linspace(-10,10,10000)
     ypdf = kde.pdf(xpdf)
 
-
-
+    log_max_like = np.sum(ypdf*xpdf)/np.sum(ypdf)
     log_max_like = xpdf[np.argmax(ypdf)]
 
     cdf = cumulative_trapezoid(
@@ -1092,7 +830,7 @@ def figure5():
         r'$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$', fontsize=15
     )
     ax.set_ylabel("Posterior Likelihood", fontsize=15)
-    ax.legend(loc=2)
+    ax.legend(loc=1)
     ax.set_xlim(-2.5, 1.5)
     ax.set_xticks(np.linspace(-2.5,1,6))
     ax.set_ylim(0, 0.9)
@@ -1100,8 +838,9 @@ def figure5():
     fig.align_ylabels()
     filename = "plots/output_to_model.pdf"
     plt.savefig(filename)
-    os.system(f"pdfcrop {filename} {filename} > /dev/null 2>&1")  
+    os.system("pdfcrop %s %s" % ( filename, filename))  
     print(f"${max_like:.2f}^{{+{error[1]:.2f}}}_{{-{error[0]:.2f}}}")
+
     
     return log_max_like, log_like_one_sigma
 
@@ -1113,7 +852,6 @@ def figure6( log_max_like, log_error):
         max_like - 10**(log_max_like - log_error[0]),
         10**(log_max_like + log_error[1]) - max_like,  
     ])
-    print(max_like, error)       
             
     markersize = 12
 
@@ -1180,11 +918,468 @@ def figure6( log_max_like, log_error):
     ax.legend(loc=1)
     fname = "plots/particle_physics.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
 # # Appendix plots
 
 def figureA1():
+    
+    nrow = 2 
+    ncol = 3
+    ifilter = 'concat'
+    fig =plt.figure(figsize=(15,10))
+    nbins=50
+    
+    ####################################
+    ##### PLOT 1 Intrinsic ell #####
+    ####################################
+    ax = plt.subplot(nrow,ncol,1)
+
+    obs_data = get_obs_data(
+            ifilter, data_dir="../data/100/a2744/"
+    )
+
+    x = np.linspace(0,1,nbins)
+    data = np.sqrt(obs_data['e1']**2+obs_data['e2']**2)
+
+    ydata, x = np.histogram( data, bins=x,density=True)
+
+
+
+    ax.stairs(
+        ydata,
+        x,
+        facecolor='g',
+        alpha=0.3,
+        fill=True,
+        linewidth=2,
+        color="g",
+        label='Data'
+    )
+    gaussian_assumption = np.sqrt( 
+        norm.rvs( *norm.fit(obs_data['e1']), 2*obs_data['e1'].shape[0])**2 +
+        norm.rvs( *norm.fit(obs_data['e2']), 2*obs_data['e1'].shape[0])**2 
+    )
+
+    y, x = np.histogram(gaussian_assumption,bins=x,density=True)
+
+    xc = (x[1:] + x[:-1])/2.
+
+    ervs = chi.rvs( *chi.fit(data),  int(data.shape[0]))
+
+    theta = np.random.uniform(0,np.pi, int(data.shape[0]))
+    e1 = ervs*np.cos(2.*theta)
+    e2 = ervs*np.sin(2.*theta)
+    g = np.sqrt(e1**2+e2**2)
+    y, x = np.histogram( e1*2/(1+g**2), density=True, bins=np.linspace(-1,1,nbins) )
+
+    obsshear = np.sqrt(obs_data['e1']**2+obs_data['e2']**2)
+
+    ax.plot( xc, chi.pdf(xc, *chi.fit(data)), color='r',label='Chi',lw=2)
+    ax.plot( xc, norm.pdf(xc, *norm.fit(data)), color='b',label='Gaussian',lw=2)
+
+
+
+    ax.set_ylabel("Probability distribution",fontsize=15)
+
+
+    ax.set_xlabel("Absolute ellipticity",fontsize=15)
+    ax.set_xlim(0,1.2)
+    ax.legend(fontsize=15)
+
+    ####################################
+    ##### PLOT 2 Ngalaxies per bin #####
+    ####################################
+
+    ax = plt.subplot(nrow,ncol,2)
+
+    nmonte = 10000
+    intrinsic_ell = []
+    ngal_range = np.arange(20)+1
+    for ngal in ngal_range:
+        rdn_ells = []
+        for imonte in range(nmonte):
+            rdn_idx = np.random.choice(
+                np.arange(obs_data['e1'].shape[0]),
+                size=ngal
+            )
+
+            e1rdn = np.mean(obs_data['e1'][rdn_idx])
+            e2rdn = np.mean(obs_data['e2'][rdn_idx])
+
+
+
+            rdn_ells.append(np.sqrt(e1rdn**2+e2rdn**2))
+
+        fit = chi.fit(rdn_ells)[2]
+
+        intrinsic_ell.append(fit)
+    intrinsic_ell = np.array(intrinsic_ell)
+    ax.plot(
+        ngal_range, intrinsic_ell, '-o', label='Measured'
+    )
+    ax.plot(
+        ngal_range, intrinsic_ell[0]/np.sqrt(ngal_range), '-',label='1/sqrt(N)', lw=2
+    )
+
+
+    ax.set_xlabel("Number of galaxies in a bin",fontsize=15)
+    ax.set_ylabel("Fitted intrinsic ell of chi fit",fontsize=15)
+    ratio =  (intrinsic_ell[0]/np.sqrt(ngal_range)) / intrinsic_ell
+
+
+
+    def g1_func( snr, a, b, c, d):
+
+        return a + b*np.arctan( ( snr - c)/d)
+
+
+
+    popt, pcov = curve_fit(
+                    g1_func,
+                    ngal_range,
+                    ratio)
+
+
+    ax.plot(
+        ngal_range, intrinsic_ell[0]/(g1_func( ngal_range, *popt)*np.sqrt(ngal_range)), label='Fit', lw=2
+    )
+    ax.legend(fontsize=15)
+    ax.set_ylabel("Probability distribution",fontsize=15)
+
+    ####################################
+    ##### PLOT 3 Source redshift #####
+    ####################################
+
+
+    ax = plt.subplot(nrow,ncol,3)
+    ax.set_ylabel("Probability distribution",fontsize=15)
+
+    obs_data = get_obs_data(
+                ifilter, data_dir="../data/100/a2744/", photoz=True, remove_members=True)
+
+    UNCOVER_ERROR=0.06
+    kde = gaussian_kde(
+        obs_data['redshift'][ np.abs(obs_data['redshift']-args.default_zs) > 1e-2],
+        UNCOVER_ERROR
+    )
+    xpdf = np.linspace(0,10,1000)
+    ypdf =  kde.pdf(xpdf)
+
+
+
+    ax.plot(xpdf,
+            ypdf, color='k', label='n(z)'
+            )
+    ax.fill_between(
+        xpdf, ypdf, alpha=0.6, color='k'
+    )
+    ax.plot(
+        [args.default_zs]*2,
+        [0,1.0],
+        'k--', label=f"$\langle z\\rangle={args.default_zs:0.2f}$")
+    ax.legend(fontsize=15)
+    ax.set_xlabel("Galaxy source redshift", fontsize=15)
+    ax.set_ylim(0,0.7)
+    ax.set_xlim(0,10)
+
+    ####################################
+    ##### PLOT 4 Susceptibility tensor #####
+    ####################################
+
+    ax = plt.subplot(nrow,ncol,4)
+
+
+    def std_err( x ):
+        return np.std(x)/np.sqrt(x.shape[0])
+
+    cuts= {'f115w':{'signal_noise_cut':4, 'stat_type':'snr'}, 
+           'f150w':{'signal_noise_cut':5, 'stat_type':'snr'}}
+    fid_cut = {
+                'size_cut':[2,200],
+                'signal_noise_cut':5,
+                'stat_type':'snr',
+                'mag_cut':[0,30],
+                'verbose':False
+            }
+
+    xbins = np.linspace(0,20,30)
+
+
+
+    color={'f115w':'b','f150w':'r'}
+    for ifilter in ['f115w','f150w']:
+        obs_data = fits.open(f"../data/100/a2744/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears")[1].data
+        this_cut = fid_cut.copy()
+
+        for icut in cuts[ifilter].keys():
+            this_cut[icut] = cuts[ifilter][icut]
+
+        calc_shear(
+                    obs_data, 
+                    "test.fits", 
+                    **this_cut
+        )
+        data = fits.open("test.fits")[1].data
+
+        y, x, n = binned_statistic(
+            data['snr'],data['g1_gal'], 
+            bins=xbins
+        )
+        stdy, x, n = binned_statistic(
+            data['snr'],data['g1_gal'], 
+            bins=xbins,
+            statistic=std_err
+        )
+        xc = (x[1:]+x[:-1])/2.
+
+        ax.errorbar(xc, y, stdy, capsize=2,fmt='o',label=ifilter, color=color[ifilter] )
+        ax.plot(np.sort(data['snr']), data['g1_model'][np.argsort(data['snr'])],'--', color=color[ifilter])
+        ax.set_xlim(3,20)
+    ax.set_xlabel('Detection signal-to-noise',fontsize=15)
+    ax.set_ylabel('Lensing susceptibility tensor',fontsize=15)
+    ax.legend(fontsize=15)
+
+
+    ####################################
+    ##### PLOT 5 B MODES #####
+    ####################################
+
+    ax = plt.subplot(nrow,ncol,5)
+
+
+    stacked_rotated_modes,obs_kappa_b = pkl.load(open("pickles/bmode_check.pkl","rb"))
+    bins = np.linspace(-1,1,50)
+
+    y_noise_floor, x =np.histogram(stacked_rotated_modes,bins=bins, density=True)
+    y_b_modes, x =np.histogram(obs_kappa_b,bins=bins, density=True)
+
+    xc = (x[1:] + x[:-1])/2.
+
+    ax.stairs(
+        y_noise_floor,
+        x,
+        fill=False,
+        linewidth=2,
+        color="k",
+        ls='--',
+        label='Sys-free B-Modes'
+    )
+
+    ax.stairs(
+        y_b_modes,
+        x,
+        fill='red',
+        alpha=0.3,
+        linewidth=2,
+        color="k",
+         label='Measured B-Modes'
+    )
+
+    residual_b = np.std(stacked_rotated_modes.flatten()) - np.std(obs_kappa_b.flatten())
+    ax.text(0.1, 0.69, f"Residual B-mode={residual_b:0.3f}", 
+            bbox=dict(
+            facecolor="white",
+            edgecolor="lightgrey",
+            boxstyle="square,pad=0.2",   # or "round,pad=0.3"
+            linewidth=1,
+        ),
+            transform=ax.transAxes, ha='left', fontsize=15)
+    ax.set_xlabel(r"Convergence, $\kappa$",fontsize=15)
+    ax.legend(loc=1,fontsize=15)
+    ax.set_ylim(0,6)
+    ax.set_ylabel("Probability distribution",fontsize=15)
+
+    ####################################
+    ##### PLOT 6 GALAXY DENSITY #####
+    ####################################
+
+    ax = plt.subplot(nrow,ncol,6)
+
+
+    obs_cat = get_obs_data( 'concat', data_dir="../data/100/a2744/")
+    binned_data = bin_obs_data(obs_cat)
+    ngal = binned_data['ngal']
+    if np.max(obs_cat['x']) > 1000:
+        ra,dec = ra_dec_to_simulation_image_pos( obs_cat)
+        obs_cat['x'] = ra
+        obs_cat['y'] = dec
+    image_size  = 100
+    obs_kappa_e, obs_kappa_b = get_kappa(
+        obs_cat, smooth=1.5, extent=[
+                        -image_size//2,image_size//2,-image_size//2,image_size//2
+                    ]
+    )
+
+    kappa_filtered = obs_kappa_e[ ngal > 0 ].flatten()
+    ngal_filtered = ngal[ ngal > 0 ].flatten()
+
+
+    bins = 20
+    y,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic=np.mean )
+    stdy,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic=np.std )
+    cy,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic='count')
+
+    xc = (x[1:]+x[:-1])/2.
+    fractional_change = y/np.mean(ngal_filtered)
+    fraction_err = stdy/np.sqrt(cy)/np.mean(ngal_filtered)
+
+    ax.errorbar(xc,fractional_change,fraction_err, capsize=2, fmt='o-',color='k')
+
+
+    def lin_func( x, a, b):
+        return x*0+a 
+
+    popt, pope = curve_fit(
+        lin_func, xc[ xc>0], fractional_change[xc>0],sigma=fraction_err[xc>0]
+    )
+
+    ax.plot( np.array([-1,1]), lin_func(np.array([-1,1]), *popt),'r--',label=f'N$_{{cont}}={popt[0]:0.2f}$')
+    ax.set_xlim(-0.4,0.8)
+    ax.set_xlabel("Weak lensing convergence, $\kappa$", fontsize=15)
+    ax.set_ylabel("$N_{\\rm gal}$ / $\langle N_{\\rm gal}\\rangle$", fontsize=15)
+    ax.legend()
+
+
+
+    filename = "plots/intrinsic_ell.pdf"
+    plt.savefig(filename)
+
+def figureA2():
+    estimates = pkl.load(open("pickles/how_correlated.pkl","rb"))
+    y_true = np.zeros(estimates[0].shape[1])+np.mean(estimates[0][:,:,0])
+    predictions = estimates[0][:,:,0]
+
+    # ------------------------------------------------------------
+    # Inputs
+    # ------------------------------------------------------------
+    # predictions.shape = (n_models, n_test_samples)
+    # y_true.shape      = (n_test_samples,)
+
+    # Example:
+    # predictions = np.load("predictions.npy")
+    # y_true = np.load("y_true.npy")
+
+    n_models, n_test = predictions.shape
+
+    # ------------------------------------------------------------
+    # Calculate errors
+    # ------------------------------------------------------------
+    errors = predictions - y_true[None, :]
+
+    # ------------------------------------------------------------
+    # Measure ensemble error as a function of N
+    # ------------------------------------------------------------
+    #
+    # Here we take the first N models.
+    # Better: randomly select subsets of N models and average
+    # over many subsets (see below).
+    # ------------------------------------------------------------
+
+    Ns = np.arange(1, n_models + 1)
+
+    rmse = []
+
+    for N in Ns:
+        nran = []
+        for i in range(1000):
+            rnadin = np.random.choice(np.arange(n_models), N, replace=False)
+            ensemble_prediction = np.mean(predictions[rnadin], axis=0)
+            ensemble_error = (ensemble_prediction - y_true)/np.std(errors,axis=0)
+            nran.append(np.sqrt(np.mean(ensemble_error**2)))
+        rmse.append(np.mean(nran))
+
+    rmse = np.array(rmse)
+
+    # ------------------------------------------------------------
+    # Fit a power law RMSE ~ N^alpha
+    # ------------------------------------------------------------
+
+    def correlated_rmse(N, sigma, rho):
+        """
+        Expected ensemble RMSE for models with
+        individual error scale sigma and
+        pairwise error correlation rho.
+        """
+        return sigma * np.sqrt((1 - rho) / N + rho)
+
+    def fit_power( x, a, b ):
+        return x**b
+
+    # ------------------------------------------------------------
+    # Your measured ensemble RMSE
+    # ------------------------------------------------------------
+
+    # Ns          = array of ensemble sizes
+    # mean_rmse   = measured mean RMSE for each N
+    # std_rmse    = uncertainty / scatter in RMSE measurements
+
+
+    # ------------------------------------------------------------
+    # Fit correlated-error model
+    # ------------------------------------------------------------
+
+    popt_power, pcov_power = curve_fit(
+        fit_power,
+        Ns,
+        rmse,
+    )
+
+    A, alpha = popt_power
+
+    A_err, alpa_err = np.sqrt(np.diag(pcov_power))
+
+    print(f"A = {A:.4f} +/- {A_err:.4f}")
+    print(f"alpha   = {alpha:.4f} +/- {alpa_err:.4f}")
+
+    print(f"\nMeasured scaling:")
+    print(f"RMSE ~ {A:.4f} * N^{alpha:.3f}")
+
+    popt_corr, pcov_corr = curve_fit(
+        correlated_rmse,
+        Ns,
+        rmse,
+    )
+
+    sigma_fit, rho_fit  = popt_corr
+    sigma_err, rho_err,  = np.sqrt(np.diag(pcov_corr))
+
+    print(f"rho = {rho_fit:.4f} +/- {rho_err:.4f}")
+    print(f"sigma = {sigma_fit:.4f} +/- {sigma_err:.4f}")
+
+
+    # ------------------------------------------------------------
+    # Plot measured scaling
+    # ------------------------------------------------------------
+
+    plt.figure(figsize=(5, 4))
+
+    plt.plot(Ns, rmse, "o", label="Measured")
+
+    plt.plot(Ns, fit_power(Ns, *popt_power), "-",  lw=2,
+             label=f"Fitted Power law ($N^{{{alpha:0.2f}}}$)")
+    plt.plot(Ns, correlated_rmse(Ns, *popt_corr), "-", lw=2, 
+             label=f"Fitted correlation law $\\rho={rho_fit:0.2f}$")
+
+
+    # Independent-model prediction for comparison
+    independent_rmse = sigma_fit / np.sqrt(Ns)
+
+    plt.plot(
+        Ns,
+        independent_rmse,
+        "--",
+        label=r"Independent models ($N^{-0.5}$)"
+    )
+
+    plt.xlabel("Number of models N",fontsize=15)
+    plt.ylabel("Ensemble RMSE / standard deviation",fontsize=13)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("plots/correlated_models.pdf")
+
+
+
+def figureA3():
 
 
     latent = pkl.load(open("pickles/latent.pkl","rb"))
@@ -1261,7 +1456,6 @@ def figureA1():
             ax.text(0.1,0.9,f"Model {1+imx}", transform=ax.transAxes, fontsize=15)
     fname="plots/latent_overlap.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
     ########################################
     ##### Latent space summary distance
@@ -1306,10 +1500,9 @@ def figureA1():
     ax.set_xlabel("Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
     fname="plots/goodness_of_fit.pdf"
     plt.savefig(fname)
-    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
 
-def figureA2(log_max_like,log_error):
+def figureA4(log_max_like,log_error):
 
     alpha =0.7
     text_ypt=1
@@ -1546,10 +1739,8 @@ def figureA2(log_max_like,log_error):
     fname='plots/galaxy_selection.pdf'
     plt.savefig(fname)
 
-    os.system(f"pdfcrop {fname} {fname} > /dev/null 2>&1")
 
-
-def figureA3(log_max_like, log_error):
+def figureA5(log_max_like, log_error):
     # ## Model systematics
 
     systematics = {
@@ -1749,14 +1940,14 @@ def figureA3(log_max_like, log_error):
 if __name__ == "__main__":
     #figure1()
     #figure2()
-    #figure3()
-    #figure4()
-    log_max_like, log_error = figure5()
-    
+    figure3and4()
+    #log_max_like, log_error = figure5()
     #figure6(log_max_like, log_error)
     #figureA1()
-    #figureA2(log_max_like, log_error)
-    figureA3(log_max_like, log_error)
+    #figureA2()
+    #figureA3()
+    #figureA4(log_max_like, log_error)
+    #figureA5(log_max_like, log_error)
 
 
 

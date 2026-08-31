@@ -860,13 +860,16 @@ def get_source_redshift( ifilter, data_dir='data/100/a2744', cuts=None ):
     return source_redshift
 
 
-def return_error_in_mean( all_thresholds, correction=0.18 ):
+def return_error_in_mean( all_thresholds, model_correlation=0.283 ):
+    '''
+    Equation 7.51 in https://www.deeplearningbook.org/contents/regularization.html
     
+    '''
     nmodels = all_thresholds.shape[0]
     
-    std = np.std(all_thresholds,axis=0)
+    sigma = np.std(all_thresholds,axis=0)
     
-    return std/all_thresholds.shape[0]**correction
+    return sigma * np.sqrt((1 - model_correlation) / nmodels + model_correlation)
 
 if __name__ == "__main__":
     
