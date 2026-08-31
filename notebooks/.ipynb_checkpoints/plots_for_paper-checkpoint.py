@@ -24,7 +24,8 @@ the paper. These include=
     - FigA4. Systematics in the data
     - FigA5. Systematics in the model
 '''
-    
+if not os.path.isdir("plots"):
+    os.system("mkdir plots")
 
 def figure1():
     # ## Postage stamp examples
