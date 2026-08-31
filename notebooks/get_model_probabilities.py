@@ -41,7 +41,7 @@ from utils import parse_args, set_seed, setup_wandb, calculate_class_weights
 
 import numpy as np
 from matplotlib import pyplot as plt
-from netloader.network import Network
+
 from torchvision.models import (
     ResNet18_Weights, resnet18, ResNet34_Weights, resnet34,
     MobileNet_V3_Small_Weights, mobilenet_v3_small,
