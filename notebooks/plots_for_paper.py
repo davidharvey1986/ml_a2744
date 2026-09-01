@@ -417,7 +417,7 @@ def figure3and4():
     obs_cat['y'] = binned_data['delta_dec']
     image_size  = 100
     obs_kappa_e, obs_kappa_b = get_kappa(
-        obs_cat, smooth=1.5, extent=[
+        obs_cat, smooth=2, extent=[
                         -image_size//2,image_size//2,-image_size//2,image_size//2
                     ]
     )
@@ -426,13 +426,13 @@ def figure3and4():
     sim_fiducial, sim_probabilities = pkl.load(open(f"pickles/sim_senstivity_{segment_size}_select_moving_av.pkl","rb"))      
     cmap_contour = 'YlOrRd'
     cmap_image = 'viridis'
-    kappa_bins = np.linspace(0.05,0.65,8)
+    kappa_bins = np.linspace(0.0,0.6,7)
 
     fig, axarr=plt.subplots(1, 3, figsize=(15, 5))
     fig.subplots_adjust(wspace=0.1)
 
     kappas = []
-    contrast=5
+    contrast=3
     vmin = 1
 
     vmax =  contrast
