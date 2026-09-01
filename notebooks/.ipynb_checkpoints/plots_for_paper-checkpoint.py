@@ -334,7 +334,7 @@ def figure2():
                            alpha=0.2, label=domain_name.upper())
 
 
-            axarr[1].set_xlabel("Model Output", fontsize=15)
+            axarr[1].set_xlabel("Model output", fontsize=15)
             axarr[1].set_ylabel("Probability distribution", fontsize=15)
 
             axarr[1].set_xlim(0.475, 0.65)
@@ -355,7 +355,7 @@ def figure2():
     axarr[0].set_xscale('log')
 
     axarr[0].set_xlabel("Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
-    axarr[0].set_ylabel("Model Output", fontsize=15)
+    axarr[0].set_ylabel("Model output", fontsize=15)
 
     axarr[0].set_xlim(1e-3,1.5)
     axarr[0].set_xscale('log')
@@ -738,7 +738,7 @@ def figure5():
     ax.set_xlabel(
         r'$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$', fontsize=15
     )
-    ax.set_ylabel("Mean Model Output", fontsize=15)
+    ax.set_ylabel("Mean model output", fontsize=15)
 
     #####################
 
@@ -830,7 +830,7 @@ def figure5():
     ax.set_xlabel(
         r'$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$', fontsize=15
     )
-    ax.set_ylabel("Posterior Likelihood", fontsize=15)
+    ax.set_ylabel("Posterior likelihood", fontsize=15)
     ax.legend(loc=1)
     ax.set_xlim(-2.5, 1.5)
     ax.set_xticks(np.linspace(-2.5,1,6))
