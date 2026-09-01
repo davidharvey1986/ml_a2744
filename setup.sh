@@ -15,11 +15,11 @@ source $ENV_NAME/bin/activate
 
 # Upgrade pip
 
-pip install --upgrade pip setuptools==59.8.0 wheel
+pip install --upgrade pip
 
 #SETUP tools with pkg
 
-python -m pip install "setuptools<81"
+
 
 # Core scientific stack
 
@@ -41,6 +41,8 @@ fi
 cd pyRRG 
 pip install .
 cd ..
+
+python -m pip install "setuptools<81"
 
 echo "export PYTHONPATH=${CWD}" >> $ENV_NAME/bin/activate
 
