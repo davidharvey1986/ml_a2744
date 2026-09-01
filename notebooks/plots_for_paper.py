@@ -1939,16 +1939,27 @@ def figureA5(log_max_like, log_error):
 
     
 if __name__ == "__main__":
-    #figure1()
-    #figure2()
+    print("Making Figure 1")
+    figure1()
+    print("Making Figure 2")
+    figure2()
+    print("Making Figure 3 and 4")
     figure3and4()
-    #log_max_like, log_error = figure5()
-    #figure6(log_max_like, log_error)
-    #figureA1()
-    #figureA2()
-    #figureA3()
-    #figureA4(log_max_like, log_error)
-    #figureA5(log_max_like, log_error)
+    print("Making Figure 5")
+    log_max_like, log_error = figure5()
+    print("Making Figure 6")
+    figure6(log_max_like, log_error)
+    print("Making Appendices")
+    print("Making A1")
+    figureA1()
+    print("Making A2")
+    figureA2()
+    print("Making A3")
+    figureA3()
+    print("Making A4")
+    figureA4(log_max_like, log_error)
+    print("Making A5")
+    figureA5(log_max_like, log_error)
 
 
 
