@@ -17,9 +17,13 @@ source $ENV_NAME/bin/activate
 
 pip install --upgrade pip setuptools==59.8.0 wheel
 
+#SETUP tools with pkg
+
+python -m pip install "setuptools<81"
+
 # Core scientific stack
 
-pip install numpy==1.26.1 scipy pandas  matplotlib seaborn scikit-learn ipython ipykernel jupyter
+pip install numpy==1.26.1 scipy pandas  matplotlib seaborn scikit-learn ipython ipykernel jupyter umap-learn
 
 # PyTorch (CUDA 12.6 wheels)
 

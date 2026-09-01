@@ -23,7 +23,7 @@ python -m pip install "setuptools<81"
 
 # Core scientific stack
 
-pip install numpy==1.26.1 scipy pandas  matplotlib seaborn scikit-learn ipython ipykernel jupyter
+pip install numpy==1.26.1 scipy pandas  matplotlib seaborn scikit-learn ipython ipykernel jupyter umap-learn
 
 # PyTorch (CUDA 12.6 wheels)
 

@@ -39,12 +39,12 @@ def main(
     sample_data=True,
     data_dir="data/100/a2744",
     reduce_shear=True,
-    zl = 0.305,
+    zl = 0.305, zs=1.72,
     add_ncomps=True
     ):
     
     
-    
+    #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
      
     ##### Some definitions ####
     
@@ -87,7 +87,7 @@ def main(
                     data[:,0], meta['norms'][:,0], 
                     meta['redshift']*0.+0.305, 
                     get_boxsize(idata_set),
-                    zs=get_source_redshift('concat',data_dir=data_dir),
+                    zs=zs, 
                     zl=zl, **{'ngal_per_sq_arcmin':200.},
                     reduce_shear=reduce_shear,
             )
@@ -155,7 +155,7 @@ def main(
                     data[:,0], meta['norms'][:,0], 
                     meta['redshift'], 
                     get_boxsize(idata_set),
-                    zs=get_source_redshift('concat'), 
+                    zs=zs,
                     zl=zl, **{'ngal_per_sq_arcmin':200.},
                     reduce_shear=False,
             )
