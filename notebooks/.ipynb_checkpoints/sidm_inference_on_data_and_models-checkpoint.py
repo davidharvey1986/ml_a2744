@@ -190,9 +190,10 @@ def infer_sidm_fct(
                         np.array([np.inf, np.inf, np.inf, np.inf])
                         ))
 
-    estimates  =  np.array([ g1_inv(  1-iest, *popt ) for iest in probabilities])
+    estimates  =  np.array([ g1_inv(  1-iest, *popt ) for iest in probabilities]).real
+    estimates[ estimates < -5] = -5 # Im not more sensitive than this
 
-    return estimates.real
+    return estimates
 
 def infer_sidm(
         probabilities,
@@ -240,7 +241,8 @@ def infer_sidm(
     else:
         kde = gaussian_kde( estimates, obsstd )
         xpdf = np.linspace(-10,10,1000)
-        ypdf = kde.pdf(xpdf)
+        ypdf = norm.pdf(xpdf, np.mean(estimates),
+                    return_error_in_mean(estimates))
 
         #max_like = np.sum(ypdf*xpdf)/np.sum(ypdf)
         max_like = xpdf[np.argmax(ypdf)]
@@ -305,7 +307,8 @@ def infer_sidm_interp(
     )
         
     estimates  =  np.array([ interp_invert( interp, 1-iest ) for iest in probabilities])
-
+    
+    estimates[ estimates < -5] = -5 # Im not more sensitive than this
     return estimates
 
 
