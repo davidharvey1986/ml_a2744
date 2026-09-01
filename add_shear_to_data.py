@@ -864,7 +864,9 @@ def return_error_in_mean( all_thresholds, model_correlation=0.283 ):
     '''
     Equation 7.51 in https://www.deeplearningbook.org/contents/regularization.html
     
+    
     '''
+    
     nmodels = all_thresholds.shape[0]
     
     sigma = np.std(all_thresholds,axis=0)

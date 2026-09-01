@@ -242,7 +242,7 @@ def infer_sidm(
         kde = gaussian_kde( estimates, obsstd )
         xpdf = np.linspace(-10,10,1000)
         ypdf = norm.pdf(xpdf, np.mean(estimates),
-                    return_error_in_mean(estimates))
+                    return_error_in_mean(np.array(estimates)))
 
         #max_like = np.sum(ypdf*xpdf)/np.sum(ypdf)
         max_like = xpdf[np.argmax(ypdf)]

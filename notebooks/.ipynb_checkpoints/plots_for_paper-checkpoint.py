@@ -770,9 +770,13 @@ def figure5():
     #####################
 
 
-    kde = gaussian_kde( est['estimates'])
+
     xpdf = np.linspace(-10,10,10000)
-    ypdf = kde.pdf(xpdf)
+    ypdf = norm.pdf(
+        xpdf, 
+        np.mean(est['estimates']), 
+        return_error_in_mean(np.array(est['estimates']))
+    )
 
     log_max_like = np.sum(ypdf*xpdf)/np.sum(ypdf)
     log_max_like = xpdf[np.argmax(ypdf)]
@@ -1940,26 +1944,26 @@ def figureA5(log_max_like, log_error):
     
 if __name__ == "__main__":
     print("Making Figure 1")
-    figure1()
+    #figure1()
     print("Making Figure 2")
-    figure2()
+    #figure2()
     print("Making Figure 3 and 4")
-    figure3and4()
+    #figure3and4()
     print("Making Figure 5")
     log_max_like, log_error = figure5()
     print("Making Figure 6")
-    figure6(log_max_like, log_error)
+    #figure6(log_max_like, log_error)
     print("Making Appendices")
     print("Making A1")
-    figureA1()
+    #figureA1()
     print("Making A2")
-    figureA2()
+    #figureA2()
     print("Making A3")
-    figureA3()
+    #figureA3()
     print("Making A4")
     figureA4(log_max_like, log_error)
     print("Making A5")
-    figureA5(log_max_like, log_error)
+    #figureA5(log_max_like, log_error)
 
 
 
