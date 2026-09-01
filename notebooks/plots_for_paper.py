@@ -838,7 +838,7 @@ def figure5():
     ax.legend(loc=1)
     ax.set_xlim(-2.5, 1.5)
     ax.set_xticks(np.linspace(-2.5,1,6))
-    ax.set_ylim(0, 0.9)
+    ax.set_ylim(0, 1.2)
 
     fig.align_ylabels()
     filename = "plots/output_to_model.pdf"
