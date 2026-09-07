@@ -47,10 +47,11 @@ def main(
 
     info = get_lens_info( cluster_name )
     zl = info['zl']
+    name = info['name']
     filter_list = info['filter_list']
     if len(filter_list) > 1:
         filter_list.append('concat')
-    print(f"CLUSTER redshift is {zl} and filters are {filter_list}")
+    print(f"{name} has redshift {zl} and filters {filter_list}")
     #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
 
 
@@ -888,7 +889,7 @@ def get_lens_info( cluster_name ):
         redshift_data['name'] == cluster_name
     ][0]
     
-    return {'zl':zl, 'filter_list':filter_list.split(',')}
+    return {'zl':zl, 'filter_list':filter_list.split(','), 'name':cluster_name}
     
 def prepare_observations( 
     filter_list, 
