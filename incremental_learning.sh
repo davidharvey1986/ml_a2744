@@ -5,7 +5,6 @@ fine_tune=0 #the weight to force the fine-tuning to align domains
 #/ np.mean(ngal[ngal!=0]) = 0.147
 adaptation_weight=1
 
-
 function get_zs () {
     
     if [[ $1 == "concat" ]]; then
@@ -22,10 +21,16 @@ function get_zs () {
     echo $zs
 }
 
+function get_redshift() {
+    local cluster
+    cluster=$(basename "$PWD")
+    awk -v cluster="$cluster" '$1 == cluster {print $2}' ../hst_shear/redshift.txt
+}
+
 for FILTER in concat
 do
     ZS=$(get_zs "${FILTER}")
-
+    ZL=$(get_redshift)
     for SEED in {1..30}
     do
         
@@ -60,7 +65,7 @@ do
                 --save_dir ${BASE_DIR} \
                 --ignore_dataset bahamas_1.pkl \
                 --apply_intrinsic_ell 0. \
-                --zl 0.305 \
+                --zl ${ZL} \
                 --zs ${ZS}
 
         else
@@ -95,7 +100,7 @@ do
                 --apply_intrinsic_ell $intrinsic_ell \
                 --num_avgpool_head 1  \
                 --seed $SEED \
-                --zl 0.305 \
+                --zl ${ZL} \
                 --zs ${ZS} \
                 --jwst_filter ${FILTER} \
                 --save_dir ${TUNE_DIR} \
@@ -121,7 +126,7 @@ do
                 --apply_intrinsic_ell 1.0 \
                 --num_avgpool_head 1  \
                 --seed $SEED \
-                --zl 0.305 \
+                --zl ${ZL} \
                 --zs ${ZS} \
                 --jwst_filter ${FILTER} \
                 --save_dir ${TUNE_DIR} \
