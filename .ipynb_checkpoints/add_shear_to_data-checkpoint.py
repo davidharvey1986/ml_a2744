@@ -17,7 +17,7 @@ from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
 import numpy.lib.recfunctions as rfn
 import sys
 from model import create_model
-
+from scipy.stats import chi
 def get_boxsize(set_name, return_units=units.pc, h=0.7):
     if ('bahamas' in set_name) or ('tng' in set_name) or ('flamingo' in set_name):
         boxsize= 10./h*units.Mpc
@@ -43,7 +43,7 @@ def main(
     add_ncomps=True
     ):
     
-        
+
     info = get_lens_info( cluster_name )
     zl = info['zl']
     filter_list = info['filter_list']
@@ -51,7 +51,18 @@ def main(
         filter_list.append('concat')
     print(f"CLUSTER redshift is {zl} and filters are {filter_list}")
     #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
-     
+
+    #First prepare the observations as this will be required by the incremental learning
+    prepare_observations( 
+            filter_list, 
+            nmonte=2, 
+            image_size=100, 
+            cuts={},
+            data_dir=data_dir,
+            pickle_dir='notebooks/pickles'
+        
+        )  
+         
     ##### Some definitions ####
     
     pixel_size_kpc = 20.*units.kpc
@@ -242,15 +253,7 @@ def main(
 
             pkl.dump([ meta, new_data], open(new_file_name,"wb"))
 
-    prepare_observations( 
-            filter_list, 
-            nmonte=2, 
-            image_size=100, 
-            cuts=None,
-            data_dir=data_dir,
-            pickle_dir='notebooks/pickle'
-        
-        )
+
 def get_num_merging_components(
                 dataset, 
                 mass_ratio_limit=10,
@@ -878,14 +881,15 @@ def prepare_observations(
     filter_list, 
     nmonte=2, 
     image_size=200, 
-    cuts=None,
+    cuts={},
     data_dir="data/100/observations/",
-    pickle_dir='notebooks/pickle'):
+    pickle_dir='notebooks/pickles'):
     
 
     for ifx, ifilter in enumerate(filter_list):
         obs_data = get_obs_data( 
-            ifilter, 
+            ifilter,
+            filter_list,
             data_dir=data_dir, 
             cuts=cuts
         )
@@ -933,9 +937,6 @@ def prepare_observations(
             e1 = egal*np.cos(2.*this_theta)
             e2 = egal*np.sin(2.*this_theta)
 
-            if i==0:
-                ax[ifx,2].hist( e1, density=True )
-                ax[ifx,3].hist( e2 , density=True)
 
             e1_rot, e2_rot = bin2d( 
                     delta_ra, delta_dec, 
@@ -970,10 +971,7 @@ def prepare_observations(
         stacked = np.append(e1_stacked[None,:,:,:], e2_stacked[None,:,:,:], axis=0)
         stacked = np.moveaxis( stacked, 0, 1)
 
-        uncover_footprint = 49. #/ arcmin2
-        galdensity = obs_data.shape[0]/uncover_footprint
-        print(f"Galaxy density for {ifilter} is {galdensity}/arcmin2")
-        pkl.dump([{}, stacked],open(f"../data/100/a2744/obs_data_{ifilter}.pkl","wb"))
+        pkl.dump([{}, stacked],open(f"{data_dir}/obs_data_{ifilter}.pkl","wb"))
 if __name__ == "__main__":
     
 
