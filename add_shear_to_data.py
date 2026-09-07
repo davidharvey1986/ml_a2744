@@ -420,31 +420,12 @@ def get_obs_data(
         )[1].data
         
     if photoz:
-        photo_z_matched = run_match(
-            f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
-            f"{data_dir}/{ifilter}_filtered.fits",
-            search_rad=0.5
-        )[1].data
         
         default_zs = 1.0 #sig_mean( photo_z_matched['z_ml'] )
 
         print(f"DEFAULT ZS {default_zs}")
         
         redshift = np.full(obs_data.shape[0], default_zs, dtype=np.float64)
-
-        # build lookup table
-        z_lookup = dict(zip(photo_z_matched['NUMBER'],
-                            photo_z_matched['z_ml']))
-
-        # fill values
-        n_missing = 0
-        for j, number in enumerate(obs_data['NUMBER']):
-            if number in z_lookup:
-                if np.isfinite(z_lookup[number] ):
-                    
-                    redshift[j] = z_lookup[number] 
-                else:
-                    redshift[j] = default_zs
             
         # append field
         obs_data = rfn.append_fields(
@@ -880,7 +861,7 @@ def get_lens_info( cluster_name ):
     
     filter_list = redshift_data['filter_list'][
         redshift_data['name'] == cluster_name
-    ]
+    ][0]
     
     return {'zl':zl, 'filter_list':filter_list.split(',')}
     
@@ -888,7 +869,7 @@ def get_lens_info( cluster_name ):
 if __name__ == "__main__":
     
 
-    
+    '''
     main( 
         sys.argv[1],
         search_path="data/100/convergence/*.pkl", 
@@ -896,6 +877,7 @@ if __name__ == "__main__":
         sample_data=False, 
         add_ncomps=True 
     )
+    '''
     #Final data, h=0.7 so that the data is correct for final outputs
     main( 
         sys.argv[1],
