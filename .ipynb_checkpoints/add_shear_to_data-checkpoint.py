@@ -34,19 +34,22 @@ def crop_center(img,cropx,cropy):
 def main( 
     cluster_name,
     search_path="data/100/convergence/*.pkl", 
-    filter_list = ['concat'],
     thresh_k = 0.9, 
     h=0.7, 
     sample_data=True,
-    data_dir="data/100/a2744",
+    data_dir="data/100/observations",
     reduce_shear=True,
     zs=1.,
     add_ncomps=True
     ):
     
         
-    zl = get_lens_redshift( cluster_name )
-    
+    info = get_lens_info( cluster_name )
+    zl = info['zl']
+    filter_list = info['filter_list']
+    if len(filter_list) > 1:
+        filter_list.append('concat')
+        
     #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
      
     ##### Some definitions ####
@@ -112,7 +115,9 @@ def main(
     for ifx, ifilter in enumerate(filter_list):
         
         obs_data = get_obs_data( 
-            ifilter, data_dir=data_dir,
+            ifilter, 
+            filter_list,
+            data_dir=data_dir,
             photoz=True
         )
    
@@ -360,8 +365,9 @@ def data_to_shear( images, norms, redshifts, boxsize,
 
 def get_obs_data( 
     ifilter, 
+    filter_list,
     cuts={}, 
-    data_dir='data/100/a2744', 
+    data_dir='data/100/observations', 
     photoz=False, 
     redshift_cut=0.305+0.05*3):
         
@@ -374,7 +380,7 @@ def get_obs_data(
             'verbose':False
         } 
         
-    for this_filter in ['f115w','f150w']:
+    for this_filter in filter_list:
         if this_filter not in list(cuts.keys()):
             print(f"Missing {this_filter} in cuts dict referring to default")
             cuts[this_filter] = {}
@@ -400,23 +406,23 @@ def get_obs_data(
  
     
     if ifilter == 'concat':
-        cat_a_name =     f"{data_dir}/a2744_f115w_filtered.fits"
-        cat_b_name =     f"{data_dir}/a2744_f150w_filtered.fits"
+        cat_a_name =     f"{data_dir}/{filter_list[0]}_filtered.fits"
+        cat_b_name =     f"{data_dir}/{filter_list[1]}_filtered.fits"
         obs_data = combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' )
-        concat_name =  f"{data_dir}/a2744_concat_filtered.fits"
+        concat_name =  f"{data_dir}/concat_filtered.fits"
 
         fits.writeto(  concat_name, obs_data, overwrite=True) 
 
     else:
 
         obs_data = fits.open(
-            f"{data_dir}/a2744_{ifilter}_filtered.fits"
+            f"{data_dir}/{ifilter}_filtered.fits"
         )[1].data
         
     if photoz:
         photo_z_matched = run_match(
             f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
-            f"{data_dir}/a2744_{ifilter}_filtered.fits",
+            f"{data_dir}/{ifilter}_filtered.fits",
             search_rad=0.5
         )[1].data
         
@@ -841,7 +847,7 @@ def sig_mean( redshift ):
     sig = sigma_critical( 0.305, redshift, Planck18).value
     return np.sum(redshift/sig)/np.sum(1/sig)
     
-def get_source_redshift( ifilter, data_dir='data/100/a2744', cuts=None ):
+def get_source_redshift( ifilter, data_dir='data/100/observations', cuts=None ):
     
     return 1.0
 
@@ -859,20 +865,24 @@ def return_error_in_mean( all_thresholds, model_correlation=0.283 ):
     
     return sigma * np.sqrt((1 - model_correlation) / nmodels + model_correlation)
 
-def get_lens_redshift( cluster_name ):
+def get_lens_info( cluster_name ):
     
     redshift_file = "/Users/davidharvey/Work/clusters/hst_shear/redshift.txt"
     
     redshift_data =  np.loadtxt(
         redshift_file,
-        dtype=[('name',object), ('redshift',float)]
+        dtype=[('name',object), ('redshift',float), ('filter_list',object)]
     )
                    
     zl = redshift_data['redshift'][
         redshift_data['name'] == cluster_name
     ]
     
-    return zl
+    filter_list = redshift_data['filter_list'][
+        redshift_data['name'] == cluster_name
+    ]
+    
+    return {'zl':zl, 'filter_list':filter_list}
     
     
 if __name__ == "__main__":
@@ -892,5 +902,5 @@ if __name__ == "__main__":
         search_path="data/100/convergence/*.pkl", 
         h=0.7, 
         sample_data=True, 
-        data_dir='data/100/a2744' 
+        data_dir='data/100/observations' 
     )
