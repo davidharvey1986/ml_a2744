@@ -157,7 +157,7 @@ def main(
                   
             dataset_name = idata_set.split('/')[-1]
             
-            new_data_path = f"{outpath}/obs"
+            new_data_path = f"{outpath}/obs/{ifilter}"
             new_file_name = f"{new_data_path}/{dataset_name}"
 
             
