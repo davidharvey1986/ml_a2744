@@ -52,16 +52,7 @@ def main(
     print(f"CLUSTER redshift is {zl} and filters are {filter_list}")
     #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
 
-    #First prepare the observations as this will be required by the incremental learning
-    prepare_observations( 
-            filter_list, 
-            nmonte=2, 
-            image_size=100, 
-            cuts={},
-            data_dir=data_dir,
-            pickle_dir='notebooks/pickles'
-        
-        )  
+
          
     ##### Some definitions ####
     
@@ -252,7 +243,17 @@ def main(
 
 
             pkl.dump([ meta, new_data], open(new_file_name,"wb"))
-
+            
+    #Finally prepare the observations as this will be required by the incremental learning
+    prepare_observations( 
+            filter_list, 
+            nmonte=2, 
+            image_size=100, 
+            cuts={},
+            data_dir=data_dir,
+            pickle_dir='notebooks/pickles'
+        
+        )  
 
 def get_num_merging_components(
                 dataset, 
