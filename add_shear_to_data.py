@@ -866,7 +866,7 @@ def get_lens_info( cluster_name ):
                    
     zl = redshift_data['redshift'][
         redshift_data['name'] == cluster_name
-    ]
+    ][0]
     
     filter_list = redshift_data['filter_list'][
         redshift_data['name'] == cluster_name
