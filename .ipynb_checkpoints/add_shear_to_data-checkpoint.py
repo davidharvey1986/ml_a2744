@@ -15,7 +15,7 @@ from RRGtools import run_match
 import os
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
 import numpy.lib.recfunctions as rfn
-
+import sys
 from model import create_model
 
 def get_boxsize(set_name, return_units=units.pc, h=0.7):
@@ -32,6 +32,7 @@ def crop_center(img,cropx,cropy):
     return img[starty:starty+cropy,startx:startx+cropx]
 
 def main( 
+    cluster_name,
     search_path="data/100/convergence/*.pkl", 
     filter_list = ['concat'],
     thresh_k = 0.9, 
@@ -39,10 +40,12 @@ def main(
     sample_data=True,
     data_dir="data/100/a2744",
     reduce_shear=True,
-    zl = 0.305, zs=1.72,
+    zs=1.,
     add_ncomps=True
     ):
     
+        
+    zl = get_lens_redshift( cluster_name )
     
     #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
      
@@ -88,7 +91,8 @@ def main(
                     meta['redshift']*0.+0.305, 
                     get_boxsize(idata_set),
                     zs=zs, 
-                    zl=zl, **{'ngal_per_sq_arcmin':200.},
+                    zl=zl, 
+                    **{'ngal_per_sq_arcmin':200.},
                     reduce_shear=reduce_shear,
             )
        
@@ -359,7 +363,6 @@ def get_obs_data(
     cuts={}, 
     data_dir='data/100/a2744', 
     photoz=False, 
-    remove_members=True,
     redshift_cut=0.305+0.05*3):
         
     # Cuts already taken during the WL process - verified.
@@ -379,24 +382,17 @@ def get_obs_data(
             if ikey not in list(cuts[this_filter].keys()):
                 cuts[this_filter][ikey] = fid_cuts[ikey]
 
-        shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{this_filter}-clear_drc_sci_clean.shears"
+        shear_cat =  f"{data_dir}/{this_filter}.shears"
         obs_data = fits.open(shear_cat)[1].data  
 
         calc_shear(
             obs_data, 
-            f"{data_dir}/a2744_{this_filter}_filtered.fits", 
+            f"{data_dir}/{this_filter}_filtered.fits", 
             **cuts[this_filter]
             )      
 
-        if remove_members:
-            obs_data = remove_cluster_members( 
-                f"{data_dir}/a2744_{this_filter}_filtered.fits", 
-                f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
-                redshift_cut=redshift_cut
-            )
-
         fits.writeto(
-             f"{data_dir}/a2744_{this_filter}_filtered.fits", 
+             f"{data_dir}/{this_filter}_filtered.fits", 
             obs_data, overwrite=True
         )
             
@@ -424,7 +420,7 @@ def get_obs_data(
             search_rad=0.5
         )[1].data
         
-        default_zs = sig_mean( photo_z_matched['z_ml'] )
+        default_zs = 1.0 #sig_mean( photo_z_matched['z_ml'] )
 
         print(f"DEFAULT ZS {default_zs}")
         
@@ -847,17 +843,7 @@ def sig_mean( redshift ):
     
 def get_source_redshift( ifilter, data_dir='data/100/a2744', cuts=None ):
     
-    if cuts is None:
-        cuts= {'f115w':{'signal_noise_cut':0, 'stat_type':'snr'}, 
-       'f150w':{'signal_noise_cut':5, 'stat_type':'snr'}}
-    data = get_obs_data( ifilter, photoz=True , data_dir=data_dir, cuts=cuts)
-
-    #remove artifical redshifts 
-    nz = data['redshift'][ np.abs( data['redshift'] - np.median(data['redshift'])) > 1e-3]
-    
-    source_redshift = sig_mean( nz )
-
-    return source_redshift
+    return 1.0
 
 
 def return_error_in_mean( all_thresholds, model_correlation=0.283 ):
@@ -873,11 +859,28 @@ def return_error_in_mean( all_thresholds, model_correlation=0.283 ):
     
     return sigma * np.sqrt((1 - model_correlation) / nmodels + model_correlation)
 
+def get_lens_redshift( cluster_name ):
+    
+    redshift_file = "/Users/davidharvey/Work/clusters/hst_shear/redshift.txt"
+    
+    redshift_data =  np.loadtxt(
+        redshift_file,
+        dtype=[('name',object), ('redshift',float)]
+    )
+                   
+    zl = redshift_data['redshift'][
+        redshift_data['name'] == cluster_name
+    ]
+    
+    return zl
+    
+    
 if __name__ == "__main__":
     
 
     
     main( 
+        sys.argv[1],
         search_path="data/100/convergence/*.pkl", 
         h=0.7, 
         sample_data=False, 
@@ -885,6 +888,7 @@ if __name__ == "__main__":
     )
     #Final data, h=0.7 so that the data is correct for final outputs
     main( 
+        sys.argv[1],
         search_path="data/100/convergence/*.pkl", 
         h=0.7, 
         sample_data=True, 
