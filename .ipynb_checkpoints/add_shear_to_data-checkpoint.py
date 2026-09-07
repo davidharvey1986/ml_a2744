@@ -33,7 +33,8 @@ def crop_center(img,cropx,cropy):
 
 def main( 
     cluster_name,
-    search_path="data/100/convergence/*.pkl", 
+    search_path="../data/100/convergence/*.pkl", 
+    outpath="data/100/",
     thresh_k = 0.9, 
     h=0.7, 
     sample_data=True,
@@ -74,8 +75,12 @@ def main(
             
             idata_set = all_data_sets[idx]
             meta, data = pkl.load( open( idata_set, "rb"))
-            new_data_set = idata_set.replace("convergence","shear")
-            new_data_path = os.path.dirname(new_data_set)      
+            
+            dataset_name = idata_set.split('/')[-1]
+            
+            new_data_path = f"{outpath}/shear"
+            
+            new_data_set = f"{new_data_path}/{dataset_name}"  
             
             if add_ncomps:
                 ncomponents = get_num_merging_components(
@@ -148,8 +153,13 @@ def main(
 
         for idata_set in tqdm(all_data_sets):
             
-            new_file_name = idata_set.replace('convergence',f'obs/{ifilter}')
-            new_data_path = os.path.dirname(new_file_name)   
+                  
+            dataset_name = idata_set.split('/')[-1]
+            
+            new_data_path = f"{outpath}/obs"
+            new_file_name = f"{new_data_path}/{dataset_name}"
+
+            
             if not os.path.isdir( new_data_path ):
                 os.system(f"mkdir -p {new_data_path}")
                 
@@ -978,19 +988,19 @@ def prepare_observations(
 if __name__ == "__main__":
     
 
-    '''
+    
     main( 
         sys.argv[1],
-        search_path="data/100/convergence/*.pkl", 
+        search_path="../data/100/convergence/darkskies_cdm.pkl", 
         h=0.7, 
         sample_data=False, 
         add_ncomps=True 
     )
-    '''
+    
     #Final data, h=0.7 so that the data is correct for final outputs
     main( 
         sys.argv[1],
-        search_path="data/100/convergence/*.pkl", 
+        search_path="../data/100/convergence/darkskies_cdm.pkl", 
         h=0.7, 
         sample_data=True, 
         data_dir='data/100/observations' 
