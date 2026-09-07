@@ -992,7 +992,7 @@ if __name__ == "__main__":
     
     main( 
         sys.argv[1],
-        search_path="../data/100/convergence/darkskies_cdm.pkl", 
+        search_path="../data/100/convergence/*", 
         h=0.7, 
         sample_data=False, 
         add_ncomps=True 
@@ -1001,7 +1001,7 @@ if __name__ == "__main__":
     #Final data, h=0.7 so that the data is correct for final outputs
     main( 
         sys.argv[1],
-        search_path="../data/100/convergence/darkskies_cdm.pkl", 
+        search_path="../data/100/convergence/*", 
         h=0.7, 
         sample_data=True, 
         data_dir='data/100/observations' 
