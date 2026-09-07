@@ -49,7 +49,7 @@ def main(
     filter_list = info['filter_list']
     if len(filter_list) > 1:
         filter_list.append('concat')
-        
+    print(f"CLUSTER redshift is {zl} and filters are {filter_list}")
     #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
      
     ##### Some definitions ####
