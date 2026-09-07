@@ -31,7 +31,7 @@ for FILTER in concat
 do
     ZS=$(get_zs "${FILTER}")
     ZL=$(get_redshift)
-    for SEED in {1..30}
+    for SEED in {1..5}
     do
         
         SRC="bahamas"
@@ -47,8 +47,7 @@ do
 
         RUN_NAME=cdan_${SRC_LAB}2${TGT_LAB}_pre_squeezenet1_aw_${adaptation_weight}_pad_shear_avgpool_gauss_seed_${SEED}_nob1
 
-        BASE_DIR=models/base_models/
-
+        BASE_DIR=../models/base_models/
 
         if [ ! -f ${BASE_DIR}/${RUN_NAME}_final.pth ]
         then
@@ -84,7 +83,7 @@ do
     
         TUNE_DIR=models/${FILTER}/
         
-        OUTPUT=${RUN_NAME}_ft_zs1p65
+        OUTPUT=${RUN_NAME}_ft
 
         for intrinsic_ell in 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 
         do
