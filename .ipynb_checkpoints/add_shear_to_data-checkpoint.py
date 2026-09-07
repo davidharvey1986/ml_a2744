@@ -882,7 +882,7 @@ def get_lens_info( cluster_name ):
         redshift_data['name'] == cluster_name
     ]
     
-    return {'zl':zl, 'filter_list':filter_list}
+    return {'zl':zl, 'filter_list':filter_list.split(',')}
     
     
 if __name__ == "__main__":
