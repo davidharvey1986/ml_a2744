@@ -394,6 +394,8 @@ def get_obs_data(
         } 
         
     for this_filter in filter_list:
+        if this_filter == 'concat':
+            continue
         if this_filter not in list(cuts.keys()):
             print(f"Missing {this_filter} in cuts dict referring to default")
             cuts[this_filter] = {}
