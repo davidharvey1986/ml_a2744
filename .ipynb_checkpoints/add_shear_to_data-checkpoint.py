@@ -242,6 +242,15 @@ def main(
 
             pkl.dump([ meta, new_data], open(new_file_name,"wb"))
 
+    prepare_observations( 
+            filter_list, 
+            nmonte=2, 
+            image_size=100, 
+            cuts=None,
+            data_dir=data_dir,
+            pickle_dir='notebooks/pickle'
+        
+        )
 def get_num_merging_components(
                 dataset, 
                 mass_ratio_limit=10,
@@ -420,31 +429,12 @@ def get_obs_data(
         )[1].data
         
     if photoz:
-        photo_z_matched = run_match(
-            f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
-            f"{data_dir}/{ifilter}_filtered.fits",
-            search_rad=0.5
-        )[1].data
         
         default_zs = 1.0 #sig_mean( photo_z_matched['z_ml'] )
 
         print(f"DEFAULT ZS {default_zs}")
         
         redshift = np.full(obs_data.shape[0], default_zs, dtype=np.float64)
-
-        # build lookup table
-        z_lookup = dict(zip(photo_z_matched['NUMBER'],
-                            photo_z_matched['z_ml']))
-
-        # fill values
-        n_missing = 0
-        for j, number in enumerate(obs_data['NUMBER']):
-            if number in z_lookup:
-                if np.isfinite(z_lookup[number] ):
-                    
-                    redshift[j] = z_lookup[number] 
-                else:
-                    redshift[j] = default_zs
             
         # append field
         obs_data = rfn.append_fields(
@@ -880,15 +870,114 @@ def get_lens_info( cluster_name ):
     
     filter_list = redshift_data['filter_list'][
         redshift_data['name'] == cluster_name
-    ]
+    ][0]
     
     return {'zl':zl, 'filter_list':filter_list.split(',')}
     
+def prepare_observations( 
+    filter_list, 
+    nmonte=2, 
+    image_size=200, 
+    cuts=None,
+    data_dir="data/100/observations/",
+    pickle_dir='notebooks/pickle'):
     
+
+    for ifx, ifilter in enumerate(filter_list):
+        obs_data = get_obs_data( 
+            ifilter, 
+            data_dir=data_dir, 
+            cuts=cuts
+        )
+
+
+        binned_data = bin_obs_data( obs_data )
+
+
+        e1_radec = binned_data['e1'] 
+        e2_radec = binned_data['e2']
+
+        ngal = binned_data['ngal']
+
+        delta_ra = binned_data['delta_ra']
+        delta_dec = binned_data['delta_dec']
+
+        obs_data['x'] = delta_ra
+        obs_data['y'] = delta_dec
+
+        egal = np.sqrt(
+            obs_data['e1']**2 + obs_data['e2']**2
+        )
+
+        dict_dump = {
+            'ngal':ngal, 'chi_fit_function':chi.fit(egal), 'binned_data':binned_data
+        }
+        pkl.dump(
+            dict_dump,
+            open(f"{pickle_dir}/ngal_{ifilter}.pkl","wb")
+        )   
+        
+        theta = np.arctan2(
+            obs_data['gamma2'], obs_data['gamma1']
+        )/2. 
+
+
+        e1_stacked = [ e1_radec ]
+        e2_stacked = [ e2_radec ]
+
+        for i in range(nmonte):
+
+            this_theta = np.random.uniform( 0, np.pi, theta.shape[0])
+
+
+            e1 = egal*np.cos(2.*this_theta)
+            e2 = egal*np.sin(2.*this_theta)
+
+            if i==0:
+                ax[ifx,2].hist( e1, density=True )
+                ax[ifx,3].hist( e2 , density=True)
+
+            e1_rot, e2_rot = bin2d( 
+                    delta_ra, delta_dec, 
+                    v=(e1, e2),
+                    npix=image_size,
+                    extent=[
+                        -image_size//2,image_size//2,
+                        -image_size//2,image_size//2
+                    ]
+                )
+
+
+            max_val = np.max([
+                e1_rot, e2_rot
+            ])
+            min_val = np.min([
+                e1_rot, e2_rot
+            ])
+
+            e1_rot -= min_val# ( e1_rot - min_val)/(max_val - min_val)
+            e1_rot /= max_val#( e1_rot - min_val)/(max_val - min_val)
+
+            e2_rot -= min_val#( e2_rot - min_val)/(max_val - min_val)
+            e2_rot /= max_val#( e2_rot - min_val)/(max_val - min_val)
+
+
+            e1_stacked.append( e1_rot )
+            e2_stacked.append( e2_rot )
+        e1_stacked = np.array(e1_stacked)
+        e2_stacked = np.array(e2_stacked)
+
+        stacked = np.append(e1_stacked[None,:,:,:], e2_stacked[None,:,:,:], axis=0)
+        stacked = np.moveaxis( stacked, 0, 1)
+
+        uncover_footprint = 49. #/ arcmin2
+        galdensity = obs_data.shape[0]/uncover_footprint
+        print(f"Galaxy density for {ifilter} is {galdensity}/arcmin2")
+        pkl.dump([{}, stacked],open(f"../data/100/a2744/obs_data_{ifilter}.pkl","wb"))
 if __name__ == "__main__":
     
 
-    
+    '''
     main( 
         sys.argv[1],
         search_path="data/100/convergence/*.pkl", 
@@ -896,6 +985,7 @@ if __name__ == "__main__":
         sample_data=False, 
         add_ncomps=True 
     )
+    '''
     #Final data, h=0.7 so that the data is correct for final outputs
     main( 
         sys.argv[1],
