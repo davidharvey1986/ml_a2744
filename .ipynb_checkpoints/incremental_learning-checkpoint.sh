@@ -5,31 +5,28 @@ fine_tune=0 #the weight to force the fine-tuning to align domains
 #/ np.mean(ngal[ngal!=0]) = 0.147
 adaptation_weight=1
 
-function get_zs () {
-    
-    if [[ $1 == "concat" ]]; then
-        zs=1
-    elif [[ $1 == "f115w" ]]; then
-        zs=1
-    elif [[ $1 == "f150w" ]]; then
-        zs=1
-    else
-        echo "NOT FOUND"
-        exit
-    fi
-    
-    echo $zs
-}
-
 function get_redshift() {
     local cluster
     cluster=$(basename "$PWD")
     awk -v cluster="$cluster" '$1 == cluster {print $2}' ../hst_shear/redshift.txt
 }
 
-for FILTER in concat
+function get_filter() {
+    local dir="$1"
+
+    if [[ -d "$dir/concat" ]]; then
+        echo "concat"
+    else
+        find "$dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | head -n 1
+    fi
+}
+
+filter_list=$(get_filter "data/100/obs")
+echo $filter_list
+
+for FILTER in $filter_list
 do
-    ZS=$(get_zs "${FILTER}")
+    ZS=1
     ZL=$(get_redshift)
     for SEED in {1..5}
     do

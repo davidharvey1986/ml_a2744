@@ -441,7 +441,8 @@ class apply_intrinsic_ell(object):
                         with scipy
         '''
         
-        home="/Users/davidharvey/Work/Dark_Matter_DA/code/notebooks/pickles"
+        home=f"notebooks/pickles"
+        
         #Intrinsic ell here is the intrinsic ellipticity for a single component.
         data_dict = pickle.load( open(f"{home}/ngal_{args.jwst_filter}.pkl","rb") )
         self.ngal = data_dict['ngal']
