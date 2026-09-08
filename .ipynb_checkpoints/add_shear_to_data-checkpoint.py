@@ -1005,7 +1005,7 @@ if __name__ == "__main__":
         h=0.7, 
         prepare_obs=True
     )
-    return
+    sys.exit()
     main( 
         sys.argv[1],
         search_path="../data/100/convergence/*", 
