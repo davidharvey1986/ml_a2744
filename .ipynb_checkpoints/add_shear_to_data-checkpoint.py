@@ -41,7 +41,8 @@ def main(
     data_dir="data/100/observations",
     reduce_shear=True,
     zs=1.,
-    add_ncomps=True
+    add_ncomps=True,
+    prepare_obs=False
     ):
     
 
@@ -54,8 +55,17 @@ def main(
     print(f"{name} has redshift {zl} and filters {filter_list}")
     #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
 
-
-         
+    if prepare_obs:
+        prepare_observations( 
+                filter_list, 
+                nmonte=2, 
+                image_size=100, 
+                cuts={},
+                data_dir=data_dir,
+                pickle_dir='notebooks/pickles'
+            
+            )  
+        return
     ##### Some definitions ####
     
     pixel_size_kpc = 20.*units.kpc
@@ -988,8 +998,15 @@ def prepare_observations(
         pkl.dump([{}, stacked],open(f"{data_dir}/obs_data_{ifilter}.pkl","wb"))
 if __name__ == "__main__":
     
-
+prepare_obs
     
+    main( 
+        sys.argv[1],
+        search_path="../data/100/convergence/*", 
+        h=0.7, 
+        prepare_obs=True
+    )
+    return
     main( 
         sys.argv[1],
         search_path="../data/100/convergence/*", 
