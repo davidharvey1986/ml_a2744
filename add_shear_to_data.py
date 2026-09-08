@@ -998,7 +998,6 @@ def prepare_observations(
         pkl.dump([{}, stacked],open(f"{data_dir}/obs_data_{ifilter}.pkl","wb"))
 if __name__ == "__main__":
     
-prepare_obs
     
     main( 
         sys.argv[1],
