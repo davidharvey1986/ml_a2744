@@ -998,14 +998,6 @@ def prepare_observations(
         pkl.dump([{}, stacked],open(f"{data_dir}/obs_data_{ifilter}.pkl","wb"))
 if __name__ == "__main__":
     
-    
-    main( 
-        sys.argv[1],
-        search_path="../data/100/convergence/*", 
-        h=0.7, 
-        prepare_obs=True
-    )
-    sys.exit()
     main( 
         sys.argv[1],
         search_path="../data/100/convergence/*", 

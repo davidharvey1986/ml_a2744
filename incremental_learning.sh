@@ -81,7 +81,10 @@ do
         TUNE_DIR=models/${FILTER}/
         
         OUTPUT=${RUN_NAME}_ft
-
+	if [ -f ${TUNE_DIR}/${OUTPUT}_best.pth ]
+	then
+	    echo "ALREADY DONE"
+	fi
         for intrinsic_ell in 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 
         do
 
