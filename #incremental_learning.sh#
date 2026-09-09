@@ -46,11 +46,11 @@ do
 
         BASE_DIR=../models/base_models/
 
-        if [ ! -f ${BASE_DIR}/${RUN_NAME}_final.pth ]
+        if [ -f ${BASE_DIR}/${RUN_NAME}_final.pth ]
         then
+	    contin
 
-
-            python main.py $COMMON_ARGS \
+        python main.py $COMMON_ARGS \
                --source_domain $SRC --target_domain $TGT \
                 --run_name ${RUN_NAME} \
                 --adaptation_weight ${adaptation_weight} \
@@ -84,9 +84,7 @@ do
 	if [ -f ${TUNE_DIR}/${OUTPUT}_best.pth ]
 	then
 	    echo "ALREADY DONE"
-	    continue
 	fi
-	
         for intrinsic_ell in 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 
         do
 
