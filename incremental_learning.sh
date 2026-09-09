@@ -28,7 +28,7 @@ for FILTER in $filter_list
 do
     ZS=1
     ZL=$(get_redshift)
-    for SEED in {1..5}
+    for SEED in {1..10}
     do
         
         SRC="bahamas"
