@@ -132,6 +132,7 @@ class args:
     zs=get_source_redshift(jwst_filter, data_dir="../data/100/a2744")
     default_zl = 0.305
     default_zs = zs
+    home='pickles'
     print(f"Source redshift:{zs}")
 
 
