@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
-from get_model_probabilities import get_mass_cut, get_threshold_for_cross, pkl, tqdm, get_massfunction_weights
-
+from get_model_probabilities import get_mass_cut, get_threshold_for_cross, pkl, tqdm, get_massfunction_weights, np
+import os
 from add_shear_to_data import get_obs_data, get_model_names, get_source_redshift, sig_mean, get_lens_info
 
-def main():
+def main(
+    ):
     cluster_name = os.getcwd().split('/')[-2]
     cluster_info = get_lens_info( cluster_name )
     filter_list = [ 'concat' if len(cluster_info['filter_list']) > 1 else cluster_info['filter_list'][0] ]
@@ -13,7 +14,7 @@ def main():
 
 
     for ifx, ifilter in enumerate(filter_list):
-        results_file = f"pickles/all_models_{ifilter}_nz_alignbest_results.pkl"
+        results_file = f"pickles/all_models_{ifilter}_nz_alignbest_wb1_results.pkl"
     
         all_results = pkl.load(open(results_file,"rb"))
     

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from get_model_probabilties import args
+from get_model_probabilities import *
 
 from add_shear_to_data import get_obs_data, get_model_names, get_source_redshift, sig_mean, get_lens_info
 
@@ -14,10 +14,10 @@ def main():
     models = {}
     probabilities = {}
     probabilities_noise = {}
-    
     for ifx, ifilter in enumerate(filter_list):
         
-        
+        _, stacked = pkl.load(open(f"../data/100/observations/obs_data_{ifilter}.pkl","rb"))
+
         all_models, seed_index =  get_model_names(model='best', 
                                                   load_model_args=args,
                                                    include_str='nob1',
