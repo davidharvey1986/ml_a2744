@@ -58,7 +58,7 @@ def main(
     if prepare_obs:
         prepare_observations( 
                 filter_list, 
-                nmonte=2, 
+                nmonte=1000, 
                 image_size=100, 
                 cuts={},
                 data_dir=data_dir,
@@ -268,7 +268,7 @@ def main(
     #Finally prepare the observations as this will be required by the incremental learning
     prepare_observations( 
             filter_list, 
-            nmonte=2, 
+            nmonte=1000, 
             image_size=100, 
             cuts={},
             data_dir=data_dir,
@@ -997,7 +997,7 @@ def prepare_observations(
 
         pkl.dump([{}, stacked],open(f"{data_dir}/obs_data_{ifilter}.pkl","wb"))
 if __name__ == "__main__":
-    
+
     main( 
         sys.argv[1],
         search_path="../data/100/convergence/*", 
