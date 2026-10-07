@@ -879,14 +879,14 @@ if __name__ == "__main__":
     
     main( 
         search_path="data/100/convergence/*.pkl", 
-        h=0.7, 
+        h=1., 
         sample_data=False, 
         add_ncomps=True 
     )
-    #Final data, h=0.7 so that the data is correct for final outputs
+
     main( 
         search_path="data/100/convergence/*.pkl", 
-        h=0.7, 
+        h=1., 
         sample_data=True, 
         data_dir='data/100/a2744' 
     )
