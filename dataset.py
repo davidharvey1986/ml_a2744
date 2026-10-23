@@ -137,7 +137,8 @@ class BalancedClusterDataset(Dataset):
         else:
             minvalue = torch.min(image_tensor)
             maxvalue = torch.max(image_tensor)
-       
+
+        this_range = (maxvalue - minvalue)
         image_tensor -= minvalue
         image_tensor /= maxvalue 
         
@@ -224,6 +225,16 @@ def create_balanced_test_set(dataset, test_size=0.2, random_state=42, verbose=Tr
 
     return test_indices
 
+def get_test_transform(args):
+    '''Forward model applied to the evaluation sets (no augmentation).'''
+    return transforms.Compose([
+            rescale_lens_source_configuration(args),
+            cluster_member_contamination( args ),
+            apply_shape_measurement_bias(args.shape_measurement_bias),
+            apply_intrinsic_ell( args),
+            Downsample(args)
+    ])
+
 def prepare_dataloaders(args):
     data_loaders = {}
     #Note that all data is in idealised form - there are transforms to forward model the data.
@@ -299,14 +310,8 @@ def prepare_dataloaders(args):
             ], p=args.aug_crop_prob),
         ]) 
         
-    test_transform = transforms.Compose([
-            rescale_lens_source_configuration(args),
-            cluster_member_contamination( args ),
-            apply_shape_measurement_bias(args.shape_measurement_bias),
-            apply_intrinsic_ell( args),
-            Downsample(args)
-    ])
-    
+    test_transform = get_test_transform(args)
+
     temp_source_dataset = [
         BalancedClusterDataset(args.data_dir, source_pattern, args=args, dtype=i, transform=train_transform) for i in args.dtypes
     ]

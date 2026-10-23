@@ -1,450 +1,473 @@
 #!/usr/bin/env python
+'''
+Turn simulated convergence maps into shear maps for training.
 
-from lenspack.image.inversion import ks93inv, ks93
-from lenspack.utils import sigma_critical, bin2d
-from glob import glob
+main(sample_data=False) writes ideal (gridded) shear maps for the base models;
+main(sample_data=True) samples the shear at the observed A2744 galaxy positions
+and re-bins it, for the final masked models.
+
+Also holds the observed-catalogue helpers (get_obs_data, combine_catalogues, ...)
+and model-loading helpers that the notebooks import from here.
+'''
+
+import os
 import pickle as pkl
+from glob import glob
+
 import numpy as np
+import numpy.lib.recfunctions as rfn
 from astropy import units
 from astropy.cosmology import Planck18
 from astropy.io import fits
+from lenspack.image.inversion import ks93inv
+from lenspack.utils import sigma_critical, bin2d
+from scipy.interpolate import make_interp_spline, BSpline
+from scipy.sparse import csr_matrix
 from tqdm import tqdm
-from scipy.interpolate import interp2d
+
 from pyRRG.calc_shear import calc_shear
 from RRGtools import run_match
-import os
-from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
-import numpy.lib.recfunctions as rfn
 
 from model import create_model
 
+# Directory holding the extracted halo components (*.comps), relative to the repo root
+COMPONENTS_DIR = "notebooks/pickles"
+
+
+def load_pickle(path):
+    with open(path, "rb") as f:
+        return pkl.load(f)
+
+
+def save_pickle(obj, path):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "wb") as f:
+        pkl.dump(obj, f)
+
+
 def get_boxsize(set_name, return_units=units.pc, h=0.7):
     if ('bahamas' in set_name) or ('tng' in set_name) or ('flamingo' in set_name):
-        boxsize= 10./h*units.Mpc
+        boxsize = 10./h*units.Mpc
     else:
-        boxsize =  400/h*units.Mpc
+        boxsize = 400/h*units.Mpc
     return boxsize.to(return_units)
-    
-def crop_center(img,cropx,cropy):
-    y,x = img.shape
-    startx = x//2-(cropx//2)
-    starty = y//2-(cropy//2)    
-    return img[starty:starty+cropy,startx:startx+cropx]
 
-def main( 
-    search_path="data/100/convergence/*.pkl", 
-    filter_list = ['concat'],
-    thresh_k = 0.9, 
-    h=0.7, 
+
+def crop_center(img, cropx, cropy):
+    y, x = img.shape
+    startx = x//2-(cropx//2)
+    starty = y//2-(cropy//2)
+    return img[starty:starty+cropy, startx:startx+cropx]
+
+
+def main(
+    search_path="data/100/convergence/*.pkl",
+    filter_list=['concat'],
+    thresh_k=0.6,
     sample_data=True,
     data_dir="data/100/a2744",
     reduce_shear=True,
-    zl = 0.305, zs=1.72,
+    zl=0.305, zs=1.72,
     add_ncomps=True
     ):
-    
-    
-    #Note - zs=1.72 is rescaled during training to the true redshift distribution so this is a place holder.
-     
-    ##### Some definitions ####
-    
-    pixel_size_kpc = 20.*units.kpc
-    conversion = (1.*units.radian.to(units.arcsecond)/Planck18.angular_diameter_distance(zl).to(units.kpc))
-    pixel_size_arc = conversion*pixel_size_kpc
-    jwst_pixel_size = 0.02*units.arcsecond
-    fov_sim = 2e3*units.kpc * conversion / 2.
+    '''
+    Note - zs=1.72 is rescaled during training to the true redshift distribution
+    so this is a place holder.
+    '''
     image_size = 100
-    
-    ######
+    shear_kwargs = dict(zs=zs, zl=zl, ngal_per_sq_arcmin=200.)
 
-    
     all_data_sets = glob(search_path)
- 
+
     ### This is for the base_models
     if not sample_data:
-        for idx in tqdm(range(len(all_data_sets))):
-            
-            idata_set = all_data_sets[idx]
-            meta, data = pkl.load( open( idata_set, "rb"))
-            new_data_set = idata_set.replace("convergence","shear")
-            new_data_path = os.path.dirname(new_data_set)      
-            
+        for idata_set in tqdm(all_data_sets):
+
+            meta, data = load_pickle(idata_set)
+
             if add_ncomps:
-                ncomponents = get_num_merging_components(
-                    idata_set
-                )
-                meta['ncomponents'] = ncomponents
-            
-            if ('darkskies' in idata_set) | ('flamingo' in idata_set):
-                meta['norms'] /= 4.*h
-                
-                
+                meta['ncomponents'] = get_num_merging_components(idata_set)
+
             if 'redshift' not in meta.keys():
                 meta['redshift'] = np.full(data.shape[0], 0.250, dtype=np.float64)
 
-                
-            e1, e2, kappa = data_to_shear( 
-                    data[:,0], meta['norms'][:,0], 
-                    meta['redshift']*0.+0.305, 
-                    get_boxsize(idata_set),
-                    zs=zs, 
-                    zl=zl, **{'ngal_per_sq_arcmin':200.},
-                    reduce_shear=reduce_shear,
+            meta['norms'] = get_surface_density_norms(meta, idata_set)
+
+            # All base-model clusters are placed at the A2744 redshift
+            redshifts = np.full(data.shape[0], 0.305)
+            e1, e2, kappa = data_to_shear(
+                data[:, 0], meta['norms'][:, 0],
+                redshifts,
+                get_boxsize(idata_set),
+                reduce_shear=reduce_shear,
+                background=get_background_sigma(meta, idata_set, redshifts),
+                **shear_kwargs
             )
-       
-            e1e2 = np.append(e1[:,None,:,:],e2[:,None,:,:], axis=1)
 
-            data[:,0,:,:] = kappa
-            add_e1e2 = np.append(e1e2, data, axis=1)
+            data[:, 0, :, :] = kappa
+            add_e1e2 = np.concatenate([e1[:, None], e2[:, None], data], axis=1)
 
-            if not os.path.isdir( new_data_path ):
-                os.system(f"mkdir -p {new_data_path}")
-                
-            pkl.dump( [meta, add_e1e2], open(new_data_set, "wb"))
-    
+            save_pickle([meta, add_e1e2], idata_set.replace("convergence", "shear"))
+
         return
-    
+
     ### This is for the final masked models
-    for ifx, ifilter in enumerate(filter_list):
-        
-        obs_data = get_obs_data( 
-            ifilter, data_dir=data_dir,
-            photoz=True
+    for ifilter in filter_list:
+
+        obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True)
+
+        delta_ra, delta_dec = ra_dec_to_simulation_image_pos(
+            obs_data, zl=zl, image_size=image_size
         )
-   
-        ra_0 = np.median(obs_data['x']) 
-        dec_0 = np.median(obs_data['y']) 
-        delta_ra = (obs_data['x'] - ra_0)*jwst_pixel_size 
-        delta_dec = (obs_data['y'] - dec_0)*jwst_pixel_size
-
-        #rescale them to be between 0 and 2 Mpc
-        max_val = fov_sim 
-
-        delta_ra /= fov_sim / 50.
-        delta_dec /= fov_sim / 50.
-
-       
-    
-        obs_data['x'] = delta_ra
-        obs_data['y'] = delta_dec
-
-        npix = image_size
-        ra_range = delta_ra.max() - delta_ra.min()
-        dec_range = delta_dec.max() - delta_dec.min()
-
-        xc = 0.
-        yc = 0.
 
         for idata_set in tqdm(all_data_sets):
-            
-            new_file_name = idata_set.replace('convergence',f'obs/{ifilter}')
-            new_data_path = os.path.dirname(new_file_name)   
-            if not os.path.isdir( new_data_path ):
-                os.system(f"mkdir -p {new_data_path}")
-                
 
-            meta, data = pkl.load( open( idata_set, "rb"))
-            if ('darkskies' in idata_set) | ('flamingo' in idata_set):
-                meta['norms'] /= 4.*h
-                
+            meta, data = load_pickle(idata_set)
+
             if 'redshift' not in meta.keys():
                 meta['redshift'] = np.full(data.shape[0], 0.305, dtype=np.float64)
 
+            meta['norms'] = get_surface_density_norms(meta, idata_set)
+
             #Interpolate the non reduced shear then reduce it later.
-            e1_ideal, e2_ideal, kappa = data_to_shear( 
-                    data[:,0], meta['norms'][:,0], 
-                    meta['redshift'], 
-                    get_boxsize(idata_set),
-                    zs=zs,
-                    zl=zl, **{'ngal_per_sq_arcmin':200.},
-                    reduce_shear=False,
+            e1_ideal, e2_ideal, kappa = data_to_shear(
+                data[:, 0], meta['norms'][:, 0],
+                meta['redshift'],
+                get_boxsize(idata_set),
+                reduce_shear=False,
+                background=get_background_sigma(meta, idata_set, meta['redshift']),
+                **shear_kwargs
             )
 
+            new_data, _ = sample_maps_on_galaxies(
+                e1_ideal, e2_ideal, kappa,
+                delta_ra, delta_dec,
+                thresh_k=thresh_k, reduce_shear=reduce_shear, npix=image_size
+            )
 
-            e1_obs = []
-            e2_obs = []
-            remove = []
-            for icluster in range(data.shape[0]):
-
-                fill_value = np.median(e1_ideal[icluster][ e1_ideal[icluster] !=0])
-
-                interp_e1 = RegularGridInterpolator(
-                    (np.arange(100)-50.+0.5,np.arange(0,100)-50.+0.5), 
-                    e1_ideal[icluster],fill_value=fill_value,
-                    method='cubic', bounds_error=False
-                )
-
-                e1 = interp_e1( 
-                    (delta_dec, delta_ra), 
-                )
-
-                fill_value = np.median( e2_ideal[icluster][ e2_ideal[icluster] !=0])
-
-                interp_e2 = RegularGridInterpolator(
-                    (np.arange(100)-50.+0.5,np.arange(0,100)-50.+0.5), 
-                    e2_ideal[icluster], fill_value=fill_value,
-                    method='cubic', bounds_error=False
-                )
-
-                e2 = interp_e2( 
-                    (delta_dec, delta_ra ), 
-                )
-
-                interp_k = RegularGridInterpolator(
-                    (np.arange(100)-50.+0.5,np.arange(0,100)-50.+0.5), 
-                    kappa[icluster], fill_value=fill_value,
-                    method='cubic', bounds_error=False
-                )
-
-                k = interp_k( 
-                    (delta_dec, delta_ra ), 
-                )       
-
-                #remove very large shear values
-
-                g = np.sqrt( e1**2 + e2**2 )
-
-                cut = (k<thresh_k)
-                if reduce_shear:
-                    e1_red = e1 / ( 1. - k)
-                    e2_red = e2 / ( 1. - k)
-                
-                e1_red = e1_red[ cut ]
-                e2_red = e2_red[ cut ]
-                ra = delta_ra.value[ cut ] 
-                dec = delta_dec.value[ cut ] 
-                remove.append((delta_ra.shape[0] - ra.shape[0])/delta_ra.shape[0]*100.)
-
-                e1_radec, e2_radec = bin2d( 
-                   ra, dec, 
-                    v=(e1_red, e2_red),
-                    npix=npix,
-                    extent=[
-                        -50,50,-50,50
-                    ]
-                )
+            save_pickle([meta, new_data], idata_set.replace('convergence', f'obs/{ifilter}'))
 
 
-                e1_obs.append(e1_radec)
-                e2_obs.append(e2_radec)
+def cubic_spline_sampler(grid, ra, dec):
+    '''
+    Precompute the not-a-knot bicubic spline (as RegularGridInterpolator
+    method='cubic') for fixed sample points, so many maps can be interpolated
+    with matrix products. Returns (coeffs, sample_matrix) such that for a map
+    M indexed [dec, ra], the interpolated values are
+        sample_matrix @ (coeffs @ M @ coeffs.T).ravel()
+    sample_matrix is sparse: each point touches a 4x4 patch of coefficients.
+    '''
+    n = len(grid)
+    spline = make_interp_spline(grid, np.eye(n), k=3)
+    coeffs = spline.c   # maps grid values -> B-spline coefficients
 
-            new_data = np.moveaxis(np.array([e1_obs, e2_obs]), 0, 1)
+    def basis(points):
+        design = BSpline.design_matrix(np.clip(points, grid[0], grid[-1]), spline.t, 3)
+        design = design.tocsr()
+        return design.indices.reshape(-1, 4), design.data.reshape(-1, 4)
+
+    idx_dec, w_dec = basis(dec)
+    idx_ra, w_ra = basis(ra)
+    cols = (idx_dec[:, :, None]*n + idx_ra[:, None, :]).reshape(len(ra), 16)
+    weights = (w_dec[:, :, None]*w_ra[:, None, :]).reshape(len(ra), 16)
+    rows = np.repeat(np.arange(len(ra)), 16)
+    sample_matrix = csr_matrix((weights.ravel(), (rows, cols.ravel())), shape=(len(ra), n*n))
+    return coeffs, sample_matrix
 
 
-            pkl.dump([ meta, new_data], open(new_file_name,"wb"))
+def sample_maps_on_galaxies(
+        e1_maps, e2_maps, kappa_maps, ra, dec,
+        thresh_k=0.9, reduce_shear=True, npix=100, batch_size=32
+    ):
+    '''
+    Interpolate (non-reduced) shear and convergence maps onto the galaxy
+    positions, drop galaxies with kappa >= thresh_k, reduce the shear and
+    re-bin onto an npix x npix grid over [-npix/2, npix/2].
+
+    Equivalent to building a cubic RegularGridInterpolator per cluster and
+    calling bin2d, but done for a batch of clusters at once since the galaxy
+    positions are the same for every cluster. Galaxies outside the pixel-centre
+    grid take the median non-zero value of each map, as fill_value would.
+
+    Returns the binned (e1, e2) maps, shape (nclusters, 2, npix, npix), and the
+    percentage of galaxies removed by the kappa cut for each cluster.
+    '''
+    grid = np.arange(npix) - npix/2. + 0.5
+    coeffs, sample_matrix = cubic_spline_sampler(grid, ra, dec)
+
+    # Same out-of-bounds rule as RegularGridInterpolator
+    out_of_grid = (ra < grid[0]) | (ra > grid[-1]) | (dec < grid[0]) | (dec > grid[-1])
+
+    # Same pixel assignment as np.histogram2d in bin2d (right edge in last bin)
+    edges = np.linspace(-npix/2., npix/2., npix+1)
+    ira = np.clip(np.searchsorted(edges, ra, side='right') - 1, 0, npix-1)
+    idec = np.clip(np.searchsorted(edges, dec, side='right') - 1, 0, npix-1)
+    in_image = (ra >= edges[0]) & (ra <= edges[-1]) & (dec >= edges[0]) & (dec <= edges[-1])
+    flat_pix = idec*npix + ira   # bin2d returns maps indexed [dec, ra]
+
+    def interp(maps):
+        # coeffs @ maps[b] @ coeffs.T for every b, written as two 2D matmuls
+        # (numpy's broadcast matmul on a stack is ~30x slower here)
+        nbatch = maps.shape[0]
+        right = (maps.reshape(-1, npix) @ coeffs.T).reshape(nbatch, npix, npix)
+        both = coeffs @ right.transpose(1, 0, 2).reshape(npix, -1)
+        spline_coeffs = both.reshape(npix, nbatch, npix).transpose(1, 0, 2).reshape(nbatch, -1)
+        vals = (sample_matrix @ spline_coeffs.T).T
+        fill_values = np.array([np.median(m[m != 0]) for m in maps])
+        vals[:, out_of_grid] = fill_values[:, None]
+        return vals
+
+    nclusters = e1_maps.shape[0]
+    new_data = np.zeros((nclusters, 2, npix, npix))
+    remove = np.zeros(nclusters)
+    for start in tqdm(range(0, nclusters, batch_size), leave=False):
+        sl = slice(start, start+batch_size)
+        nbatch = e1_maps[sl].shape[0]
+
+        e1 = interp(e1_maps[sl])
+        e2 = interp(e2_maps[sl])
+        k = interp(kappa_maps[sl])
+
+        cut = k < thresh_k
+        remove[sl] = (~cut).sum(axis=1) / ra.shape[0] * 100.
+        if reduce_shear:
+            with np.errstate(divide='ignore', invalid='ignore'):
+                e1 = e1 / (1. - k)
+                e2 = e2 / (1. - k)
+
+        use = cut & in_image[None, :]
+        bins = (np.arange(nbatch)[:, None]*npix*npix + flat_pix[None, :])[use]
+        nmap = npix*npix*nbatch
+        counts = np.bincount(bins, minlength=nmap)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            for ic, comp in enumerate((e1, e2)):
+                sums = np.bincount(bins, weights=comp[use], minlength=nmap)
+                new_data[sl, ic] = np.where(counts > 0, sums / counts, 0.).reshape(nbatch, npix, npix)
+
+    return new_data, remove
+
+
+def get_components_file(dataset, components_dir=COMPONENTS_DIR):
+    return f"{components_dir}/{os.path.basename(dataset)}.comps"
+
 
 def get_num_merging_components(
-                dataset, 
-                mass_ratio_limit=10,
+        dataset,
+        mass_ratio_limit=10,
+        components_dir=COMPONENTS_DIR,
     ):
-    comp_name =  f"notebooks/pickles/{dataset.split('/')[-1]}.comps"
+    comp_name = get_components_file(dataset, components_dir)
     try:
-        extracted_components = pkl.load(open(comp_name,"rb"))
-    except:
-        raise IOError(f"Unable to open {comp_name}")
+        extracted_components = load_pickle(comp_name)
+    except OSError as err:
+        raise IOError(f"Unable to open {comp_name}") from err
     ncomponents = []
     for icomp in extracted_components:
         mass_ratio = icomp['FLUX_AUTO'].max() / icomp['FLUX_AUTO']
-        
-        icomp = icomp[ mass_ratio < mass_ratio_limit ]
-        ncomponents.append( icomp.shape[0])
+        ncomponents.append(np.sum(mass_ratio < mass_ratio_limit))
     return np.array(ncomponents)
 
-def data_to_shear( images, norms, redshifts, boxsize, 
-                  reduce_shear=True, 
-                  kappa_thresh=None, 
-                  **kwargs 
+
+def extract_num_merging_components(dataset=None, zoomed_amount=2):
+    '''
+    Run the component extractor over every convergence map and save the
+    components where get_num_merging_components expects them.
+    '''
+    # component_extractor is a separate package, only needed here
+    from component_extractor import component_extractor
+    from scipy.ndimage import zoom
+
+    if dataset is None:
+        dataset = glob("data/100/convergence/darkskies_*")
+
+    for ishear in dataset:
+
+        _, all_halos = load_pickle(ishear)
+
+        all_components = []
+        for ihalo in tqdm(all_halos):
+
+            extracted_components = component_extractor(
+                zoom(ihalo[0, :, :], zoomed_amount),
+                use_sex=True,
+            )
+            extracted_components['X_IMAGE'] /= zoomed_amount
+            extracted_components['Y_IMAGE'] /= zoomed_amount
+
+            all_components.append(extracted_components)
+        save_pickle(all_components, get_components_file(ishear))
+
+
+def is_physical_surface_density(meta):
+    '''
+    Maps made with the fixed darkskies_images.py store Msun / pMpc^2 on a
+    physical stamp and record it in meta['map_units']. Older maps do not.
+    '''
+    return 'map_units' in meta.keys()
+
+
+def get_surface_density_norms(meta, set_name):
+    '''
+    Peak surface density of each map in Msun / Mpc^2 (physical).
+
+    Old darkskies/flamingo maps were mass per (2 cMpc)^2, hence the /4. New maps
+    (meta['map_units'] present) are already Msun / pMpc^2 and must not be divided.
+    '''
+    norms = np.array(meta['norms'], dtype=np.float64)
+    if (('darkskies' in set_name) or ('flamingo' in set_name)) and not is_physical_surface_density(meta):
+        norms /= 4.
+    return norms
+
+
+def get_background_sigma(meta, set_name, redshifts):
+    '''
+    Mean matter surface density through each projection in Msun / pc^2 (physical),
+    subtracted from the map in data_to_shear.
+
+    New maps record it per image in meta['background_sigma'] (Msun / pMpc^2), which
+    accounts for the actual comoving projection depth and the snapshot redshift.
+    Older maps fall back to the previous approximation.
+    '''
+    redshifts = np.atleast_1d(redshifts)
+    boxsize = get_boxsize(set_name)
+    old = np.array([
+        (Planck18.critical_density(z).to(units.Msun/units.pc**3)*boxsize*Planck18.Om0).value
+        for z in redshifts
+    ])
+    if 'background_sigma' not in meta.keys():
+        return old*units.Msun/units.pc**2
+
+    new = np.array([np.nan if b is None else b for b in meta['background_sigma']], dtype=np.float64)
+    new = new*1e-12          # Msun / pMpc^2 -> Msun / pc^2
+    return np.where(np.isfinite(new), new, old)*units.Msun/units.pc**2
+
+
+def data_to_shear(images, norms, redshifts, boxsize,
+                  reduce_shear=True,
+                  kappa_thresh=None,
+                  background=None,
+                  zl=0.3,
+                  zs=2.,
+                  norm_units=units.Msun/(units.Mpc*units.Mpc),
+                  **kwargs
                  ):
     '''
-    add weak lensing noise 
+    Convert surface density maps to convergence and (noise free) shear via
+    Kaiser-Squires.
+
+    images : maps normalised to a peak of 1, shape (N, npix, npix)
+    norms : peak surface density of each map, in norm_units
+    redshifts, boxsize : only used for the old background approximation
+    background : optional per-image mean surface density (astropy quantity,
+        e.g. from get_background_sigma). If None, use the old
+        critical_density * boxsize * Om0 approximation.
+    kappa_thresh : if set, zero the shear where kappa exceeds it
+    kwargs : accepted for backwards compatibility (e.g. ngal_per_sq_arcmin)
+        but unused, since no noise is added here.
     '''
-    
-    if 'zl' in kwargs.keys():
-        zl = kwargs['zl']
-    else:
-        zl = 0.3
-        
-    if 'zs' in kwargs.keys():
-        zs = kwargs['zs']
-    else:
-        zs=2.
-    if 'ngal_per_sq_arcmin' in kwargs.keys():
-        ngal_per_sq_arcmin = kwargs['ngal_per_sq_arcmin']
-    else:
-        ngal_per_sq_arcmin = 100.
-    if 'kpc_per_pixel' in kwargs.keys():
-        kpc_per_pixel = kwargs['kpc_per_pixel']
-    else:
-        kpc_per_pixel = 20.
-    if 'ell_disp' in kwargs.keys():
-        ell_disp = kwargs['ell_disp']
-    else:
-        ell_disp = 0.26
-        
-    if 'e1_bias' in kwargs.keys():
-        e1_bias = kwargs['e1_bias']     
-    if 'e2_bias' in kwargs.keys():
-        e2_bias = kwargs['e2_bias']  
-        
-    if 'interpolate' in kwargs.keys():
-        interpolate = kwargs['interpolate']
-        
-    if 'gals_per_bin' in kwargs.keys():
-        gals_per_bin = kwargs['gals_per_bin']
-    else:
-        gals_per_bin = 2
-        
-    if 'norm_units' not in  kwargs.keys():
-        kwargs['norm_units'] = units.Msun/(units.Mpc*units.Mpc)
-        
-    ngal_per_sq_arcmin  /= units.arcminute**2
-    
-    kpc_per_pixel *= units.kpc
-    
-    
-    kpc_per_arcmin = \
-        1.*units.arcminute.to(units.radian)*Planck18.angular_diameter_distance(zl).to(units.kpc)/units.arcminute
-
-    arcmin_per_pixel = kpc_per_pixel / kpc_per_arcmin 
-    
-    sq_arcmin_per_pixel = arcmin_per_pixel * arcmin_per_pixel  
-    
-    ngalaxies_per_pixel =  ngal_per_sq_arcmin * sq_arcmin_per_pixel
-    
     sigma_crit = sigma_critical(zl, zs, Planck18)
-    
-    peak = norms*kwargs['norm_units']
-   
-    peak_pc_sq = peak.to(units.Msun/units.pc/units.pc)/sigma_crit
-    
-    
-    all_e1, all_e2, all_converge = [], [], []
-    ampl = []
 
-    
+    peak = norms*norm_units
+    peak_kappa = peak.to(units.Msun/units.pc/units.pc)/sigma_crit
+
+    all_e1, all_e2, all_converge = [], [], []
+
     for idx, image in enumerate(images):
-        
-        #I sum over all z so need to remove the critical density
-        critical_density = Planck18.critical_density( redshifts[idx] ).to(units.Msun/units.pc**3)*boxsize*Planck18.Om0
-                
-        convergence = image*peak_pc_sq[idx] - critical_density/sigma_crit
-        
-        ampl.append(np.max(convergence))
-        
-        e1 , e2 = ks93inv(convergence,convergence*0.)
-        
+
+        #I sum over all z so need to remove the mean density along the line of sight
+        if background is None:
+            mean_density = Planck18.critical_density(redshifts[idx]).to(units.Msun/units.pc**3)*boxsize*Planck18.Om0
+        else:
+            mean_density = background[idx]
+
+        convergence = image*peak_kappa[idx] - mean_density/sigma_crit
+
+        e1, e2 = ks93inv(convergence, convergence*0.)
+
         if reduce_shear:
             e1 /= 1.-convergence
             e2 /= 1.-convergence
-        
+
         if kappa_thresh is not None:
-            e1[ convergence > kappa_thresh] = 0.
-            e2[ convergence > kappa_thresh] = 0.
-            
-        all_e1.append( e1 )
-        all_e2.append( e2 )
-        
+            e1[convergence > kappa_thresh] = 0.
+            e2[convergence > kappa_thresh] = 0.
+
+        all_e1.append(e1)
+        all_e2.append(e2)
         all_converge.append(convergence)
-        
 
-
-     
     return np.array(all_e1), np.array(all_e2), np.array(all_converge)
 
 
-
-
-def get_obs_data( 
-    ifilter, 
-    cuts={}, 
-    data_dir='data/100/a2744', 
-    photoz=False, 
+def get_obs_data(
+    ifilter,
+    cuts=None,
+    data_dir='data/100/a2744',
+    photoz=False,
     remove_members=True,
     redshift_cut=0.305+0.05*3):
-        
+    '''
+    Apply the shear cuts to the f115w and f150w catalogues (rewriting
+    a2744_<filter>_filtered.fits), optionally remove cluster members and,
+    for ifilter='concat', combine the two. With photoz=True a 'redshift' field
+    is added from the UNCOVER photo-z's, defaulting to the lensing-weighted
+    mean for unmatched galaxies.
+    '''
+    cuts = {} if cuts is None else dict(cuts)
+
     # Cuts already taken during the WL process - verified.
     fid_cuts = {
-            'size_cut':[2,200],
-            'signal_noise_cut':0,
-            'stat_type':'median',
-            'mag_cut':[0,30],
-            'verbose':False
-        } 
-        
-    for this_filter in ['f115w','f150w']:
-        if this_filter not in list(cuts.keys()):
+            'size_cut': [2, 200],
+            'signal_noise_cut': 0,
+            'stat_type': 'median',
+            'mag_cut': [0, 30],
+            'verbose': False
+        }
+
+    for this_filter in ['f115w', 'f150w']:
+        if this_filter not in cuts:
             print(f"Missing {this_filter} in cuts dict referring to default")
-            cuts[this_filter] = {}
-        for ikey in fid_cuts.keys():
-            if ikey not in list(cuts[this_filter].keys()):
-                cuts[this_filter][ikey] = fid_cuts[ikey]
+        filter_cuts = {**fid_cuts, **cuts.get(this_filter, {})}
 
-        shear_cat =  f"{data_dir}/abell2744clu-grizli-v5.4-{this_filter}-clear_drc_sci_clean.shears"
-        obs_data = fits.open(shear_cat)[1].data  
+        filtered_name = f"{data_dir}/a2744_{this_filter}_filtered.fits"
+        shear_cat = f"{data_dir}/abell2744clu-grizli-v5.4-{this_filter}-clear_drc_sci_clean.shears"
 
-        calc_shear(
-            obs_data, 
-            f"{data_dir}/a2744_{this_filter}_filtered.fits", 
-            **cuts[this_filter]
-            )      
+        calc_shear(fits.open(shear_cat)[1].data, filtered_name, **filter_cuts)
 
         if remove_members:
-            obs_data = remove_cluster_members( 
-                f"{data_dir}/a2744_{this_filter}_filtered.fits", 
+            obs_data = remove_cluster_members(
+                filtered_name,
                 f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
                 redshift_cut=redshift_cut
             )
+            fits.writeto(filtered_name, obs_data, overwrite=True)
 
-        fits.writeto(
-             f"{data_dir}/a2744_{this_filter}_filtered.fits", 
-            obs_data, overwrite=True
-        )
-            
-
- 
-    
+    filtered_name = f"{data_dir}/a2744_{ifilter}_filtered.fits"
     if ifilter == 'concat':
-        cat_a_name =     f"{data_dir}/a2744_f115w_filtered.fits"
-        cat_b_name =     f"{data_dir}/a2744_f150w_filtered.fits"
-        obs_data = combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' )
-        concat_name =  f"{data_dir}/a2744_concat_filtered.fits"
-
-        fits.writeto(  concat_name, obs_data, overwrite=True) 
-
+        obs_data = combine_catalogues(
+            f"{data_dir}/a2744_f115w_filtered.fits",
+            f"{data_dir}/a2744_f150w_filtered.fits",
+        )
+        fits.writeto(filtered_name, obs_data, overwrite=True)
     else:
+        obs_data = fits.open(filtered_name)[1].data
 
-        obs_data = fits.open(
-            f"{data_dir}/a2744_{ifilter}_filtered.fits"
-        )[1].data
-        
     if photoz:
         photo_z_matched = run_match(
             f"{data_dir}/UNCOVER_DR4_SPS_catalog.fits",
-            f"{data_dir}/a2744_{ifilter}_filtered.fits",
+            filtered_name,
             search_rad=0.5
         )[1].data
-        
-        default_zs = sig_mean( photo_z_matched['z_ml'] )
+
+        default_zs = sig_mean(photo_z_matched['z_ml'])
 
         print(f"DEFAULT ZS {default_zs}")
-        
-        redshift = np.full(obs_data.shape[0], default_zs, dtype=np.float64)
 
-        # build lookup table
-        z_lookup = dict(zip(photo_z_matched['NUMBER'],
-                            photo_z_matched['z_ml']))
+        z_lookup = dict(zip(photo_z_matched['NUMBER'], photo_z_matched['z_ml']))
+        redshift = np.array([z_lookup.get(number, np.nan) for number in obs_data['NUMBER']],
+                            dtype=np.float64)
+        redshift[~np.isfinite(redshift)] = default_zs
 
-        # fill values
-        n_missing = 0
-        for j, number in enumerate(obs_data['NUMBER']):
-            if number in z_lookup:
-                if np.isfinite(z_lookup[number] ):
-                    
-                    redshift[j] = z_lookup[number] 
-                else:
-                    redshift[j] = default_zs
-            
-        # append field
         obs_data = rfn.append_fields(
             obs_data,
             names='redshift',
@@ -456,286 +479,161 @@ def get_obs_data(
 
     return obs_data
 
-def remove_cluster_members( cat_raw, photoz, redshift_cut=0.): #0.305+2*0.06):
-    
-    combined = run_match( cat_raw, photoz,search_rad=0.5)
+
+def remove_cluster_members(cat_raw, photoz, redshift_cut=0.):
+
+    combined = run_match(cat_raw, photoz, search_rad=0.5)
 
     all_cat = fits.open(cat_raw)[1].data
-    
-    cluster_numbers = combined[1].data['NUMBER'][ combined[1].data['z_ml'] < redshift_cut]
-        
-    mask = ~np.isin(all_cat['NUMBER'], cluster_numbers)
-    
-    removed = all_cat[mask]
-    
-    #print(f"REMOVING {cluster_numbers.shape[0]} GALAXIES")
-    return removed
-       
-def combine_catalogues( cat_a_name, cat_b_name, identifier='NUMBER' ):
-    
+
+    cluster_numbers = combined[1].data['NUMBER'][combined[1].data['z_ml'] < redshift_cut]
+
+    return all_cat[~np.isin(all_cat['NUMBER'], cluster_numbers)]
+
+
+def combine_catalogues(cat_a_name, cat_b_name, identifier='NUMBER'):
+    '''
+    Merge two shear catalogues: galaxies matched in both get the mean
+    shear/ellipticity (and the first catalogue's other properties), unmatched
+    galaxies from either catalogue are appended. Galaxies are renumbered from 1.
+    '''
     cat_a = fits.open(cat_a_name)[1].data
     cat_b = fits.open(cat_b_name)[1].data
-   
+
     matched_cat = run_match(cat_a_name, cat_b_name)[1].data
 
-    extra_cat_a =  np.array([
-        i for i in range(cat_a.shape[0]) if cat_a['NUMBER'][i] not in matched_cat['NUMBER_1'] 
-    ])
-    extra_cat_b =  np.array([
-        i for i in range(cat_b.shape[0]) if cat_b['NUMBER'][i] not in matched_cat['NUMBER_2'] 
-    ]) 
-    
+    extra_a = ~np.isin(cat_a[identifier], matched_cat[f'{identifier}_1'])
+    extra_b = ~np.isin(cat_b[identifier], matched_cat[f'{identifier}_2'])
 
-    
-    concat_gamma_1 = ( matched_cat['gamma1_1'] +matched_cat['gamma1_2'])/2. 
-    concat_gamma_2 = ( matched_cat['gamma2_1'] +matched_cat['gamma2_2'])/2. 
-    
-    concat_e_1 = ( matched_cat['e1_1'] +matched_cat['e1_2'])/2. 
-    concat_e_2 = ( matched_cat['e2_1'] +matched_cat['e2_2'])/2. 
-    
-    
-    
-    if 'z_1' in list(matched_cat.dtype.names):
-        z = matched_cat['z_1']
-    
-    
-    ra = matched_cat['ra_1']
-    dec = matched_cat['dec_1']
-    
-    final_x = np.concatenate([
-        matched_cat['x_1'],
-        cat_a['x'][ extra_cat_a ],
-        cat_b['x'][ extra_cat_b ]
-    ])
-    
-      
-    final_y = np.concatenate([
-        matched_cat['y_1'],
-        cat_a['y'][ extra_cat_a ],
-        cat_b['y'][ extra_cat_b ]
-    ])
-        
-    final_g1 = np.concatenate([
-        concat_gamma_1,
-        cat_a['gamma1'][ extra_cat_a ],
-        cat_b['gamma1'][ extra_cat_b ]
-    ])
-    
-    final_g2 = np.concatenate([
-        concat_gamma_2,
-        cat_a['gamma2'][ extra_cat_a ],
-        cat_b['gamma2'][ extra_cat_b ]
-    ])
-    
-    final_e1 = np.concatenate([
-        concat_e_1,
-        cat_a['e1'][ extra_cat_a ],
-        cat_b['e1'][ extra_cat_b ]
-    ])
-    
-    final_e2 = np.concatenate([
-        concat_e_2,
-        cat_a['e2'][ extra_cat_a ],
-        cat_b['e2'][ extra_cat_b ]
-    ])  
-    
-    final_ra = np.concatenate([
-        matched_cat['ra_1'],
-        cat_a['ra'][ extra_cat_a ],
-        cat_b['ra'][ extra_cat_b ]
-    ])  
-        
-    final_dec = np.concatenate([
-        matched_cat['dec_1'],
-        cat_a['dec'][ extra_cat_a ],
-        cat_b['dec'][ extra_cat_b ]
-    ]) 
-    
-    final_mag = np.concatenate([
-        matched_cat['MAG_AUTO_1'],
-        cat_a['MAG_AUTO'][ extra_cat_a ],
-        cat_b['MAG_AUTO'][ extra_cat_b ]
-    ]) 
-    final_size = np.concatenate([
-        matched_cat['gal_size_1'],
-        cat_a['gal_size'][ extra_cat_a ],
-        cat_b['gal_size'][ extra_cat_b ]
-    ]) 
-            
-    if 'z_1' in list(matched_cat.dtype.names):
-        final_z = np.concatenate([
-            z,
-            cat_a['z'][ extra_cat_a ],
-            cat_b['z'][ extra_cat_b ]
-        ]) 
-        
+    def stack(matched, name):
+        return np.concatenate([matched, cat_a[name][extra_a], cat_b[name][extra_b]])
+
+    def average(name):
+        return stack((matched_cat[f'{name}_1'] + matched_cat[f'{name}_2'])/2., name)
+
+    def first(name):
+        return stack(matched_cat[f'{name}_1'], name)
+
+    obs_data = {
+        'x': first('x'),
+        'y': first('y'),
+        'gamma1': average('gamma1'),
+        'gamma2': average('gamma2'),
+        'e1': average('e1'),
+        'e2': average('e2'),
+        'RA': first('ra'),
+        'DEC': first('dec'),
+    }
+    if 'z_1' in matched_cat.dtype.names:
+        obs_data['z'] = first('z')
+    obs_data['NUMBER'] = np.arange(obs_data['DEC'].shape[0])+1
+    obs_data['MAG'] = first('MAG_AUTO')
+    obs_data['SIZE'] = first('gal_size')
+
+    new_cols = [
+        fits.Column(name=ikey, format=obs_data[ikey].dtype, array=obs_data[ikey])
+        for ikey in obs_data
+    ]
+    return fits.BinTableHDU.from_columns(new_cols).data
 
 
+def bin_obs_data(in_obs_data, image_size=100, npix=100):
 
-        obs_data = {'x':final_x, 
-                'y':final_y, 
-                'gamma1':final_g1, 
-                'gamma2':final_g2,
-                'e1':final_e1, 
-                'e2':final_e2,
-                'RA':final_ra,
-                'DEC':final_dec,
-                    'z':final_z,
-                'NUMBER':np.arange(final_dec.shape[0])+1,
-                'MAG':final_mag,
-                'SIZE':final_size,
-               }
-
-    else:
-        
-
-
-
-        obs_data = {'x':final_x, 
-                'y':final_y, 
-                'gamma1':final_g1, 
-                'gamma2':final_g2,
-                'e1':final_e1, 
-                'e2':final_e2,
-                'RA':final_ra,
-                'DEC':final_dec,
-                'NUMBER':np.arange(final_dec.shape[0])+1,
-                'MAG':final_mag,
-                'SIZE':final_size,
-               }   
-    new_cols = []
-    for ikey in obs_data.keys():
-            new_cols.append(
-                fits.Column(
-                    name=ikey,
-                    format=obs_data[ikey].dtype,
-                    array=obs_data[ikey]
-                ))
-    hdu = fits.BinTableHDU.from_columns(new_cols)
-        
-        
-    return hdu.data
-
-
-def bin_obs_data( in_obs_data, image_size = 100, npix=100 ):
-    
     obs_data = in_obs_data.copy()
-    
-    g = np.sqrt( obs_data['gamma1']**2 + obs_data['gamma2']**2)
+
+    g = np.sqrt(obs_data['gamma1']**2 + obs_data['gamma2']**2)
 
     obs_data['gamma1'] = 2.*obs_data['gamma1'] / (1.+g**2)
     obs_data['gamma2'] = 2.*obs_data['gamma2'] / (1.+g**2)
 
-    delta_ra, delta_dec = ra_dec_to_simulation_image_pos( obs_data )
+    delta_ra, delta_dec = ra_dec_to_simulation_image_pos(obs_data)
 
+    extent = [-image_size//2, image_size//2, -image_size//2, image_size//2]
 
-    e1_radec, e2_radec = bin2d( 
-                delta_ra, delta_dec, 
-                v=(obs_data['gamma1'], 
-                   obs_data['gamma2']),
-                npix=npix,
-                extent=[
-                    -image_size//2,image_size//2,-image_size//2,image_size//2
-                ]
-            )
-
-    ### TO SPEED UP THE AUGMENTATION ####
-    edges = np.linspace(-image_size//2,image_size//2,npix+1)
-    
-    ix = np.digitize(delta_ra, edges) - 1
-    iy = np.digitize(delta_dec, edges) - 1
-    
-    
-    valid = (
-        (ix >= 0) & (ix < image_size) &
-        (iy >= 0) & (iy < image_size)
+    e1_radec, e2_radec = bin2d(
+        delta_ra, delta_dec,
+        v=(obs_data['gamma1'], obs_data['gamma2']),
+        npix=npix,
+        extent=extent
     )
 
-    ix = ix[valid]
-    iy = iy[valid]
+    ### TO SPEED UP THE AUGMENTATION ####
+    edges = np.linspace(-image_size//2, image_size//2, npix+1)
 
-    flat_bin = iy * image_size + ix
-    
-    
+    ix = np.digitize(delta_ra, edges) - 1
+    iy = np.digitize(delta_dec, edges) - 1
+
+    valid = (
+        (ix >= 0) & (ix < npix) &
+        (iy >= 0) & (iy < npix)
+    )
+
+    flat_bin = iy[valid] * npix + ix[valid]
+
     ###################
 
-    ngal = bin2d( 
-                delta_ra, delta_dec, 
-                v=None,
-                npix=npix,
-                extent=[
-                    -image_size//2,image_size//2,
-                    -image_size//2,image_size//2
-                ]
-            )
+    ngal = bin2d(delta_ra, delta_dec, v=None, npix=npix, extent=extent)
 
-    max_val = np.max([
-        e1_radec, e2_radec
-    ])
-    
-    min_val = np.min([
-        e1_radec, e2_radec
-    ])
-    
-    e1_radec -= min_val 
-    e1_radec /= max_val 
+    max_val = np.max([e1_radec, e2_radec])
+    min_val = np.min([e1_radec, e2_radec])
 
-    e2_radec -= min_val 
-    e2_radec /= max_val 
+    e1_radec -= min_val
+    e1_radec /= max_val
 
-    return {'e1':e1_radec, 'e2':e2_radec, 'ngal':ngal,
-            'delta_ra':delta_ra,'delta_dec':delta_dec,
-            'valid':valid, 'flat_bin':flat_bin}
+    e2_radec -= min_val
+    e2_radec /= max_val
+
+    return {'e1': e1_radec, 'e2': e2_radec, 'ngal': ngal,
+            'delta_ra': delta_ra, 'delta_dec': delta_dec,
+            'valid': valid, 'flat_bin': flat_bin}
 
 
-def ra_dec_to_simulation_image_pos( 
-    obs_data, 
-    fov_sim=2e3*units.kpc, 
-    jwst_pixel_size = 0.02*units.arcsecond, 
-    zl = 0.305,
-    pixel_size_kpc = 20.*units.kpc,
-    image_size = 100,
+def ra_dec_to_simulation_image_pos(
+    obs_data,
+    fov_sim=2e3*units.kpc,
+    jwst_pixel_size=0.02*units.arcsecond,
+    zl=0.305,
+    image_size=100,
     ra_0=None, dec_0=None,
     ):
-    
+    '''
+    Convert catalogue pixel positions (x, y) to simulation pixel coordinates,
+    centred on (ra_0, dec_0) (default: the median position) and scaled so that
+    fov_sim at zl spans [-image_size//2, image_size//2].
+    '''
+    arcsec_per_kpc = units.radian.to(units.arcsecond)/Planck18.angular_diameter_distance(zl).to(units.kpc)
 
+    fov_sim_arcsec = fov_sim * arcsec_per_kpc / 2.
 
-    conversion = (1.*units.radian.to(units.arcsecond)/Planck18.angular_diameter_distance(zl).to(units.kpc))
-    
-    pixel_size_arc = conversion*pixel_size_kpc
-
-    fov_sim_arcsec = fov_sim * conversion / 2.
-    
     if ra_0 is None:
-        ra_0 = np.median(obs_data['x']) 
+        ra_0 = np.median(obs_data['x'])
     if dec_0 is None:
-        dec_0 = np.median(obs_data['y']) 
-    delta_ra = (obs_data['x'] - ra_0)*jwst_pixel_size 
+        dec_0 = np.median(obs_data['y'])
+    delta_ra = (obs_data['x'] - ra_0)*jwst_pixel_size
     delta_dec = (obs_data['y'] - dec_0)*jwst_pixel_size
 
-    #rescale them to be between 0 and 2 Mpc
     delta_ra /= fov_sim_arcsec / (image_size//2)
     delta_dec /= fov_sim_arcsec / (image_size//2)
-    
+
     return delta_ra.value, delta_dec.value
 
 
 def rebin(arr, Q):
     """
     Rebin an array of shape (N, M, P, P) to (N, M, Q, Q)
-    using block-wise averaging.
+    using block-wise averaging, then repeat back up to (N, M, P, P).
 
     Parameters
     ----------
     arr : ndarray
         Input array of shape (N, M, P, P).
     Q : int
-        Desired output size of the last two dimensions.
+        Resolution of the block average.
 
     Returns
     -------
     ndarray
-        Rebinned array of shape (N, M, Q, Q).
+        Array of shape (N, M, P, P), piecewise constant on a Q x Q grid.
     """
     N, M, P1, P2 = arr.shape
     if P1 != P2:
@@ -745,7 +643,7 @@ def rebin(arr, Q):
 
     factor = P1 // Q
 
-    coarse =  arr.reshape(
+    coarse = arr.reshape(
         N, M,
         Q, factor,
         Q, factor
@@ -756,8 +654,9 @@ def rebin(arr, Q):
         factor, axis=3
     )
 
-def resize_data( 
-    new_resolution, 
+
+def resize_data(
+    new_resolution,
     fiducual_res=100,
     dir_path="/Users/davidharvey/Work/Dark_Matter_DA/code_nature/data/"
     ):
@@ -766,127 +665,101 @@ def resize_data(
     so i need to rebin the images. but i want to do this at the last stage
     so i dont FFT on low res images
     '''
-
-        
-    
     # Only create data that i have to
     for root, _, files in os.walk(dir_path):
-        if not 'convergence' in root:
-            if len(files) == 0:
+        if 'convergence' in root:
+            continue
+        for ifile in files:
+            if 'pkl' not in ifile:
                 continue
-            for ifile in files:
-                
-                newroot = root.replace("code_nature/data",f"code/data/{int(new_resolution)}")
-                
-                if not os.path.isdir(f"{newroot}"):
-                    os.system(f"mkdir -p {newroot}")    
-                
-                if 'pkl' in ifile:
-                    old_path = f"{root}/{ifile}"
-                    meta, data = pkl.load(open(old_path,"rb"))
-                    new_data = rebin( data, new_resolution)
 
-                    new_path = f"{newroot}/{ifile}"
-                    
-                    if new_path == old_path:
-                        raise ValueError("Overwriting original data")
-                        
-                    pkl.dump([meta, new_data], 
-                             open(new_path, "wb")
-                            )
-                    
+            newroot = root.replace("code_nature/data", f"code/data/{int(new_resolution)}")
+            old_path = f"{root}/{ifile}"
+            new_path = f"{newroot}/{ifile}"
+            if new_path == old_path:
+                raise ValueError("Overwriting original data")
+
+            meta, data = load_pickle(old_path)
+            save_pickle([meta, rebin(data, new_resolution)], new_path)
+
 
 def get_model_names(
-        ifilter='concat', 
+        ifilter='concat',
         model_dir="../models",
-        model='final', 
+        model='final',
         exclude_str=None,
         include_str=None,
         load_model_args=None,
         nmodels=None
     ):
-    
-    list_of_models = glob(
-        f"{model_dir}/{ifilter}/*{model}.pth"
-    )
-    
+
+    list_of_models = glob(f"{model_dir}/{ifilter}/*{model}.pth")
+
     if exclude_str is not None:
-        list_of_models  = [ i for i in list_of_models if not exclude_str in i ]
-    
+        list_of_models = [i for i in list_of_models if exclude_str not in i]
+
     if include_str is not None:
-        list_of_models  = [ i for i in list_of_models if include_str in i ]
-     
+        list_of_models = [i for i in list_of_models if include_str in i]
+
     if nmodels is not None:
         list_of_models = list_of_models[:nmodels]
-        
-    
-    assert len(list_of_models) > 0,f"No models found check path ({model_dir})"
-        
+
+    assert len(list_of_models) > 0, f"No models found check path ({model_dir})"
+
     #get the seed number index
-    names_in_model = np.array(list_of_models[0].split('/')[-1].split('_'))
-    seed_index  = np.where(names_in_model == 'seed')[0][0] + 1
-    
+    names_in_model = np.array(os.path.basename(list_of_models[0]).split('_'))
+    seed_index = np.where(names_in_model == 'seed')[0][0] + 1
+
     if load_model_args is not None:
         all_models = []
         for imodel in list_of_models:
             load_model_args.checkpoint = imodel
-            this_model = create_model(load_model_args)
+            all_models.append(create_model(load_model_args))
 
-            model_name = f"seed_{this_model.args.seed}"
-            #if target_test_accuracy[ifilter][model_name]['target_test_f1'] <0.48:
-            #    continue
-
-            all_models.append(this_model)
-        
         return np.array(all_models), seed_index
     return np.array(list_of_models), seed_index
 
-def sig_mean( redshift ):
-    sig = sigma_critical( 0.305, redshift, Planck18).value
+
+def sig_mean(redshift, zl=0.305):
+    '''Mean source redshift weighted by 1 / Sigma_crit.'''
+    sig = sigma_critical(zl, redshift, Planck18).value
     return np.sum(redshift/sig)/np.sum(1/sig)
-    
-def get_source_redshift( ifilter, data_dir='data/100/a2744', cuts=None ):
-    
+
+
+def get_source_redshift(ifilter, data_dir='data/100/a2744', cuts=None):
+
     if cuts is None:
-        cuts= {'f115w':{'signal_noise_cut':0, 'stat_type':'snr'}, 
-       'f150w':{'signal_noise_cut':5, 'stat_type':'snr'}}
-    data = get_obs_data( ifilter, photoz=True , data_dir=data_dir, cuts=cuts)
+        cuts = {'f115w': {'signal_noise_cut': 0, 'stat_type': 'snr'},
+                'f150w': {'signal_noise_cut': 5, 'stat_type': 'snr'}}
+    data = get_obs_data(ifilter, photoz=True, data_dir=data_dir, cuts=cuts)
 
-    #remove artifical redshifts 
-    nz = data['redshift'][ np.abs( data['redshift'] - np.median(data['redshift'])) > 1e-3]
-    
-    source_redshift = sig_mean( nz )
+    #remove artifical redshifts
+    nz = data['redshift'][np.abs(data['redshift'] - np.median(data['redshift'])) > 1e-3]
 
-    return source_redshift
+    return sig_mean(nz)
 
 
-def return_error_in_mean( all_thresholds, model_correlation=0.283 ):
+def return_error_in_mean(all_thresholds, model_correlation=0.283):
     '''
     Equation 7.51 in https://www.deeplearningbook.org/contents/regularization.html
-    
-    
     '''
-    
     nmodels = all_thresholds.shape[0]
-    
-    sigma = np.std(all_thresholds,axis=0)
-    
+
+    sigma = np.std(all_thresholds, axis=0)
+
     return sigma * np.sqrt((1 - model_correlation) / nmodels + model_correlation)
 
-if __name__ == "__main__":
-    
 
-    
-    main( 
-        search_path="data/100/convergence/*.pkl", 
-        h=1., 
-        sample_data=False, 
-        add_ncomps=True 
+if __name__ == "__main__":
+
+    main(
+        search_path="data/100/convergence/*.pkl",
+        sample_data=False,
+        add_ncomps=True
     )
 
-    main( 
-        search_path="data/100/convergence/*.pkl", 
-        h=1., 
-        sample_data=True, 
-        data_dir='data/100/a2744' 
+    main(
+        search_path="data/100/convergence/*.pkl",
+        sample_data=True,
+        data_dir='data/100/a2744'
     )

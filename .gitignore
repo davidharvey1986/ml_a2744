@@ -17,3 +17,7 @@ notebooks/plots
 plots
 *.zip
 notebooks/*.zip
+# SBI latents are ~1 GB; regenerate with sbi/make_summaries.py
+sbi/summaries/latents_*.npy
+sbi/test
+sbi/summaries/legacy/latents.pkl
