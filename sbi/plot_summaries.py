@@ -2,8 +2,8 @@
 """
 Plot the SBI summaries written by make_summaries.py.
 
-    (a) ensemble P(SIDM) against sigma/m for each simulation, with A2744, using
-        the figure-2 selection (A2744 mass range, merging, mass-function weights)
+    (a) ensemble P(SIDM) against sigma/m for each simulation, with A2744; merging
+        clusters weighted towards the A2744 mass (mass_weighting.py)
     (b,c) the latent space of one model (PCA), CDM vs the largest cross-section
     (d,e) P(SIDM) against projected mass inside 750 kpc, one line per sigma/m
     (f) P(SIDM) against the number of merging components
@@ -16,7 +16,7 @@ Usage
     cd ml_check && astro-env/bin/python sbi/plot_summaries.py
     astro-env/bin/python sbi/plot_summaries.py --held-out     # only clusters each model never trained on
     astro-env/bin/python sbi/plot_summaries.py --summaries sbi/summaries_ta --out sbi/plots/sbi_summaries_ta
-    astro-env/bin/python sbi/plot_summaries.py --no-mass-cut  # panel (a) over all clusters, unweighted
+    astro-env/bin/python sbi/plot_summaries.py --mass-weighting cut   # hard 2-sigma cut instead
 """
 
 import argparse
@@ -35,6 +35,9 @@ from sklearn.decomposition import PCA
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 from add_shear_to_data import return_error_in_mean  # noqa: E402
+from mass_weighting import (  # noqa: E402
+    a2744_log_mass, a2744_mass_gaussian, effective_sample_size, gaussian_mass_weights,
+)
 
 DOMAINS = ["bahamas", "darkskies"]
 # Same colours as COLOUR_SCHEME in notebooks/get_model_probabilities.py
@@ -44,20 +47,8 @@ INK, MUTED = "#222222", "#6b6b6b"
 CDM_X = 3e-3          # where CDM sits on the log sigma/m axis (as in figure 2)
 
 
-def a2744_log_mass(nsigma=2):
-    '''
-    log10 of the A2744 core + NW + N mass and its nsigma range, as
-    get_model_probabilities.get_mass_cut(study='harvey') (not imported: that
-    module reruns the catalogue cuts on import).
-    '''
-    mass = {"core": 16., "nw": 10.8, "n": 6.5}                       # 1e13 Msun
-    err = {"core": (0.9, 0.6), "nw": (1.0, 0.3), "n": (0.9, 0.7)}
-    est = sum(mass.values())
-    lo, hi = (np.sqrt(sum((err[k][i] / mass[k])**2 for k in mass)) * est for i in (0, 1))
-    return np.log10(np.array([est, est - nsigma * lo, est + nsigma * hi]) * 1e13)
-
-
-A2744_LOG_MASS = a2744_log_mass()
+A2744_MU, A2744_SIGMA = a2744_mass_gaussian()
+A2744_CUT = a2744_log_mass(nsigma=2)[1]
 
 
 def parse():
@@ -66,8 +57,9 @@ def parse():
     p.add_argument("--out", default=str(REPO / "sbi" / "plots" / "sbi_summaries"))
     p.add_argument("--held-out", action="store_true", help="use only rows each model did not train on")
     p.add_argument("--noise", type=int, default=0, help="noise realisation to plot")
-    p.add_argument("--no-mass-cut", action="store_true",
-                   help="panel (a): average all clusters instead of the figure-2 selection")
+    p.add_argument("--mass-weighting", choices=["gaussian", "cut", "none"], default="gaussian",
+                   help="panel (a): Gaussian weights towards the A2744 mass (default), the hard "
+                        "2-sigma cut with inverse mass-function weights, or all clusters unweighted")
     return p.parse_args()
 
 
@@ -109,38 +101,45 @@ def ensemble(values):
     return values.mean(0), return_error_in_mean(values)
 
 
-def figure2_weights(P, min_components=1):
+def mass_weights(P, scheme, min_components=1):
     '''
-    Per-cluster weights reproducing the selection of figure 2, i.e.
-    get_threshold_for_cross(mass_cut=get_mass_cut(nsigma=2), integrated_mass=True,
-    ncomponents=1, mass_weights=get_massfunction_weights(domain)):
-    mass inside 750 kpc within the A2744 range, more than one merging component,
-    weighted by the inverse CDM mass function of that same mass (30 bins from
-    10^14 to 10^15.5).
+    Per-cluster weights for panel (a), as get_threshold_for_cross(integrated_mass=True,
+    ncomponents=1, ...) with mass_gaussian=a2744_mass_gaussian() ("gaussian") or
+    mass_cut=get_mass_cut(nsigma=2) + get_massfunction_weights ("cut"). Each
+    cross-section is weighted separately, using the mass inside 750 kpc.
     '''
     m750 = P["log10_mass_750"]
-    sel = (m750 > A2744_LOG_MASS[1]) & (m750 < A2744_LOG_MASS[2]) & (P["ncomponents"] > min_components)
-    mass_function, edges = np.histogram(m750[P["cross_section"] == 0], bins=np.linspace(14, 15.5, 30))
+    cs = P["cross_section"]
+    if scheme == "none":
+        return np.ones(len(m750))
+    merging = P["ncomponents"] > min_components
+    weights = np.zeros(len(m750))
+    if scheme == "gaussian":
+        for c in np.unique(cs):
+            sel = (cs == c) & merging
+            weights[sel] = gaussian_mass_weights(m750[sel], A2744_MU, A2744_SIGMA)
+        return weights
+    sel = (m750 > A2744_CUT[0]) & (m750 < A2744_CUT[1]) & merging
+    mass_function, edges = np.histogram(m750[cs == 0], bins=np.linspace(14, 15.5, 30))
     mass_function[mass_function == 0] = 1
     ibin = np.clip(np.digitize(m750[sel], edges) - 1, 0, len(mass_function) - 1)
-    weights = np.zeros(len(m750))
     weights[sel] = 1. / mass_function[ibin]
     return weights
 
 
-def panel_response(ax, data, obs, use_held_out, mass_cut=True):
+def panel_response(ax, data, obs, use_held_out, scheme="gaussian"):
     for d in DOMAINS:
         P = data[d]
         s = masked(P, use_held_out)
-        w = figure2_weights(P) if mass_cut else np.ones(s.shape[1])
+        w = mass_weights(P, scheme)
         sigmas = np.unique(P["cross_section"])
         per_model = []
         for c in sigmas:
             wc = np.where(np.isfinite(s) & (P["cross_section"] == c), w, 0.)
             per_model.append(np.nansum(wc * s, axis=1) / wc.sum(1))
         mean, err = ensemble(np.array(per_model).T)
-        if mass_cut:
-            print(f"  (a) {d}: {np.sum(w > 0)} clusters pass the figure-2 selection")
+        neff = [effective_sample_size(w[P["cross_section"] == c]) for c in sigmas]
+        print(f"  (a) {d} [{scheme}]: effective clusters per sigma/m {np.round(neff).astype(int)}")
         x = np.where(sigmas == 0, CDM_X, sigmas)
         ax.errorbar(x, mean, err, fmt="-o", color=COLOUR[d], lw=2, ms=8, mec="white",
                     mew=1.5, capsize=3, label=d.upper(), zorder=3)
@@ -157,8 +156,9 @@ def panel_response(ax, data, obs, use_held_out, mass_cut=True):
     ax.set_xticklabels(["CDM", "0.01", "0.1", "1"])
     ax.set_xlabel(r"$\sigma/m$ [cm$^2$ g$^{-1}$]")
     ax.set_ylabel("Ensemble P(SIDM)")
-    ax.set_title("A2744 mass range, merging, mass-function weighted" if mass_cut else "All clusters",
-                 color=INK)
+    titles = {"gaussian": "Merging, weighted to A2744 mass", "cut": "Merging, A2744 mass range (2$\\sigma$ cut)",
+              "none": "All clusters"}
+    ax.set_title(titles[scheme], color=INK)
     ax.legend(loc="lower right")
 
 
@@ -223,8 +223,8 @@ def panel_mass(ax, d, P, use_held_out):
         colour = RAMP[d](shade)
         ax.fill_between(x, y - e, y + e, color=colour, alpha=0.2, lw=0)
         ax.plot(x, y, "-", color=colour, lw=2, label="CDM" if c == 0 else f"{c:g}")
-    ax.axvspan(A2744_LOG_MASS[1], A2744_LOG_MASS[2], color="k", alpha=0.08, lw=0)
-    ax.text(A2744_LOG_MASS[0], 0.02, "A2744", transform=ax.get_xaxis_transform(),
+    ax.axvspan(A2744_MU - A2744_SIGMA, A2744_MU + A2744_SIGMA, color="k", alpha=0.08, lw=0)
+    ax.text(A2744_MU, 0.02, "A2744 $\\pm1\\sigma$", transform=ax.get_xaxis_transform(),
             ha="center", va="bottom", fontsize=9, color=INK)
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles[::-1], labels[::-1], title=r"$\sigma/m$", loc="upper left", fontsize=8,
@@ -261,7 +261,7 @@ def main():
     data, obs = load(opts.summaries, opts.noise)
 
     fig, axes = plt.subplots(2, 3, figsize=(14, 8.5), constrained_layout=True)
-    panel_response(axes[0, 0], data, obs, opts.held_out, mass_cut=not opts.no_mass_cut)
+    panel_response(axes[0, 0], data, obs, opts.held_out, scheme=opts.mass_weighting)
     for ax, d in zip(axes[0, 1:], DOMAINS):
         panel_latent(ax, d, data[d], obs)
     for ax, d in zip(axes[1, :2], DOMAINS):

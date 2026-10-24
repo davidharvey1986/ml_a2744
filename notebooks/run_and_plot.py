@@ -23,6 +23,7 @@ from scipy.stats import norm
 from tqdm import tqdm
 
 from add_shear_to_data import get_obs_data, get_model_names, return_error_in_mean
+from mass_weighting import a2744_mass_gaussian
 from get_model_probabilities import (
     args, get_variable_redshift_dist, get_probabilities,
     get_threshold_for_cross, get_massfunction_weights,
@@ -66,7 +67,8 @@ def run_ta_models(imonte=5):
         args.apply_intrinsic_ell = 1.0
         args.ignore_dataset      = [""]
         args.unbalance           = True
-
+        args.train_split         = 0.01
+        args.verbose             = False
         ndone = len(all_results[seed_key]["src"])
 
         for _ in range(ndone, imonte):
@@ -96,7 +98,13 @@ def run_ta_models(imonte=5):
 # Step 2 – figure 2 (main result plot)
 # -------------------------------------------------------------------------
 
-def figure2(results_file="pickles/all_models_concat_nz_alignbest_wb1_results.pkl"):
+def figure2(results_file="pickles/all_models_concat_nz_alignbest_wb1_results.pkl",
+            mass_weighting="gaussian"):
+    """
+    mass_weighting : "gaussian" weights clusters towards the A2744 mass
+        (mass_weighting.gaussian_mass_weights); "cut" is the hard 2-sigma mass cut
+        with inverse mass-function weights.
+    """
     cdm = 3e-3
     ifilter = "concat"
 
@@ -119,20 +127,25 @@ def figure2(results_file="pickles/all_models_concat_nz_alignbest_wb1_results.pkl
         all_thresholds = []
         domain_name    = domain[target].split("_")[0]
 
-        mass_weights = get_massfunction_weights(domain[target].split("_")[0])
+        if mass_weighting == "gaussian":
+            mass_kwargs = {"mass_gaussian": a2744_mass_gaussian(study="harvey")}
+        elif mass_weighting == "cut":
+            mass_kwargs = {"mass_cut": mass_cut,
+                           "mass_weights": get_massfunction_weights(domain_name)}
+        else:
+            raise ValueError(f"Unknown mass_weighting {mass_weighting!r}")
 
         for imodel in all_results.keys():
             if "seed" not in imodel:
                 continue
             tgt = get_threshold_for_cross(
                 all_results[imodel][target],
-                mass_cut=mass_cut,
                 integrated_mass=True,
                 function=np.mean,
-                mass_weights=mass_weights,
-                dataset=domain[target].split("_")[0],
+                dataset=domain_name,
                 ncomponents=1,
                 quiet=True,
+                **mass_kwargs,
             )
             all_thresholds.append(tgt["thresholds"])
 
@@ -242,6 +255,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-ta", action="store_true", help="Skip running ta models")
     ap.add_argument("--imonte", type=int, default=5)
+    ap.add_argument("--mass-weighting", choices=["gaussian", "cut"], default="gaussian")
     opts = ap.parse_args()
 
     if not opts.skip_ta:
@@ -249,5 +263,5 @@ if __name__ == "__main__":
         run_ta_models(imonte=opts.imonte)
 
     print("\n=== Generating figure 2 ===")
-    outfile = figure2()
+    outfile = figure2(mass_weighting=opts.mass_weighting)
     print(f"\nDone. Plot at: {outfile}")

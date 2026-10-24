@@ -128,6 +128,7 @@ from dataset import (
     sigma_critical,
 )
 from getColorFromRange import colourFromRange
+from mass_weighting import a2744_log_mass, gaussian_mass_weights
 from model import create_model
 from refactor_parameter_space import *          # domain-specific parameter space helpers
 from RRGtools import run_match
@@ -401,6 +402,7 @@ def get_threshold_for_cross(
     mass_weights=None,
     h=0.7,
     ncomponents=None,
+    mass_gaussian=None,
 ):
     """
     Summarise per-cross-section mean probabilities over one or more result
@@ -426,22 +428,31 @@ def get_threshold_for_cross(
     h : float
         Hubble parameter (used for unit conversions).
     ncomponents : int, optional
-        Minimum number of sub-structure components to include.
+        Keep clusters with more than this many sub-structure components.
+    mass_gaussian : tuple[float, float], optional
+        ``(mu, sigma)`` in log10 Msun, e.g. ``mass_weighting.a2744_mass_gaussian()``.
+        Instead of a hard mass cut, weight each cluster by
+        N(log M; mu, sigma) / n(log M), with n the mass density of the clusters
+        averaged (see mass_weighting.py). Use with integrated_mass=True for the
+        A2744 (<750 kpc) mass; not combinable with mass_weights.
 
     Returns
     -------
     dict with keys:
         thresholds, threshold_err, cross_sections, probabilities, indexes
     """
-    if (mass_cut is not None) and (dataset is None):
-        raise ValueError("A dataset name is required when mass_cut is set.")
+    need_mass = (mass_cut is not None) or (mass_gaussian is not None)
+    if (need_mass or ncomponents is not None) and (dataset is None):
+        raise ValueError("A dataset name is required for mass or component selections.")
+    if (mass_gaussian is not None) and (mass_weights is not None):
+        raise ValueError("Use either mass_gaussian or mass_weights, not both.")
 
     if not isinstance(results_list, list):
         results_list = [results_list]
 
     # Pre-compute lensing critical density if we need projected masses
     critical_kappa = None
-    if integrated_mass and mass_cut is not None:
+    if integrated_mass and need_mass:
         # The stored kappa is at the map redshifts, not the observed n(z)
         critical_kappa = (
             lenspack.utils.sigma_critical(MAP_ZL, MAP_ZS, Planck18)
@@ -469,37 +480,23 @@ def get_threshold_for_cross(
                 cross_mask = icross == results["all_cross_sections"][0]
 
                 # ---- Build selection mask --------------------------------
-                if mass_cut is not None or ncomponents is not None:
-                    if icross_lab not in mass_data or icross_lab not in components:
+                idx = results["indexes"][cross_mask]
+                sel = np.ones(idx.shape[0], dtype=bool)
+                if need_mass or ncomponents is not None:
+                    if icross_lab not in components:
                         meta, data = get_dataset_meta(dataset, icross)
                         components[icross_lab] = meta["ncomponents"]
+                        if need_mass:
+                            mass_data[icross_lab] = (
+                                integrated_log_mass(data[:, 2], critical_kappa)
+                                if integrated_mass else meta["mass"]
+                            )
 
-                        if mass_cut is not None:
-                            if integrated_mass:
-                                mass_data[icross_lab] = integrated_log_mass(
-                                    data[:, 2], critical_kappa
-                                )
-                            else:
-                                mass_data[icross_lab] = meta["mass"]
-
-                    these_components = components[icross_lab][
-                        results["indexes"][cross_mask]
-                    ]
-
+                    if ncomponents is not None:
+                        sel &= components[icross_lab][idx] > ncomponents
                     if mass_cut is not None:
-                        mass = mass_data[icross_lab][results["indexes"][cross_mask]]
-                        mass_ok = (mass > mass_cut[0]) & (mass < mass_cut[1])
-                        comp_ok = (
-                            (these_components > ncomponents)
-                            if ncomponents is not None
-                            else np.ones(mass_ok.shape, dtype=bool)
-                        )
-                        sel = mass_ok & comp_ok
-                    else:
-                        sel = these_components > ncomponents
-                else:
-                    n = results["indexes"][cross_mask].shape[0]
-                    sel = np.ones(n, dtype=bool)
+                        mass = mass_data[icross_lab][idx]
+                        sel &= (mass > mass_cut[0]) & (mass < mass_cut[1])
 
                 # ---- Probability for selected objects --------------------
                 prob = results["probabilities"][
@@ -507,10 +504,13 @@ def get_threshold_for_cross(
                 ][sel, :]
                 probs = prob[:, 0].detach().numpy()
 
-                if mass_weights is None:
+                if mass_gaussian is not None:
+                    w = gaussian_mass_weights(mass_data[icross_lab][idx][sel], *mass_gaussian)
+                    threshold = np.nansum(w * probs) / np.sum(w)
+                elif mass_weights is None:
                     threshold = function(probs)
                 else:
-                    mass = mass_data[icross_lab][results["indexes"][cross_mask]][sel]
+                    mass = mass_data[icross_lab][idx][sel]
                     # mass_weights must be built from the same mass definition
                     # (integrated_mass) as the selection; digitize - 1 is the bin index
                     ibin = np.clip(
@@ -525,9 +525,7 @@ def get_threshold_for_cross(
                     np.nanquantile(probs, [0.16, 0.84]) / np.sqrt(probs.shape[0])
                 )
                 these_probs.append(prob)
-                these_indexes.append(
-                    results["indexes"][cross_mask][sel]
-                )
+                these_indexes.append(idx[sel])
 
         all_thresholds.append(thresholds)
         all_threshold_err.append(threshold_err)
@@ -677,7 +675,7 @@ def get_variable_redshift_dist(data_dir="../data/100/a2744/", ifilter="concat"):
 def get_mass_cut(ifilter, zl=0.305, zs=1.6, thresh=0.0, nsigma=2, study="harvey"):
     """
     Return the log10 mass threshold (and confidence interval) consistent with
-    published mass measurements of Abell 2744.
+    published mass measurements of Abell 2744 (numbers in mass_weighting.py).
 
     Parameters
     ----------
@@ -689,28 +687,8 @@ def get_mass_cut(ifilter, zl=0.305, zs=1.6, thresh=0.0, nsigma=2, study="harvey"
     tuple[float, list[float]]
         ``(central_log_mass, [lower_log_mass, upper_log_mass])``
     """
-    obs = {
-        "harvey": {"core": 16,   "nw": 10.8, "n": 6.5},
-        "jauzac": {"core": 27.7, "nw": 18.0, "n": 8.6},
-    }
-    err = {
-        "harvey": {"core": [0.9, 0.6], "nw": [1.0, 0.3], "n": [0.9, 0.7]},
-        "jauzac": {"core": [0.1, 0.1], "nw": [1.0, 1.0], "n": [2.2, 2.2]},
-    }
-
-    choice      = obs[study]
-    choice_err  = err[study]
-    est         = sum(choice.values())
-    err_lo = np.sqrt(sum((choice_err[k][0] / choice[k]) ** 2 for k in choice)) * est
-    err_hi = np.sqrt(sum((choice_err[k][1] / choice[k]) ** 2 for k in choice)) * est
-
-    return (
-        np.log10(est * 1e13),
-        [
-            np.log10((est - nsigma * err_lo) * 1e13),
-            np.log10((est + nsigma * err_hi) * 1e13),
-        ],
-    )
+    centre, bounds = a2744_log_mass(nsigma=nsigma, study=study)
+    return centre, list(bounds)
 
 
 def get_massfunction_weights(dataset, ifilter="concat", integrated_mass=True):
