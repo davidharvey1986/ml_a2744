@@ -119,6 +119,8 @@ from add_shear_to_data import (
     return_error_in_mean,
 )
 from dataset import (
+    MAP_ZL,
+    MAP_ZS,
     apply_intrinsic_ell,
     get_cross_section_from_filename,
     prepare_dataloaders,
@@ -440,10 +442,9 @@ def get_threshold_for_cross(
     # Pre-compute lensing critical density if we need projected masses
     critical_kappa = None
     if integrated_mass and mass_cut is not None:
-        zl = 0.305
-        zs = args.default_zs
+        # The stored kappa is at the map redshifts, not the observed n(z)
         critical_kappa = (
-            lenspack.utils.sigma_critical(zl, zs, Planck18)
+            lenspack.utils.sigma_critical(MAP_ZL, MAP_ZS, Planck18)
             .to(units.Msun / units.kpc / units.kpc)
         )
 
@@ -726,8 +727,8 @@ def get_massfunction_weights(dataset, ifilter="concat", integrated_mass=True):
     -------
     dict with keys ``"x"`` (bin edges) and ``"y"`` (inverse counts).
     """
-    zs = args.default_zs
-    critical_density = sigma_critical(args.zl, zs, Planck18).to(
+    # The stored kappa is at the map redshifts, not the observed n(z)
+    critical_density = sigma_critical(MAP_ZL, MAP_ZS, Planck18).to(
         units.Msun / units.kpc / units.kpc
     )
 

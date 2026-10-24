@@ -12,6 +12,13 @@ from astropy import cosmology
 from scipy.stats import chi, norm
 from scipy.ndimage import zoom
 
+# Lens and source redshift the shear/kappa maps are made at (add_shear_to_data.main).
+# rescale_lens_source_configuration rescales from these to the observed n(z); masses
+# from the stored kappa must use them too.
+MAP_ZL = 0.305
+MAP_ZS = 1.72
+SIGMA_CRIT_MAP = sigma_critical(MAP_ZL, MAP_ZS, cosmology.Planck18).value   # 2334 Msun/pc^2
+
 def get_cross_section_from_filename(filename):
     base_name = os.path.basename(filename)
     name = os.path.splitext(base_name)[0].lower()
@@ -662,7 +669,7 @@ class cluster_member_contamination( object ):
     
 class rescale_lens_source_configuration( object ):
     '''
-    When creating the data it assumes that zs=1.72, zl=0.305
+    When creating the data it assumes that zs=MAP_ZS=1.72, zl=MAP_ZL=0.305
     '''
     def __init__(self, args ):
         self.zl = args.zl
@@ -680,7 +687,7 @@ class rescale_lens_source_configuration( object ):
         else:
             self.apply = True
             
-            sigma_crit_fid = 2334. # hard coded to speed up
+            sigma_crit_fid = SIGMA_CRIT_MAP
             
             sigma_crit = sigma_critical(self.zl, self.zs, cosmology.Planck18).value
             
