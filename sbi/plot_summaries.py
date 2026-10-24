@@ -2,7 +2,8 @@
 """
 Plot the SBI summaries written by make_summaries.py.
 
-    (a) ensemble P(SIDM) against sigma/m for each simulation, with A2744
+    (a) ensemble P(SIDM) against sigma/m for each simulation, with A2744, using
+        the figure-2 selection (A2744 mass range, merging, mass-function weights)
     (b,c) the latent space of one model (PCA), CDM vs the largest cross-section
     (d,e) P(SIDM) against projected mass inside 750 kpc, one line per sigma/m
     (f) P(SIDM) against the number of merging components
@@ -14,9 +15,12 @@ Usage
 -----
     cd ml_check && astro-env/bin/python sbi/plot_summaries.py
     astro-env/bin/python sbi/plot_summaries.py --held-out     # only clusters each model never trained on
+    astro-env/bin/python sbi/plot_summaries.py --summaries sbi/summaries_ta --out sbi/plots/sbi_summaries_ta
+    astro-env/bin/python sbi/plot_summaries.py --no-mass-cut  # panel (a) over all clusters, unweighted
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -62,6 +66,8 @@ def parse():
     p.add_argument("--out", default=str(REPO / "sbi" / "plots" / "sbi_summaries"))
     p.add_argument("--held-out", action="store_true", help="use only rows each model did not train on")
     p.add_argument("--noise", type=int, default=0, help="noise realisation to plot")
+    p.add_argument("--no-mass-cut", action="store_true",
+                   help="panel (a): average all clusters instead of the figure-2 selection")
     return p.parse_args()
 
 
@@ -103,13 +109,38 @@ def ensemble(values):
     return values.mean(0), return_error_in_mean(values)
 
 
-def panel_response(ax, data, obs, use_held_out):
+def figure2_weights(P, min_components=1):
+    '''
+    Per-cluster weights reproducing the selection of figure 2, i.e.
+    get_threshold_for_cross(mass_cut=get_mass_cut(nsigma=2), integrated_mass=True,
+    ncomponents=1, mass_weights=get_massfunction_weights(domain)):
+    mass inside 750 kpc within the A2744 range, more than one merging component,
+    weighted by the inverse CDM mass function of that same mass (30 bins from
+    10^14 to 10^15.5).
+    '''
+    m750 = P["log10_mass_750"]
+    sel = (m750 > A2744_LOG_MASS[1]) & (m750 < A2744_LOG_MASS[2]) & (P["ncomponents"] > min_components)
+    mass_function, edges = np.histogram(m750[P["cross_section"] == 0], bins=np.linspace(14, 15.5, 30))
+    mass_function[mass_function == 0] = 1
+    ibin = np.clip(np.digitize(m750[sel], edges) - 1, 0, len(mass_function) - 1)
+    weights = np.zeros(len(m750))
+    weights[sel] = 1. / mass_function[ibin]
+    return weights
+
+
+def panel_response(ax, data, obs, use_held_out, mass_cut=True):
     for d in DOMAINS:
         P = data[d]
         s = masked(P, use_held_out)
+        w = figure2_weights(P) if mass_cut else np.ones(s.shape[1])
         sigmas = np.unique(P["cross_section"])
-        per_model = np.array([np.nanmean(s[:, P["cross_section"] == c], axis=1) for c in sigmas]).T
-        mean, err = ensemble(per_model)
+        per_model = []
+        for c in sigmas:
+            wc = np.where(np.isfinite(s) & (P["cross_section"] == c), w, 0.)
+            per_model.append(np.nansum(wc * s, axis=1) / wc.sum(1))
+        mean, err = ensemble(np.array(per_model).T)
+        if mass_cut:
+            print(f"  (a) {d}: {np.sum(w > 0)} clusters pass the figure-2 selection")
         x = np.where(sigmas == 0, CDM_X, sigmas)
         ax.errorbar(x, mean, err, fmt="-o", color=COLOUR[d], lw=2, ms=8, mec="white",
                     mew=1.5, capsize=3, label=d.upper(), zorder=3)
@@ -126,6 +157,8 @@ def panel_response(ax, data, obs, use_held_out):
     ax.set_xticklabels(["CDM", "0.01", "0.1", "1"])
     ax.set_xlabel(r"$\sigma/m$ [cm$^2$ g$^{-1}$]")
     ax.set_ylabel("Ensemble P(SIDM)")
+    ax.set_title("A2744 mass range, merging, mass-function weighted" if mass_cut else "All clusters",
+                 color=INK)
     ax.legend(loc="lower right")
 
 
@@ -228,7 +261,7 @@ def main():
     data, obs = load(opts.summaries, opts.noise)
 
     fig, axes = plt.subplots(2, 3, figsize=(14, 8.5), constrained_layout=True)
-    panel_response(axes[0, 0], data, obs, opts.held_out)
+    panel_response(axes[0, 0], data, obs, opts.held_out, mass_cut=not opts.no_mass_cut)
     for ax, d in zip(axes[0, 1:], DOMAINS):
         panel_latent(ax, d, data[d], obs)
     for ax, d in zip(axes[1, :2], DOMAINS):
@@ -236,8 +269,10 @@ def main():
     panel_ncomp(axes[1, 2], data, opts.held_out)
 
     nmodels = obs["softmax"].shape[0]
+    model = json.load(open(Path(opts.summaries) / "info.json"))["options"]["model"]
     rows = "held-out clusters" if opts.held_out else "all clusters"
-    fig.suptitle(f"CNN summaries for SBI: {nmodels} models, {rows}", color=INK, fontsize=13)
+    fig.suptitle(f"CNN summaries for SBI: {nmodels} {model.replace('_', ' ')} models, {rows}",
+                 color=INK, fontsize=13)
     for ax, letter in zip(axes.flat, "abcdef"):
         ax.text(-0.02, 1.02, f"({letter})", transform=ax.transAxes, ha="right", va="bottom",
                 fontsize=11, color=INK)

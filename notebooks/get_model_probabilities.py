@@ -165,6 +165,13 @@ _xg, _yg = np.meshgrid(_vec * 20.0, _vec * 20.0)
 rgrid = np.sqrt(_xg ** 2 + _yg ** 2)
 
 
+def integrated_log_mass(kappa, critical_kappa, aperture=750.0):
+    """log10 projected mass [Msun] inside *aperture* kpc of (N, 100, 100) kappa maps."""
+    return np.log10(
+        (np.sum(kappa[:, rgrid < aperture], axis=-1) * critical_kappa * (20 * units.kpc) ** 2).value
+    )
+
+
 # ---------------------------------------------------------------------------
 # Global configuration namespace
 # ---------------------------------------------------------------------------
@@ -468,13 +475,8 @@ def get_threshold_for_cross(
 
                         if mass_cut is not None:
                             if integrated_mass:
-                                kappa = data[:, 2]
-                                mass_data[icross_lab] = np.log10(
-                                    (
-                                        np.sum(kappa[:, rgrid < 750.0], axis=-1)
-                                        * critical_kappa
-                                        * (20 * units.kpc) ** 2
-                                    ).value
+                                mass_data[icross_lab] = integrated_log_mass(
+                                    data[:, 2], critical_kappa
                                 )
                             else:
                                 mass_data[icross_lab] = meta["mass"]
@@ -508,9 +510,13 @@ def get_threshold_for_cross(
                     threshold = function(probs)
                 else:
                     mass = mass_data[icross_lab][results["indexes"][cross_mask]][sel]
-                    w = mass_weights["y"][
-                        np.digitize(mass, mass_weights["x"])
-                    ]
+                    # mass_weights must be built from the same mass definition
+                    # (integrated_mass) as the selection; digitize - 1 is the bin index
+                    ibin = np.clip(
+                        np.digitize(mass, mass_weights["x"]) - 1,
+                        0, len(mass_weights["y"]) - 1,
+                    )
+                    w = mass_weights["y"][ibin]
                     threshold = np.nansum(w * probs) / np.sum(w)
 
                 thresholds.append(threshold)
@@ -706,10 +712,15 @@ def get_mass_cut(ifilter, zl=0.305, zs=1.6, thresh=0.0, nsigma=2, study="harvey"
     )
 
 
-def get_massfunction_weights(dataset, ifilter="concat"):
+def get_massfunction_weights(dataset, ifilter="concat", integrated_mass=True):
     """
     Compute per-mass-bin weights that account for the different mass functions
-    across simulations.
+    across simulations: the inverse of the CDM mass function.
+
+    integrated_mass : bool
+        Use the projected mass inside 750 kpc, as get_threshold_for_cross does
+        with integrated_mass=True; otherwise the total mass in the stamp.
+        Must match the integrated_mass passed to get_threshold_for_cross.
 
     Returns
     -------
@@ -727,12 +738,12 @@ def get_massfunction_weights(dataset, ifilter="concat"):
     )
     meta, data = pkl.load(open(pkl_path, "rb"))
 
-    mass = np.log10(
-        np.sum(
-            np.sum(data[:, 2], axis=-1) * critical_density * (20 * units.kpc) ** 2,
-            axis=-1,
-        ).value
-    )
+    if integrated_mass:
+        mass = integrated_log_mass(data[:, 2], critical_density)
+    else:
+        mass = np.log10(
+            (np.sum(data[:, 2], axis=(-1, -2)) * critical_density * (20 * units.kpc) ** 2).value
+        )
 
     mass_function, x = np.histogram(mass, bins=np.linspace(14, 15.5, 30))
     mass_function[mass_function == 0] = 1

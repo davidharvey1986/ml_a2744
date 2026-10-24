@@ -21,3 +21,5 @@ notebooks/*.zip
 sbi/summaries/latents_*.npy
 sbi/test
 sbi/summaries/legacy/latents.pkl
+sbi/summaries_*/latents_*.npy
+sbi/summaries_*/legacy/latents.pkl
