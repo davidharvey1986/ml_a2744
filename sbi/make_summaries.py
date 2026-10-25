@@ -88,7 +88,7 @@ RGRID = np.hypot(*np.meshgrid(_vec, _vec))  # kpc from the stamp centre
 
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--model", default="tweakedalign_best", help="checkpoint suffix passed to get_model_names")
+    p.add_argument("--model", default="tweakedalign_final", help="checkpoint suffix passed to get_model_names")
     p.add_argument("--include-str", default="nob1")
     p.add_argument("--nmodels", type=int, default=None)
     p.add_argument("--filter", default="concat")
@@ -97,6 +97,8 @@ def parse():
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--out-dir", default=str(REPO / "sbi" / "summaries"))
     p.add_argument("--legacy-dir", default=None, help="also write the old Dark_Matter_DA/sbi pickles here")
+    p.add_argument("--no-latents", action="store_true",
+                   help="do not save the simulated latents (~1 GB), only softmax and parameters")
     return p.parse_args()
 
 
@@ -248,14 +250,17 @@ def run_domain(domain, models, args, opts, out_dir, device):
     print(f"  held out per model: {params['held_out'].sum(1).min()}-{params['held_out'].sum(1).max()} of {n}")
 
     softmax = np.zeros((len(models), opts.n_noise, n), dtype=np.float32)
-    latents = np.lib.format.open_memmap(
+    latents = None if opts.no_latents else np.lib.format.open_memmap(
         out_dir / f"latents_{domain}.npy", mode="w+", dtype=np.float32,
         shape=(len(models), opts.n_noise, n, 512),
     )
     for r in range(opts.n_noise):
         images = noisy_images(dataset, opts.noise_seed + r)
-        latents[:, r], softmax[:, r] = run_models(models, images, device, opts.batch_size)
-    latents.flush()
+        z, softmax[:, r] = run_models(models, images, device, opts.batch_size)
+        if latents is not None:
+            latents[:, r] = z
+    if latents is not None:
+        latents.flush()
 
     np.save(out_dir / f"softmax_{domain}.npy", softmax)
     np.savez(out_dir / f"params_{domain}.npz", filename=filenames, image_idx=image_idx,
@@ -323,7 +328,9 @@ def main():
     }
     json.dump(info, open(out_dir / "info.json", "w"), indent=2)
 
-    if opts.legacy_dir:
+    if opts.legacy_dir and opts.no_latents:
+        print("skipping --legacy-dir: it needs the latents")
+    elif opts.legacy_dir:
         write_legacy(LAUNCH_DIR / opts.legacy_dir, out_dir, models)
 
 

@@ -12,7 +12,9 @@ and two estimators are trained:
     NLE  p(x | theta), x = logit of the ensemble-mean P(SIDM) (1-d). The posterior is
          evaluated on a grid with flat priors in log1p sigma/m, log M and n_comp
          (or the A2744 mass measurement as the mass prior, --mass-prior a2744).
-    NPE  p(theta | x), x = the 30 per-model logit P(SIDM). n_comp is dequantised
+    NPE  p(theta | x), x = the 30 per-model logit P(SIDM) plus, with --latent-pcs k,
+         the first k principal components of each model's 512-d latent space (PCA
+         per model, fitted on the simulated clusters). n_comp is dequantised
          (+U(-1/2, 1/2)). Its prior is the simulated population (the sigma/m grid,
          each simulation's mass function and merger fractions).
 
@@ -31,13 +33,14 @@ simulation-based calibration (rank ECDFs) on held-out clusters, whether A2744 li
 inside the simulated summary distribution, and how much lower the CNN outputs are
 for clusters a model was trained on.
 
-Outputs in sbi/results/<summaries dir name>/: results.json, posteriors.npz,
+Outputs in sbi/results/<summaries dir name>[_pc<k>]/: results.json, posteriors.npz,
 posterior.pdf/png, discrepancy.pdf/png, validation.pdf/png and the trained
 estimators (*.pt, not in git).
 
 Usage (needs the sbi package, e.g. the Dark_Matter_DA/sbi environment):
     cd ml_check
     ../Dark_Matter_DA/sbi/bin/python sbi/run_sbi.py --summaries sbi/summaries_ta
+    ../Dark_Matter_DA/sbi/bin/python sbi/run_sbi.py --summaries sbi/summaries_ta --latent-pcs 0   # softmax only
 """
 
 import argparse
@@ -83,6 +86,8 @@ def parse():
     p.add_argument("--mass-prior", choices=["flat", "a2744"], default="flat",
                    help="NLE mass prior: flat over the simulations or the A2744 measurement")
     p.add_argument("--noise", type=int, default=0, help="noise realisation of the summaries")
+    p.add_argument("--latent-pcs", type=int, default=0,
+                   help="principal components of each model's latent space added to the NPE input")
     p.add_argument("--retrain", action="store_true")
     p.add_argument("--seed", type=int, default=0)
     return p.parse_args()
@@ -94,7 +99,23 @@ def logit(p):
 
 
 # ── data ───────────────────────────────────────────────────────────────────────
-def load_domain(summaries, d, noise):
+def latent_features(S, d, k, noise, rows):
+    '''First k principal components of each model's latents, for the simulations and A2744.'''
+    Z = np.load(S / f"latents_{d}.npy", mmap_mode="r")[:, noise]        # (n_models, N, 512)
+    Z_obs = np.load(S / "obs.npz")["latents"][:, 0]                     # (n_models, 512)
+    sims, obs, explained = [], [], []
+    for m in range(Z.shape[0]):
+        z = np.asarray(Z[m])[rows]
+        mean = z.mean(0)
+        _, sv, vt = np.linalg.svd(z - mean, full_matrices=False)
+        sims.append((z - mean) @ vt[:k].T)
+        obs.append((Z_obs[m] - mean) @ vt[:k].T)
+        explained.append(np.sum(sv[:k]**2) / np.sum(sv**2))
+    return (np.concatenate(sims, axis=1).astype(np.float32), np.concatenate(obs).astype(np.float32),
+            float(np.mean(explained)))
+
+
+def load_domain(summaries, d, noise, latent_pcs=0):
     S = Path(summaries)
     P = np.load(S / f"params_{d}.npz")
     soft = np.load(S / f"softmax_{d}.npy")[:, noise]                   # (n_models, N)
@@ -105,7 +126,15 @@ def load_domain(summaries, d, noise):
     theta = np.c_[np.log1p(sigma), P["log10_mass_750"][ok],
                   np.minimum(P["ncomponents"][ok], NCOMP_MAX)].astype(np.float32)
     held_out = P["held_out"][:, ok]
+    x_npe, x_obs_npe = logit(soft[:, ok].T), logit(obs)
+    explained = 0.
+    if latent_pcs > 0:
+        pcs, pcs_obs, explained = latent_features(S, d, latent_pcs, noise, ok)
+        x_npe, x_obs_npe = np.c_[x_npe, pcs], np.r_[x_obs_npe, pcs_obs]
     return {
+        "x_npe": x_npe,                                                # (N, n_models * (1 + k))
+        "x_obs_npe": x_obs_npe,
+        "latent_variance_explained": explained,
         "theta": theta,
         "sigma": sigma,
         "x_ens": logit(soft[:, ok].mean(0))[:, None],                 # (N, 1)
@@ -319,6 +348,38 @@ def npe_sbc(posterior, th_te, x_te, sigma_grid, rng, n_samples=500):
     return np.array(ranks)
 
 
+def npe_test_metrics(posterior, th_te, x_te, sigma_grid, rng, n_clusters=1000, n_samples=400):
+    '''
+    How much a single cluster's posterior learns: probability on the true sigma/m
+    (chance = 1 / number of simulated values), how often the most probable sigma/m is
+    right, and the same for n_comp; mass as posterior std and error of the median.
+    '''
+    pick = rng.choice(len(th_te), min(n_clusters, len(th_te)), replace=False)
+    smp = posterior.sample_batched((n_samples,), x=torch.tensor(x_te[pick]),
+                                   show_progress_bars=False).numpy()      # (S, B, 3)
+    true_sigma = np.expm1(th_te[pick, 0])
+    snapped = snap_sigma(smp[..., 0], sigma_grid)
+    probs = np.stack([np.mean(snapped == v, axis=0) for v in sigma_grid], axis=1)   # (B, n_sigma)
+    true_idx = np.array([np.argmin(abs(sigma_grid - t)) for t in true_sigma])
+    nc = np.clip(np.round(smp[..., 2]), 1, NCOMP_MAX)
+    nc_probs = np.stack([np.mean(nc == k, axis=0) for k in range(1, NCOMP_MAX + 1)], axis=1)
+    nc_true = th_te[pick, 2].astype(int) - 1
+    rows = np.arange(len(pick))
+    return {
+        "n_clusters": int(len(pick)),
+        "sigma_p_true": float(probs[rows, true_idx].mean()),
+        "sigma_p_true_chance": float(1. / len(sigma_grid)),
+        "sigma_map_correct": float(np.mean(probs.argmax(1) == true_idx)),
+        "sigma_map_correct_by_sigma": {f"{v:g}": float(np.mean(probs.argmax(1)[true_idx == i] == i))
+                                       for i, v in enumerate(sigma_grid)},
+        "mass_posterior_std": float(np.mean(smp[..., 1].std(0))),
+        "mass_prior_std": float(th_te[:, 1].std()),
+        "mass_median_rms_error": float(np.sqrt(np.mean((np.median(smp[..., 1], 0) - th_te[pick, 1])**2))),
+        "ncomp_p_true": float(nc_probs[rows, nc_true].mean()),
+        "ncomp_map_correct": float(np.mean(nc_probs.argmax(1) == nc_true)),
+    }
+
+
 def misspecification(x_train, x_obs):
     '''Fraction of simulated summaries further from the mean (Mahalanobis) than A2744.'''
     mu = x_train.mean(0)
@@ -489,7 +550,7 @@ def save(fig, stem):
 # ── main ───────────────────────────────────────────────────────────────────────
 def run_domain(d, opts, out, rng, mu, sig):
     print(f"\n=== {d} ===")
-    D = load_domain(opts.summaries, d, opts.noise)
+    D = load_domain(opts.summaries, d, opts.noise, opts.latent_pcs)
     th, n = D["theta"], len(D["theta"])
     test = rng.random(n) < TEST_FRAC
     sigma_cut = cdm_threshold(D["sigma_grid"])
@@ -523,23 +584,30 @@ def run_domain(d, opts, out, rng, mu, sig):
     if path.exists() and not opts.retrain:
         npe = torch.load(path, weights_only=False)
     else:
-        npe = train_npe(th_deq[~test], D["x_models"][~test], prior)
+        npe = train_npe(th_deq[~test], D["x_npe"][~test], prior)
         torch.save(npe, path)
-    samples = npe.sample((N_POST,), x=torch.tensor(D["x_obs_models"][None]),
+    samples = npe.sample((N_POST,), x=torch.tensor(D["x_obs_npe"][None]),
                          show_progress_bars=False).numpy()
     npe_res = npe_summary(samples, D["sigma_grid"], th[~test])
     print(f"  NPE: sigma/m = {npe_res['sigma_quantiles'][1]:.3f} [{npe_res['sigma_quantiles'][0]:.3f}, "
           f"{npe_res['sigma_quantiles'][2]:.3f}], BF(SIDM:CDM) = {npe_res['bayes_factor_sidm_cdm']:.2f}")
-    sbc = npe_sbc(npe, th[test], D["x_models"][test], D["sigma_grid"], rng)
+    sbc = npe_sbc(npe, th[test], D["x_npe"][test], D["sigma_grid"], rng)
+    test_metrics = npe_test_metrics(npe, th[test], D["x_npe"][test], D["sigma_grid"], rng)
+    print(f"  NPE on held-out single clusters: P(true sigma/m) = {test_metrics['sigma_p_true']:.2f} "
+          f"(chance {test_metrics['sigma_p_true_chance']:.2f}), most probable right "
+          f"{100 * test_metrics['sigma_map_correct']:.0f}%, mass std {test_metrics['mass_posterior_std']:.3f} "
+          f"(prior {test_metrics['mass_prior_std']:.3f}), P(true n_comp) = {test_metrics['ncomp_p_true']:.2f}")
 
     checks = {
-        "obs_summary_percentile_mahalanobis": misspecification(D["x_models"], D["x_obs_models"]),
+        "obs_summary_percentile_mahalanobis": misspecification(D["x_npe"], D["x_obs_npe"]),
         "cdm_training_bias_logit": training_bias(D),
     }
     print(f"  A2744 within simulations: {100 * checks['obs_summary_percentile_mahalanobis']:.1f}% of simulated "
           f"summaries are further out; trained-on CDM clusters are {checks['cdm_training_bias_logit']:+.3f} in logit")
 
     results = {"empirical": emp_summary, "nle": nle_res, "npe": npe_res, "checks": checks,
+               "npe_test_metrics": test_metrics, "npe_input_dim": int(D["x_npe"].shape[1]),
+               "latent_variance_explained": D["latent_variance_explained"],
                "cdm_definition_sigma_below": float(sigma_cut), "n_clusters": n,
                "empirical_p_by_sigma": {s: v["p_ge_obs"] for s, v in empirical.items()}}
     return results, {"grids": grids, "nle_post": post, "sigma_grid": D["sigma_grid"], "npe_samples": samples, "sigma_cut": sigma_cut,
@@ -555,7 +623,8 @@ def main():
     setup_style()
     summaries = Path(opts.summaries).resolve()
     opts.summaries = str(summaries)
-    out = Path(opts.out_dir) if opts.out_dir else REPO / "sbi" / "results" / summaries.name
+    name = summaries.name + (f"_pc{opts.latent_pcs}" if opts.latent_pcs > 0 else "")
+    out = Path(opts.out_dir) if opts.out_dir else REPO / "sbi" / "results" / name
     out.mkdir(parents=True, exist_ok=True)
     mu, sig = a2744_mass_gaussian()
 
@@ -566,6 +635,7 @@ def main():
     info = json.load(open(summaries / "info.json"))
     results["settings"] = {"summaries": summaries.name, "model": info["options"]["model"],
                            "n_models": len(info["seeds"]), "mass_prior_nle": opts.mass_prior,
+                           "latent_pcs": opts.latent_pcs,
                            "a2744_log_mass": [mu, sig], "ncomp_max": NCOMP_MAX, "seed": opts.seed}
     json.dump(results, open(out / "results.json", "w"), indent=2)
     np.savez(out / "posteriors.npz", **{f"{d}_{k}": v for d, r in R.items()
