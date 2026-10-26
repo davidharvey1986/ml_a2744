@@ -12,6 +12,7 @@ and model-loading helpers that the notebooks import from here.
 
 import os
 import pickle as pkl
+import re
 from glob import glob
 
 import numpy as np
@@ -255,16 +256,31 @@ def get_components_file(dataset, components_dir=COMPONENTS_DIR):
     return f"{components_dir}/{os.path.basename(dataset)}.comps"
 
 
+def get_convergence_file(dataset):
+    '''The convergence map matching a convergence, shear or obs file (same name under data/<npix>/convergence).'''
+    if "/convergence/" in dataset:
+        return dataset
+    root = re.match(r"(.*data/\d+)/", dataset)
+    if root is None:
+        raise ValueError(f"Cannot find the convergence map for {dataset}")
+    return f"{root.group(1)}/convergence/{os.path.basename(dataset)}"
+
+
 def get_num_merging_components(
         dataset,
         mass_ratio_limit=10,
         components_dir=COMPONENTS_DIR,
     ):
+    '''
+    Number of components with mass (flux) ratio to the main one below mass_ratio_limit,
+    per map. If the component file does not exist it is made first with
+    extract_num_merging_components, from the matching convergence map.
+    '''
     comp_name = get_components_file(dataset, components_dir)
-    try:
-        extracted_components = load_pickle(comp_name)
-    except OSError as err:
-        raise IOError(f"Unable to open {comp_name}") from err
+    if not os.path.isfile(comp_name):
+        print(f"{comp_name} not found: extracting components from {get_convergence_file(dataset)}")
+        extract_num_merging_components([get_convergence_file(dataset)], components_dir=components_dir)
+    extracted_components = load_pickle(comp_name)
     ncomponents = []
     for icomp in extracted_components:
         mass_ratio = icomp['FLUX_AUTO'].max() / icomp['FLUX_AUTO']
@@ -272,7 +288,7 @@ def get_num_merging_components(
     return np.array(ncomponents)
 
 
-def extract_num_merging_components(dataset=None, zoomed_amount=2):
+def extract_num_merging_components(dataset=None, zoomed_amount=2, components_dir=COMPONENTS_DIR):
     '''
     Run the component extractor over every convergence map and save the
     components where get_num_merging_components expects them.
@@ -299,7 +315,7 @@ def extract_num_merging_components(dataset=None, zoomed_amount=2):
             extracted_components['Y_IMAGE'] /= zoomed_amount
 
             all_components.append(extracted_components)
-        save_pickle(all_components, get_components_file(ishear))
+        save_pickle(all_components, get_components_file(ishear, components_dir))
 
 
 def is_physical_surface_density(meta):
@@ -774,13 +790,13 @@ def return_error_in_mean(all_thresholds, model_correlation=0.283):
 if __name__ == "__main__":
 
     main(
-        search_path="data/100/convergence/*.pkl",
+        search_path="data/100/convergence/flamingo*.pkl",
         sample_data=False,
         add_ncomps=True
     )
 
     main(
-        search_path="data/100/convergence/*.pkl",
+        search_path="data/100/convergence/flamingo*.pkl",
         sample_data=True,
         data_dir='data/100/a2744'
     )
