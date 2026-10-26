@@ -279,7 +279,9 @@ def create_model(args):
     )
 
     if args.checkpoint:
-        checkpoint = torch.load(args.checkpoint, weights_only=False)
+        # load on CPU: checkpoints saved on one device (e.g. mps on a Mac) must load on
+        # another (cuda); main.py moves the model to its device afterwards
+        checkpoint = torch.load(args.checkpoint, weights_only=False, map_location="cpu")
         if "model_state_dict" in checkpoint:
             new_state_dict = {}
             for k, v in checkpoint["model_state_dict"].items():
