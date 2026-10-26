@@ -18,10 +18,19 @@ For each group and simulation, with merging clusters weighted to the A2744 mass
 reported at sigma/m = 0.1 (simulated in both) and at each simulation's largest
 sigma/m, plus the A2744 ensemble output.
 
+With --match-ncomp the merger state is matched too: merging clusters are split into
+n_comp = 2, 3, 4+, mass-weighted within each class, and the classes reweighted to a
+common mix (the mass-weighted CDM mix pooled equally over both simulations), so every
+simulation and cross-section has the same mass and merger-state distribution.
+Outputs then carry the suffix _ncomp.
+
 Usage
 -----
     cd ml_check && astro-env/bin/python sbi/compare_model_groups.py
+    astro-env/bin/python sbi/compare_model_groups.py --match-ncomp
 """
+
+import argparse
 
 import json
 import sys
@@ -51,16 +60,54 @@ DOMAINS = ["bahamas", "darkskies"]
 COLOUR = {"bahamas": "#56B4E9", "darkskies": "#E69F00"}
 INK, MUTED = "#222222", "#6b6b6b"
 EPS = 1e-4
+NCOMP_CLASSES = (2, 3, 4)     # merging clusters; 4 means 4 or more
+MIN_PER_CLASS = 10
 
 
-def weights(P, mu, sig):
-    '''Merging clusters weighted to the A2744 mass, separately per cross-section.'''
+def ncomp_class(P):
+    return np.minimum(P["ncomponents"], NCOMP_CLASSES[-1])
+
+
+def weights(P, mu, sig, target=None):
+    '''
+    Merging clusters weighted to the A2744 mass, separately per cross-section. With
+    target {n_comp class: fraction}, the mass weighting is done within each class and
+    the classes are scaled to the target mix.
+    '''
     w = np.zeros(len(P["cross_section"]))
     m750, cs = P["log10_mass_750"], P["cross_section"]
+    merging = (P["ncomponents"] > 1) & np.isfinite(m750)
     for c in np.unique(cs):
-        sel = (cs == c) & (P["ncomponents"] > 1) & np.isfinite(m750)
-        w[sel] = gaussian_mass_weights(m750[sel], mu, sig)
+        if target is None:
+            sel = (cs == c) & merging
+            w[sel] = gaussian_mass_weights(m750[sel], mu, sig)
+            continue
+        for k, frac in target.items():
+            sel = (cs == c) & merging & (ncomp_class(P) == k)
+            if sel.sum() < MIN_PER_CLASS:
+                print(f"  warning: only {sel.sum()} clusters with n_comp class {k} at sigma/m={c:g}")
+                continue
+            wk = gaussian_mass_weights(m750[sel], mu, sig)
+            w[sel] = frac * wk / wk.sum()
     return w
+
+
+def ncomp_mix(P, w, sigma=0.):
+    '''Weighted n_comp class fractions of one cross-section.'''
+    sel = P["cross_section"] == sigma
+    cls = ncomp_class(P)[sel]
+    return {k: float(w[sel][cls == k].sum() / w[sel].sum()) for k in NCOMP_CLASSES}
+
+
+def target_ncomp_mix(S, mu, sig):
+    '''Mass-weighted CDM n_comp mix, averaged over the two simulations.'''
+    mixes = []
+    for d in DOMAINS:
+        P = dict(np.load(S / f"params_{d}.npz"))
+        mixes.append(ncomp_mix(P, weights(P, mu, sig)))
+        print(f"  {d:9s} mass-weighted merging CDM n_comp mix: "
+              + ", ".join(f"{k}{'+' if k == NCOMP_CLASSES[-1] else ''}: {v:.2f}" for k, v in mixes[-1].items()))
+    return {k: 0.5 * (mixes[0][k] + mixes[1][k]) for k in NCOMP_CLASSES}
 
 
 def logit(p):
@@ -68,13 +115,13 @@ def logit(p):
     return np.log(p / (1 - p))
 
 
-def group_metrics(S, mu, sig):
+def group_metrics(S, mu, sig, target=None):
     out, cdm_per_model = {}, {}
     x_obs = logit(np.load(S / "obs.npz")["softmax"][:, 0].mean())
     for d in DOMAINS:
         P = dict(np.load(S / f"params_{d}.npz"))
         soft = np.load(S / f"softmax_{d}.npy")[:, 0]                     # (n_models, N)
-        w = weights(P, mu, sig)
+        w = weights(P, mu, sig, target)
         cs = P["cross_section"]
         sigmas = np.unique(cs)
         per_model = {c: (soft[:, cs == c] * w[cs == c]).sum(1) / w[cs == c].sum() for c in sigmas}
@@ -105,7 +152,7 @@ def group_metrics(S, mu, sig):
     return out
 
 
-def plot(M, out):
+def plot(M, out, suffix="", label="merging, weighted to A2744 mass"):
     plt.rcParams.update({"axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
                          "axes.labelcolor": INK, "axes.grid": True, "grid.color": "#e6e6e6",
                          "axes.spines.top": False, "axes.spines.right": False, "legend.frameon": False,
@@ -143,13 +190,13 @@ def plot(M, out):
     ax.set_xlabel("P(SIDM) offset at CDM")
     for ax in axes[:3]:
         ax.set_xlabel("S/N" if "S/N" in ax.get_title() else "separation / CDM scatter")
-    fig.suptitle("Model groups: sensitivity and domain alignment (merging, weighted to A2744 mass)",
+    fig.suptitle(f"Model groups: sensitivity and domain alignment ({label})",
                  color=INK, fontsize=12)
     for ext in ("pdf", "png"):
-        fig.savefig(out / f"model_groups.{ext}", dpi=180)
+        fig.savefig(out / f"model_groups{suffix}.{ext}", dpi=180)
 
 
-def plot_response(M, out, cdm_x=3e-3):
+def plot_response(M, out, suffix="", label="merging, weighted to A2744 mass", cdm_x=3e-3):
     '''Mass-matched ensemble P(SIDM) against sigma/m, one panel per model group.'''
     groups = list(M)
     ncol = 3
@@ -182,21 +229,30 @@ def plot_response(M, out, cdm_x=3e-3):
     first.legend(loc="lower right")
     a = M[groups[0]]["a2744"]
     first.text(cdm_x * 0.75, a["p_mean"] + a["err"], "A2744", va="bottom", fontsize=9, color=INK)
-    fig.suptitle("Softmax output vs cross-section (merging, weighted to A2744 mass; error in ensemble mean)",
+    fig.suptitle(f"Softmax output vs cross-section ({label}; error in ensemble mean)",
                  color=INK, fontsize=12)
     for ext in ("pdf", "png"):
-        fig.savefig(out / f"model_groups_response.{ext}", dpi=180)
+        fig.savefig(out / f"model_groups_response{suffix}.{ext}", dpi=180)
 
 
 def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--match-ncomp", action="store_true", help="also match the n_comp mix between simulations")
+    opts = ap.parse_args()
     mu, sig = a2744_mass_gaussian()
+    target, suffix, label = None, "", "merging, weighted to A2744 mass"
+    if opts.match_ncomp:
+        # cluster masses and n_comp are the same for every group, so any summaries will do
+        target = target_ncomp_mix(REPO / "sbi" / GROUPS["best"], mu, sig)
+        print("  target mix: " + ", ".join(f"{k}: {v:.2f}" for k, v in target.items()))
+        suffix, label = "_ncomp", "merging, weighted to A2744 mass and a common n_comp mix"
     M = {}
     for g, name in GROUPS.items():
         S = REPO / "sbi" / name
         if not (S / "softmax_bahamas.npy").exists():
             print(f"skipping {g}: no summaries in {S}")
             continue
-        M[g] = group_metrics(S, mu, sig)
+        M[g] = group_metrics(S, mu, sig, target)
 
     header = (f"{'group':10s} {'n':>3s} | {'S/N 0.1 B':>9s} {'S/N 0.1 D':>9s} | {'S/N max B':>9s} {'S/N max D':>9s}"
               f" | {'dp max B':>8s} {'dp max D':>8s} | {'CDM offset':>17s} | {'A2744':>13s} | {'z_CDM B':>7s} {'z_CDM D':>7s}")
@@ -211,10 +267,11 @@ def main():
 
     out = REPO / "sbi" / "results"
     out.mkdir(parents=True, exist_ok=True)
-    json.dump(M, open(out / "model_groups.json", "w"), indent=2)
-    plot(M, out)
-    plot_response(M, out)
-    print(f"\nwrote {out / 'model_groups.json'} and model_groups.pdf/.png")
+    json.dump(M, open(out / f"model_groups{suffix}.json", "w"), indent=2)
+    plot(M, out, suffix, label)
+    plot_response(M, out, suffix, label)
+    print(f"\nwrote {out}/model_groups{suffix}.json, model_groups{suffix}.pdf/.png "
+          f"and model_groups_response{suffix}.pdf/.png")
 
 
 if __name__ == "__main__":
