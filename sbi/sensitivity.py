@@ -528,24 +528,25 @@ def bin_means(kw, delta, bins):
     return binned_statistic(kw[keep], delta[keep], statistic="mean", bins=bins)[0]
 
 
-def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10):
+def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bins=None):
     '''
     Mean Delta P(SIDM) against reconstructed kappa: BAHAMAS per sigma/m (error: scatter between
     clusters / sqrt(N)) and output-matched BAHAMAS maps; A2744 with errors from the scatter over
     shear-rotated (noise-only) versions of the map, binned with A2744's own kappa windows.
     '''
     plt = style()
-    kw, dl = a2744["kappa"].ravel(), a2744["delta"].ravel()
-    bins = np.quantile(kw[np.isfinite(kw)], np.linspace(0, 1, n_bins + 1))
+    kw, dl = a2744[x].ravel(), a2744["delta"].ravel()
+    if bins is None:
+        bins = np.quantile(kw[np.isfinite(kw)], np.linspace(0, 1, n_bins + 1))
     xc = 0.5 * (bins[1:] + bins[:-1])
     fig, ax = plt.subplots(figsize=(7.5, 5), constrained_layout=True)
     sig_vals = sorted({m["sigma"] for m in sims})
     for s, sh in zip(sig_vals, np.linspace(0.35, 0.95, len(sig_vals))):
-        per = np.array([bin_means(m["kappa"], m["delta"], bins) for m in sims if m["sigma"] == s])
+        per = np.array([bin_means(m[x], m["delta"], bins) for m in sims if m["sigma"] == s])
         n = np.sum(np.isfinite(per), 0)
         ax.errorbar(xc, np.nanmean(per, 0), np.nanstd(per, 0) / np.sqrt(np.maximum(n, 1)), fmt="o-", ms=4,
                     lw=1.5, capsize=2, color=plt.cm.Blues(sh), label="BAHAMAS " + ("CDM" if s == 0 else f"$\\sigma/m={s:g}$"))
-    matched = np.array([bin_means(m["kappa"], m["delta"], bins) for m in sims
+    matched = np.array([bin_means(m[x], m["delta"], bins) for m in sims
                         if abs(m["p_full"] - a2744["p_full"]) < P_MATCH])
     if len(matched):
         n = np.sum(np.isfinite(matched), 0)
@@ -557,7 +558,8 @@ def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10):
     ax.errorbar(xc, bin_means(kw, dl, bins), np.nanstd(rot, 0), fmt="s", ms=8, color="k", capsize=3,
                 zorder=5, label="A2744 (errors: rotated-map scatter)")
     ax.axhline(0, color=MUTED, lw=1)
-    ax.set_xlabel(r"Reconstructed convergence $\kappa$ (window mean)")
+    ax.set_xlabel(r"Reconstructed convergence $\kappa$ (window mean)" if x == "kappa"
+                  else r"Reconstructed $\kappa$ S/N (window mean)")
     ax.set_ylabel(r"Mean $\Delta P$(SIDM) when the window is removed")
     ax.set_title("Where the CNNs find SIDM signal: A2744 vs BAHAMAS", color=INK)
     ax.legend(fontsize=7, loc="lower left")
@@ -574,6 +576,7 @@ def kappa_plot(opts, out):
                                             nmodels=opts.nmodels), args, device)
     raw_np, cat, ra, dec = a2744_map()
     a2744 = {"kappa": window_mean(reconstruct_kappa(raw_np)[0], opts.window, opts.stride),
+             "snr": z["a2744_snr_windows"].reshape(z["a2744_delta"].shape[1:]),
              "delta": z["a2744_delta"].mean(0), "p_full": json.load(open(out / "sensitivity.json"))["a2744_p_sidm"]}
     rot = rotated_a2744_deltas(models, cat, ra, dec, opts.rotations, opts.window, opts.stride, device,
                                opts.batch_size, out / "rotated_a2744.npz")
@@ -589,9 +592,11 @@ def kappa_plot(opts, out):
             assert np.allclose(window_mean(snr, opts.window, opts.stride).ravel(), z["bahamas_snr_windows"][0], atol=1e-4), \
                 "regenerated maps differ from the saved run"
         sims.append({"sigma": float(sel["cross_section"][i]), "p_full": float(z["bahamas_p_full"][i]),
-                     "kappa": window_mean(k, opts.window, opts.stride).ravel(), "delta": z["bahamas_delta"][i].ravel()})
+                     "kappa": window_mean(k, opts.window, opts.stride).ravel(), "delta": z["bahamas_delta"][i].ravel(),
+                     "snr": z["bahamas_snr_windows"][i]})
     plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_kappa_bahamas")
-    print(f"wrote {out / 'delta_vs_kappa_bahamas'}.pdf/.png")
+    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_snr_bahamas", x="snr", bins=SNR_BINS)
+    print(f"wrote {out}/delta_vs_kappa_bahamas and delta_vs_snr_bahamas (.pdf/.png)")
 
 
 def main():
