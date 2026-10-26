@@ -448,12 +448,14 @@ class apply_intrinsic_ell(object):
         a switch that turns it on or off
         
         See section 4.) in add_shear.ipynb for fitting
-        See section 2.) in prepare_data for the dump of ngal_{jwst_filter}.pkl 
+        add_shear_to_data.make_noise_model writes ngal_{jwst_filter}.pkl 
                         which is the number density of gals and the chi fit
                         with scipy
         '''
         
-        home="/Users/davidharvey/Work/Dark_Matter_DA/code/notebooks/pickles"
+        # Made by add_shear_to_data.make_noise_model from the same A2744 catalogue as
+        # the data map (previously a July catalogue in Dark_Matter_DA/code).
+        home = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "100", "a2744")
         #Intrinsic ell here is the intrinsic ellipticity for a single component.
         data_dict = pickle.load( open(f"{home}/ngal_{args.jwst_filter}.pkl","rb") )
         self.ngal = data_dict['ngal']

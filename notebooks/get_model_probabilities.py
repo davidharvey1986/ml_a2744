@@ -655,10 +655,12 @@ def get_variable_redshift_dist(data_dir="../data/100/a2744/", ifilter="concat"):
         "f115w": {"signal_noise_cut": 0, "stat_type": "snr"},
         "f150w": {"signal_noise_cut": 5, "stat_type": "snr"},
     }
-    obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True)
+    obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True, cuts=cuts)
     delta_ra, delta_dec = ra_dec_to_simulation_image_pos(obs_data)
 
     half = args.image_size // 2
+    # binned_statistic_2d(x=ra, y=dec) is indexed [ra, dec]; transpose to [dec, ra]
+    # like the shear maps (bin2d), so each pixel gets its own source redshift
     n_z = binned_statistic_2d(
         delta_ra,
         delta_dec,
@@ -666,7 +668,7 @@ def get_variable_redshift_dist(data_dir="../data/100/a2744/", ifilter="concat"):
         range=[[-half, half], [-half, half]],
         statistic=np.median,
         bins=args.image_size,
-    ).statistic
+    ).statistic.T
 
     n_z[~np.isfinite(n_z)] = args.default_zs
     return n_z

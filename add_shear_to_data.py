@@ -33,6 +33,10 @@ from model import create_model
 # Directory holding the extracted halo components (*.comps), relative to the repo root
 COMPONENTS_DIR = "notebooks/pickles"
 
+# Shear-catalogue cuts used for the A2744 data map (prepare_uncovers_data)
+SHEAR_CUTS = {'f115w': {'signal_noise_cut': 0, 'stat_type': 'snr'},
+              'f150w': {'signal_noise_cut': 5, 'stat_type': 'snr'}}
+
 
 def load_pickle(path):
     with open(path, "rb") as f:
@@ -726,11 +730,28 @@ def sig_mean(redshift, zl=0.305):
     return np.sum(redshift/sig)/np.sum(1/sig)
 
 
+def make_noise_model(ifilter='concat', data_dir='data/100/a2744', cuts=None):
+    '''
+    Write <data_dir>/ngal_<ifilter>.pkl, read by dataset.apply_intrinsic_ell: the binned
+    A2744 catalogue (galaxy-to-pixel assignment, bin_obs_data) and a chi fit to the
+    galaxy ellipticities, so the simulated shape noise sits at the same galaxies as the
+    data map.
+    '''
+    from scipy.stats import chi
+    obs_data = get_obs_data(ifilter, data_dir=data_dir, cuts=SHEAR_CUTS if cuts is None else cuts)
+    binned_data = bin_obs_data(obs_data)
+    egal = np.sqrt(obs_data['e1']**2 + obs_data['e2']**2)
+    noise_model = {'ngal': binned_data['ngal'], 'chi_fit_function': chi.fit(egal),
+                   'binned_data': binned_data}
+    out = f"{data_dir}/ngal_{ifilter}.pkl"
+    save_pickle(noise_model, out)
+    return out
+
+
 def get_source_redshift(ifilter, data_dir='data/100/a2744', cuts=None):
 
     if cuts is None:
-        cuts = {'f115w': {'signal_noise_cut': 0, 'stat_type': 'snr'},
-                'f150w': {'signal_noise_cut': 5, 'stat_type': 'snr'}}
+        cuts = SHEAR_CUTS
     data = get_obs_data(ifilter, photoz=True, data_dir=data_dir, cuts=cuts)
 
     #remove artifical redshifts
