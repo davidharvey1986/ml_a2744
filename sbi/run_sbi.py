@@ -85,7 +85,9 @@ def parse():
     p.add_argument("--out-dir", default=None, help="default sbi/results/<summaries dir name>")
     p.add_argument("--mass-prior", choices=["flat", "a2744"], default="flat",
                    help="NLE mass prior: flat over the simulations or the A2744 measurement")
-    p.add_argument("--noise", type=int, default=0, help="noise realisation of the summaries")
+    p.add_argument("--noise", default="0",
+                   help="noise realisation of the summaries, or 'all' to train on every cluster-draw "
+                        "pair (split by cluster; checks use one draw per cluster)")
     p.add_argument("--latent-pcs", type=int, default=0,
                    help="principal components of each model's latent space added to the NPE input")
     p.add_argument("--retrain", action="store_true")
@@ -116,33 +118,47 @@ def latent_features(S, d, k, noise, rows):
 
 
 def load_domain(summaries, d, noise, latent_pcs=0):
+    '''
+    Rows are cluster-draw pairs: one per cluster for a single noise realisation, or
+    every realisation stacked (noise="all"), with "cluster" and "draw" indices.
+    '''
     S = Path(summaries)
     P = np.load(S / f"params_{d}.npz")
-    soft = np.load(S / f"softmax_{d}.npy")[:, noise]                   # (n_models, N)
+    soft_all = np.load(S / f"softmax_{d}.npy")                         # (n_models, n_noise, N)
+    draws = list(range(soft_all.shape[1])) if noise == "all" else [int(noise)]
     obs = np.load(S / "obs.npz")["softmax"][:, 0]                      # (n_models,)
 
     ok = np.isfinite(P["log10_mass_750"])
-    sigma = P["cross_section"][ok]
-    theta = np.c_[np.log1p(sigma), P["log10_mass_750"][ok],
-                  np.minimum(P["ncomponents"][ok], NCOMP_MAX)].astype(np.float32)
-    held_out = P["held_out"][:, ok]
-    x_npe, x_obs_npe = logit(soft[:, ok].T), logit(obs)
+    n_ok = int(ok.sum())
+    soft = np.concatenate([soft_all[:, r][:, ok] for r in draws], axis=1)   # (n_models, R * N)
+    rep = len(draws)
+    sigma = np.tile(P["cross_section"][ok], rep)
+    theta = np.tile(np.c_[np.log1p(P["cross_section"][ok]), P["log10_mass_750"][ok],
+                          np.minimum(P["ncomponents"][ok], NCOMP_MAX)], (rep, 1)).astype(np.float32)
+    held_out = np.tile(P["held_out"][:, ok], (1, rep))
+    x_npe, x_obs_npe = logit(soft.T), logit(obs)
     explained = 0.
     if latent_pcs > 0:
-        pcs, pcs_obs, explained = latent_features(S, d, latent_pcs, noise, ok)
+        if rep > 1:
+            raise ValueError("--latent-pcs needs a single noise realisation")
+        pcs, pcs_obs, explained = latent_features(S, d, latent_pcs, draws[0], ok)
         x_npe, x_obs_npe = np.c_[x_npe, pcs], np.r_[x_obs_npe, pcs_obs]
     return {
+        "cluster": np.tile(np.arange(n_ok), rep),
+        "draw": np.repeat(np.arange(rep), n_ok),
+        "n_clusters": n_ok,
+        "n_draws": rep,
         "x_npe": x_npe,                                                # (N, n_models * (1 + k))
         "x_obs_npe": x_obs_npe,
         "latent_variance_explained": explained,
         "theta": theta,
         "sigma": sigma,
-        "x_ens": logit(soft[:, ok].mean(0))[:, None],                 # (N, 1)
-        "x_models": logit(soft[:, ok].T),                              # (N, n_models)
+        "x_ens": logit(soft.mean(0))[:, None],                         # (rows, 1)
+        "x_models": logit(soft.T),                                     # (rows, n_models)
         "x_obs_ens": logit(np.array([obs.mean()])),                    # (1,)
         "x_obs_models": logit(obs),                                    # (n_models,)
         "held_out": held_out,
-        "logit_models": logit(soft[:, ok]),                            # (n_models, N)
+        "logit_models": logit(soft),                                   # (n_models, rows)
         "sigma_grid": np.unique(sigma),
         "n_dropped": int(np.sum(~ok)),
     }
@@ -188,7 +204,8 @@ def empirical_test(D, mu, sig):
         sel = np.isclose(D["sigma"], s) & merging
         w = gaussian_mass_weights(th[sel, 1], mu, sig)
         p = float(np.sum(w * (x[sel] >= x_obs)) / w.sum())
-        out[f"{s:g}"] = {"p_ge_obs": p, "n_eff": float(effective_sample_size(w)), "x": x[sel], "w": w}
+        n_eff = effective_sample_size(w) / D["n_draws"]          # clusters, not cluster-draw pairs
+        out[f"{s:g}"] = {"p_ge_obs": p, "n_eff": float(n_eff), "x": x[sel], "w": w}
     cdm = out["0"]
     p_floor = 1. / cdm["n_eff"]
     p = max(cdm["p_ge_obs"], p_floor)
@@ -551,10 +568,12 @@ def save(fig, stem):
 def run_domain(d, opts, out, rng, mu, sig):
     print(f"\n=== {d} ===")
     D = load_domain(opts.summaries, d, opts.noise, opts.latent_pcs)
-    th, n = D["theta"], len(D["theta"])
-    test = rng.random(n) < TEST_FRAC
+    th, n = D["theta"], D["n_clusters"]
+    test = (rng.random(n) < TEST_FRAC)[D["cluster"]]           # all draws of a cluster on one side
+    check = test & (D["draw"] == 0)                             # one draw per held-out cluster for checks
     sigma_cut = cdm_threshold(D["sigma_grid"])
-    print(f"  {n} clusters ({D['n_dropped']} without a valid mass dropped), CDM := sigma/m < {sigma_cut:g}")
+    print(f"  {n} clusters x {D['n_draws']} noise draws ({D['n_dropped']} without a valid mass dropped), "
+          f"CDM := sigma/m < {sigma_cut:g}")
 
     empirical, emp_summary = empirical_test(D, mu, sig)
     print(f"  empirical: p(CDM >= A2744) = {emp_summary['p_value']:.3g} "
@@ -577,7 +596,7 @@ def run_domain(d, opts, out, rng, mu, sig):
     print(f"  NLE: sigma/m = {nle_res['sigma_quantiles'][1]:.3f} [{nle_res['sigma_quantiles'][0]:.3f}, "
           f"{nle_res['sigma_quantiles'][2]:.3f}], BF(SIDM:CDM) = {nle_res['bayes_factor_sidm_cdm']:.2f}, "
           f"LR = {nle_res['likelihood_ratio_best_vs_cdm']:.2f}")
-    recovery = nle_recovery(nle, th[test], D["x_ens"][test], grids[0], rng)
+    recovery = nle_recovery(nle, th[check], D["x_ens"][check], grids[0], rng)
 
     th_deq = dequantise(th, rng)
     path = out / f"npe_{d}.pt"
@@ -591,8 +610,8 @@ def run_domain(d, opts, out, rng, mu, sig):
     npe_res = npe_summary(samples, D["sigma_grid"], th[~test])
     print(f"  NPE: sigma/m = {npe_res['sigma_quantiles'][1]:.3f} [{npe_res['sigma_quantiles'][0]:.3f}, "
           f"{npe_res['sigma_quantiles'][2]:.3f}], BF(SIDM:CDM) = {npe_res['bayes_factor_sidm_cdm']:.2f}")
-    sbc = npe_sbc(npe, th[test], D["x_npe"][test], D["sigma_grid"], rng)
-    test_metrics = npe_test_metrics(npe, th[test], D["x_npe"][test], D["sigma_grid"], rng)
+    sbc = npe_sbc(npe, th[check], D["x_npe"][check], D["sigma_grid"], rng)
+    test_metrics = npe_test_metrics(npe, th[check], D["x_npe"][check], D["sigma_grid"], rng)
     print(f"  NPE on held-out single clusters: P(true sigma/m) = {test_metrics['sigma_p_true']:.2f} "
           f"(chance {test_metrics['sigma_p_true_chance']:.2f}), most probable right "
           f"{100 * test_metrics['sigma_map_correct']:.0f}%, mass std {test_metrics['mass_posterior_std']:.3f} "
@@ -623,7 +642,8 @@ def main():
     setup_style()
     summaries = Path(opts.summaries).resolve()
     opts.summaries = str(summaries)
-    name = summaries.name + (f"_pc{opts.latent_pcs}" if opts.latent_pcs > 0 else "")
+    name = (summaries.name + (f"_pc{opts.latent_pcs}" if opts.latent_pcs > 0 else "")
+            + ("_alldraws" if opts.noise == "all" else ""))
     out = Path(opts.out_dir) if opts.out_dir else REPO / "sbi" / "results" / name
     out.mkdir(parents=True, exist_ok=True)
     mu, sig = a2744_mass_gaussian()
@@ -636,6 +656,7 @@ def main():
     results["settings"] = {"summaries": summaries.name, "model": info["options"]["model"],
                            "n_models": len(info["seeds"]), "mass_prior_nle": opts.mass_prior,
                            "latent_pcs": opts.latent_pcs,
+                           "noise": opts.noise,
                            "a2744_log_mass": [mu, sig], "ncomp_max": NCOMP_MAX, "seed": opts.seed}
     json.dump(results, open(out / "results.json", "w"), indent=2)
     np.savez(out / "posteriors.npz", **{f"{d}_{k}": v for d, r in R.items()
