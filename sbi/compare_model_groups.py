@@ -149,6 +149,45 @@ def plot(M, out):
         fig.savefig(out / f"model_groups.{ext}", dpi=180)
 
 
+def plot_response(M, out, cdm_x=3e-3):
+    '''Mass-matched ensemble P(SIDM) against sigma/m, one panel per model group.'''
+    groups = list(M)
+    ncol = 3
+    nrow = int(np.ceil(len(groups) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4.6 * ncol, 3.6 * nrow), sharex=True, sharey=True,
+                             constrained_layout=True, squeeze=False)
+    for ax, g in zip(axes.flat, groups):
+        a = M[g]["a2744"]
+        ax.axhspan(a["p_mean"] - a["err"], a["p_mean"] + a["err"], color="k", alpha=0.1, lw=0)
+        ax.axhline(a["p_mean"], color="k", lw=1.5)
+        for d in DOMAINS:
+            sig = np.array([float(k) for k in M[g][d]["p_mean"]])
+            mean = np.array(list(M[g][d]["p_mean"].values()))
+            err = np.array(list(M[g][d]["p_err"].values()))
+            x = np.where(sig == 0, cdm_x, sig)
+            ax.errorbar(x, mean, err, fmt="-o", color=COLOUR[d], lw=2, ms=7, mec="white", mew=1.2,
+                        capsize=3, label=d.upper())
+        ax.set_xscale("log")
+        ax.set_xticks([cdm_x, 1e-2, 1e-1, 1])
+        ax.set_xticklabels(["CDM", "0.01", "0.1", "1"])
+        ax.set_xlim(cdm_x * 0.6, 2)
+        ax.set_title(f"{g} ({M[g]['bahamas']['n_models']} models)", color=INK)
+    for ax in axes.flat[len(groups):]:
+        ax.set_axis_off()
+    for ax in axes[-1]:
+        ax.set_xlabel(r"$\sigma/m$ [cm$^2$ g$^{-1}$]")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Ensemble P(SIDM)")
+    first = axes.flat[0]
+    first.legend(loc="lower right")
+    a = M[groups[0]]["a2744"]
+    first.text(cdm_x * 0.75, a["p_mean"] + a["err"], "A2744", va="bottom", fontsize=9, color=INK)
+    fig.suptitle("Softmax output vs cross-section (merging, weighted to A2744 mass; error in ensemble mean)",
+                 color=INK, fontsize=12)
+    for ext in ("pdf", "png"):
+        fig.savefig(out / f"model_groups_response.{ext}", dpi=180)
+
+
 def main():
     mu, sig = a2744_mass_gaussian()
     M = {}
@@ -174,6 +213,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     json.dump(M, open(out / "model_groups.json", "w"), indent=2)
     plot(M, out)
+    plot_response(M, out)
     print(f"\nwrote {out / 'model_groups.json'} and model_groups.pdf/.png")
 
 
