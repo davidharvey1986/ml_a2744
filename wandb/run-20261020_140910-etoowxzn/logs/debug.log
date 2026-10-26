@@ -1,0 +1,152 @@
+2026-10-20 14:09:10,289 INFO    MainThread:40349 [wandb_setup.py:_flush():81] Current SDK version is 0.31.0
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_setup.py:_flush():81] Configure stats pid to 40349
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_init.py:setup_run_log_directory():740] Logging user logs to /Users/davidharvey/Work/ml_check/wandb/run-20261020_140910-etoowxzn/logs/debug.log
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_init.py:setup_run_log_directory():741] Logging internal logs to /Users/davidharvey/Work/ml_check/wandb/run-20261020_140910-etoowxzn/logs/debug-internal.log
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_init.py:init():784] calling init triggers
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_init.py:init():789] wandb.init called with sweep_config: {}
+config: {'verbose': True, 'save_dir': 'models/concat/', 'data_dir': 'data/', 'source_domain': 'bahamas_obs', 'target_domain': 'darkskies_obs', 'train_split': 0.8, 'image_size': 100, 'downsample': 1, 'use_log_transform': False, 'use_normalization': False, 'device': 'MPS', 'apply_intrinsic_ell': 0.1, 'meta_names': [], 'mass_index': 0, 'apply_mask': False, 'apply_shape_measurement_bias': False, 'cluster_member_contamination': 0.0, 'zl': 0.305, 'zs': 1.65, 'default_zl': 0.305, 'default_zs': 1.72, 'jwst_filter': 'concat', 'med_norm': -1, 'unbalance': False, 'ignore_dataset': ['bahamas_1.pkl'], 'log_mass_cut': 0, 'model': 'squeezenet1_1', 'pretrained': True, 'in_channels': 2, 'checkpoint': '/Users/davidharvey/Work/Dark_Matter_DA/code/models/base_models/cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_final.pth', 'cnn_base_channels': 32, 'num_avgpool_head': 1, 'early_stop': False, 'fine_tune': False, 'save_most_aligned': False, 'weighting_scheme': 'inverse_frequency', 'align_domains': 0.0, 'batch_size': 32, 'lr': 0.0001, 'gamma': 0.0003, 'optimizer': 'sgd', 'momentum': 0.9, 'weight_decay': 0.0005, 'use_nesterov': True, 'epochs': 10, 'seed': 1, 'num_workers': 0, 'aug_h_flip_prob': 0.5, 'aug_v_flip_prob': 0.5, 'aug_rotation_prob': 1.0, 'aug_rotation_degrees': 360, 'aug_crop_prob': 0.5, 'aug_crop_scale_min': 0.9, 'aug_crop_scale_max': 1.1, 'adaptation': 'cdan', 'adaptation_weight': 1.0, 'adaptation_schedule': 'dann', 'adaptation_schedule_power': 0.75, 'adaptation_schedule_gamma': 10.0, 'mmd_kernel_mul': 2.0, 'mmd_kernel_num': 5, 'mmd_fix_sigma': None, 'domain_discriminator_hidden': 256, 'use_mixup': False, 'mixup_strategy': 'random', 'mixup_alpha': 0.2, 'mixup_per_pair': True, 'eval_interval': 2, 'use_wandb': True, 'project_name': 'incremental_learning', 'run_name': 'cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_ft_range', 'save_model': True, 'analyze_predictions': True, 'shape_measurement_bias': {'e1': {'c': 0.0, 'm': 0.0}, 'e2': {'c': 0.0, 'm': 0.0}}, '_wandb': {}}
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_init.py:init():832] starting backend
+2026-10-20 14:09:10,290 INFO    MainThread:40349 [wandb_init.py:init():847] sending inform_init request
+2026-10-20 14:09:10,292 INFO    MainThread:40349 [wandb_init.py:init():852] backend started and connected
+2026-10-20 14:09:10,295 INFO    MainThread:40349 [wandb_init.py:init():922] updated telemetry
+2026-10-20 14:09:10,359 INFO    MainThread:40349 [wandb_init.py:init():940] communicating run to backend with 90.0 second timeout
+2026-10-20 14:09:10,757 INFO    MainThread:40349 [wandb_init.py:init():977] starting run threads in backend
+2026-10-20 14:09:10,862 INFO    MainThread:40349 [wandb_run.py:_console_start():2528] atexit reg
+2026-10-20 14:09:10,862 INFO    MainThread:40349 [wandb_run.py:_redirect():2378] redirect: wrap_raw
+2026-10-20 14:09:10,862 INFO    MainThread:40349 [wandb_run.py:_redirect():2447] Wrapping output streams.
+2026-10-20 14:09:10,862 INFO    MainThread:40349 [wandb_run.py:_redirect():2470] Redirects installed.
+2026-10-20 14:09:10,864 INFO    MainThread:40349 [wandb_init.py:init():1015] run started, returning control to user process
+2026-10-20 14:09:14,986 INFO    MainThread:40349 [wandb_watch.py:_watch():69] Watching
+2026-10-20 14:11:04,167 INFO    wandb-AsyncioManager-main:40349 [service_client.py:_forward_responses():122] [no run ID] Reached EOF.
+2026-10-20 14:11:04,168 INFO    wandb-AsyncioManager-main:40349 [mailbox.py:close():154] [no run ID] Closing mailbox, abandoning 1 handles.
+2026-10-20 14:11:04,168 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/run_messages.py", line 90, in loop
+    await asyncio_compat.race(
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_compat.py", line 279, in race
+    async with open_task_group(race=True) as tg:
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/contextlib.py", line 206, in __aexit__
+    await anext(self.gen)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_compat.py", line 241, in open_task_group
+    await task_group._wait_all(race=race, timeout=exit_timeout)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_compat.py", line 181, in _wait_all
+    raise exc
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/run_messages.py", line 113, in _print_all
+    result = await handle.wait_async(timeout=None)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/mailbox/mailbox_handle.py", line 127, in wait_async
+    response = await self._handle.wait_async(timeout=timeout)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/mailbox/response_handle.py", line 123, in wait_async
+    raise HandleAbandonedError()
+wandb.sdk.mailbox.mailbox_handle.HandleAbandonedError
+2026-10-20 14:11:04,482 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 42, in publish
+    await self._send_server_request(request)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 84, in _send_server_request
+    await self._drain_writer()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 92, in _drain_writer
+    await self._writer.drain()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 371, in drain
+    await self._protocol._drain_helper()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 167, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2026-10-20 14:11:04,485 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 42, in publish
+    await self._send_server_request(request)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 84, in _send_server_request
+    await self._drain_writer()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 92, in _drain_writer
+    await self._writer.drain()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 371, in drain
+    await self._protocol._drain_helper()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 167, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2026-10-20 14:11:04,486 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 42, in publish
+    await self._send_server_request(request)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 84, in _send_server_request
+    await self._drain_writer()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 92, in _drain_writer
+    await self._writer.drain()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 371, in drain
+    await self._protocol._drain_helper()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 167, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2026-10-20 14:11:04,486 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 42, in publish
+    await self._send_server_request(request)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 84, in _send_server_request
+    await self._drain_writer()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 92, in _drain_writer
+    await self._writer.drain()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 371, in drain
+    await self._protocol._drain_helper()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 167, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2026-10-20 14:11:04,486 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 42, in publish
+    await self._send_server_request(request)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 84, in _send_server_request
+    await self._drain_writer()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 92, in _drain_writer
+    await self._writer.drain()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 371, in drain
+    await self._protocol._drain_helper()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 167, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2026-10-20 14:11:04,487 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 42, in publish
+    await self._send_server_request(request)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 75, in _send_server_request
+    raise self._broken_exc.with_traceback(self._broken_tb)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 84, in _send_server_request
+    await self._drain_writer()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 92, in _drain_writer
+    await self._writer.drain()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 371, in drain
+    await self._protocol._drain_helper()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 167, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2026-10-20 14:11:04,487 ERROR   wandb-AsyncioManager-main:40349 [asyncio_manager.py:fn_wrap_exceptions():197] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 195, in fn_wrap_exceptions
+    await fn()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 42, in publish
+    await self._send_server_request(request)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 75, in _send_server_request
+    raise self._broken_exc.with_traceback(self._broken_tb)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 84, in _send_server_request
+    await self._drain_writer()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/sdk/lib/service/service_client.py", line 92, in _drain_writer
+    await self._writer.drain()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 371, in drain
+    await self._protocol._drain_helper()
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 167, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost

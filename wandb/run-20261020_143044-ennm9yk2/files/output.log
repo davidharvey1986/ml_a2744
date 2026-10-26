@@ -1,0 +1,120 @@
+Device: mps
+Model: squeezenet1_1 (pretrained)
+Mixup: Disabled
+Adaptation: cdan
+Meta: []
+Experiment: cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_ft_ta
+SOURCE REDSHIFT: 1.65
+SOURCE REDSHIFT: 1.65
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Class distribution:
+  Class 0: 3600 samples
+  Class 1: 7200 samples
+Creating balanced test set with 1079 samples per class (2158 total)
+Balanced test set distribution:
+  Class 0: 1079 samples (50.0%)
+  Class 1: 1079 samples (50.0%)
+Source domain setup:
+  Training samples: 8642
+  Test samples: 2158
+Source dataset normalization - Mean: -0.0015, Std: 0.0365
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Class distribution:
+  Class 0: 1200 samples
+  Class 1: 4800 samples
+Creating balanced test set with 599 samples per class (1198 total)
+Balanced test set distribution:
+  Class 0: 599 samples (50.0%)
+  Class 1: 599 samples (50.0%)
+Target domain setup:
+  Training samples: 4802
+  Test samples: 1198
+DataLoader summary:
+  Source train: 8642 samples
+  Source test: 2158 samples
+  Target train: 4802 samples
+  Target test: 1198 samples
+Loaded model from /Users/davidharvey/Work/Dark_Matter_DA/code/models/base_models/cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_final.pth
+Saving models to models/concat/
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/main.py", line 386, in <module>
+    main()
+  File "/Users/davidharvey/Work/ml_check/main.py", line 66, in main
+    class_weights = calculate_class_weights(data_loaders, args)
+  File "/Users/davidharvey/Work/ml_check/utils.py", line 357, in calculate_class_weights
+    for batch_data in this_loader[0]:
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 725, in __next__
+    data = self._next_data()
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 785, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 52, in fetch
+    data = self.dataset.__getitems__(possibly_batched_index)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/utils/data/dataset.py", line 443, in __getitems__
+    return [self.dataset[self.indices[idx]] for idx in indices]
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/utils/data/dataset.py", line 443, in <listcomp>
+    return [self.dataset[self.indices[idx]] for idx in indices]
+  File "/Users/davidharvey/Work/ml_check/dataset.py", line 132, in __getitem__
+    image_tensor = self.transform(image_tensor)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torchvision/transforms/transforms.py", line 95, in __call__
+    img = t(img)
+KeyboardInterrupt

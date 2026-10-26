@@ -1,0 +1,20 @@
+{"time":"2026-10-24T16:40:27.536913+01:00","level":"INFO","msg":"wandb-core"}
+{"time":"2026-10-24T16:40:27.536957+01:00","level":"INFO","msg":"stream: starting","core version":"0.31.0"}
+{"time":"2026-10-24T16:40:27.537105+01:00","level":"INFO","msg":"stream: created new stream","id":"rf2y3uyx"}
+{"time":"2026-10-24T16:40:27.537146+01:00","level":"INFO","msg":"handler: started"}
+{"time":"2026-10-24T16:40:27.537245+01:00","level":"INFO","msg":"stream: started"}
+{"time":"2026-10-24T16:40:27.537257+01:00","level":"INFO","msg":"writer: started","stream_id":"rf2y3uyx"}
+{"time":"2026-10-24T16:40:27.537273+01:00","level":"INFO","msg":"sender: started"}
+{"time":"2026-10-24T16:40:27.604793+01:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.forge.coreweave.com/graphql\": dial tcp: lookup api.forge.coreweave.com: no such host"}
+{"time":"2026-10-24T16:40:29.632695+01:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.forge.coreweave.com/graphql\": dial tcp: lookup api.forge.coreweave.com: no such host"}
+{"time":"2026-10-24T16:40:33.82137+01:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.forge.coreweave.com/graphql\": dial tcp: lookup api.forge.coreweave.com: no such host"}
+{"time":"2026-10-24T16:40:42.652367+01:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.forge.coreweave.com/graphql\": dial tcp: lookup api.forge.coreweave.com: no such host"}
+{"time":"2026-10-24T16:41:00.212816+01:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.forge.coreweave.com/graphql\": dial tcp: lookup api.forge.coreweave.com: no such host"}
+{"time":"2026-10-24T16:41:39.811446+01:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.forge.coreweave.com/graphql\": dial tcp: lookup api.forge.coreweave.com: no such host"}
+{"time":"2026-10-24T16:41:57.604413+01:00","level":"ERROR","msg":"runupserter: failed to init run","error":"context deadline exceeded\nwhile retrying: Post \"https://api.forge.coreweave.com/graphql\": dial tcp: lookup api.forge.coreweave.com: no such host"}
+{"time":"2026-10-24T16:41:57.656675+01:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2026-10-24T16:41:57.656703+01:00","level":"INFO","msg":"stream: finishing up"}
+{"time":"2026-10-24T16:41:57.656716+01:00","level":"INFO","msg":"handler: closed"}
+{"time":"2026-10-24T16:41:57.656874+01:00","level":"INFO","msg":"sender: closed"}
+{"time":"2026-10-24T16:41:57.656881+01:00","level":"INFO","msg":"stream: all finished"}
+{"time":"2026-10-24T16:41:57.665881+01:00","level":"ERROR","msg":"stream: runURL: runhandle: run not yet initialized"}

@@ -1,0 +1,164 @@
+Device: mps
+Model: squeezenet1_1 (pretrained)
+Mixup: Disabled
+Adaptation: cdan
+Meta: []
+Experiment: cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_ft_range
+SOURCE REDSHIFT: 1.65
+SOURCE REDSHIFT: 1.65
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Class distribution:
+  Class 0: 3600 samples
+  Class 1: 7200 samples
+Creating balanced test set with 1079 samples per class (2158 total)
+Balanced test set distribution:
+  Class 0: 1079 samples (50.0%)
+  Class 1: 1079 samples (50.0%)
+Source domain setup:
+  Training samples: 8642
+  Test samples: 2158
+Source dataset normalization - Mean: -0.0016, Std: 0.0413
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Class distribution:
+  Class 0: 1200 samples
+  Class 1: 4800 samples
+Creating balanced test set with 599 samples per class (1198 total)
+Balanced test set distribution:
+  Class 0: 599 samples (50.0%)
+  Class 1: 599 samples (50.0%)
+Target domain setup:
+  Training samples: 4802
+  Test samples: 1198
+DataLoader summary:
+  Source train: 8642 samples
+  Source test: 2158 samples
+  Target train: 4802 samples
+  Target test: 1198 samples
+Loaded model from /Users/davidharvey/Work/Dark_Matter_DA/code/models/base_models/cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_final.pth
+Saving models to models/concat/
+Training class distribution:
+  Class 0: 2521 samples
+  Class 1: 6119 samples
+Weighting scheme: inverse_frequency
+Class weights: [0: 1.7136, 1: 0.7060]
+Created separate optimizer for domain discriminator
+
+Epoch 1/10
+Train - Total: 2.0391, Task: 1.8477, Adapt: 1.3887,
+Train - Discriminator: 1.3874, LR: 0.000089
+
+Epoch 2/10
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/main.py", line 386, in <module>
+    main()
+  File "/Users/davidharvey/Work/ml_check/main.py", line 133, in main
+    train_metrics = train_epoch(
+  File "/Users/davidharvey/Work/ml_check/train.py", line 86, in train_epoch
+    target_outputs = model(all_target)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 563, in __call__
+    return super().__call__(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 1261, in compile_wrapper
+    result = fn(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/model.py", line 172, in forward
+    def forward(self, x):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 1548, in _fn
+    return fn(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_functorch/aot_autograd.py", line 1289, in forward
+    return compiled_fn(full_args)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 2594, in __call__
+    return self.compiled_fn(*args, **kwargs)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 1189, in runtime_wrapper
+    result = _codegen_runtime_wrapper(
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(runtime_wrapper_orchestration)", line 11, in _runtime_wrapper
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_functorch/_aot_autograd/utils.py", line 118, in g
+    return f(*args)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 3521, in forward
+    return CompiledFunction._fwd_fn(
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_forward)", line 2, in _compiled_forward
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/torch/_inductor/output_code.py", line 828, in __call__
+    return self.current_callable(inputs)
+  File "/var/folders/4h/_cd2hltn3dxf0t5xqsz8vwf00000gp/T/torchinductor_davidharvey/rk/crkdvgozsncz5yjx2muuf6mhu3uk2yt5ukivhbv5xwpponutlxrk.py", line 1267, in call
+    buf61 = extern_kernels.convolution(buf60, reinterpret_tensor(primals_26, (32, 256, 1, 1), (256, 1, 256, 256), 0), stride=(1, 1), padding=(0, 0), dilation=(1, 1), transposed=False, output_padding=(0, 0), groups=1, bias=None)
+KeyboardInterrupt
+Exception ignored in atexit callback: <bound method OpenTelemetryProxy.shutdown of <wandb.analytics.opentelemetry.opentelemetry_proxy.OpenTelemetryProxy object at 0x102ab3ee0>>
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/wandb/analytics/opentelemetry/opentelemetry_proxy.py", line 818, in shutdown
+    meter_provider.shutdown(timeout_millis=timeout_millis)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/opentelemetry/sdk/metrics/_internal/__init__.py", line 579, in shutdown
+    metric_reader.shutdown(timeout_millis=(deadline_ns - current_ts) / 10**6)
+  File "/Users/davidharvey/Work/ml_check/astro-env/lib/python3.10/site-packages/opentelemetry/sdk/metrics/_internal/export/__init__.py", line 540, in shutdown
+    self._daemon_thread.join(timeout=(deadline_ns - time_ns()) / 10**9)
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/threading.py", line 1100, in join
+    self._wait_for_tstate_lock(timeout=max(timeout, 0))
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/threading.py", line 1116, in _wait_for_tstate_lock
+    if lock.acquire(block, timeout):
+KeyboardInterrupt:
+shutdown can only be called once

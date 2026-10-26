@@ -16,7 +16,7 @@ from scipy.ndimage import zoom
 # rescale_lens_source_configuration rescales from these to the observed n(z); masses
 # from the stored kappa must use them too.
 MAP_ZL = 0.305
-MAP_ZS = 1.72
+MAP_ZS = 2.28
 SIGMA_CRIT_MAP = sigma_critical(MAP_ZL, MAP_ZS, cosmology.Planck18).value   # 2334 Msun/pc^2
 
 def get_cross_section_from_filename(filename):

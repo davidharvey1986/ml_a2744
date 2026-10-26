@@ -1,0 +1,180 @@
+Device: mps
+Model: squeezenet1_1 (pretrained)
+Mixup: Disabled
+Adaptation: cdan
+Meta: []
+Experiment: cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_ft_range
+SOURCE REDSHIFT: 1.65
+SOURCE REDSHIFT: 1.65
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Class distribution:
+  Class 0: 3600 samples
+  Class 1: 7200 samples
+Creating balanced test set with 1079 samples per class (2158 total)
+Balanced test set distribution:
+  Class 0: 1079 samples (50.0%)
+  Class 1: 1079 samples (50.0%)
+Source domain setup:
+  Training samples: 8642
+  Test samples: 2158
+Source dataset normalization - Mean: -0.0016, Std: 0.0413
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Class distribution:
+  Class 0: 1200 samples
+  Class 1: 4800 samples
+Creating balanced test set with 599 samples per class (1198 total)
+Balanced test set distribution:
+  Class 0: 599 samples (50.0%)
+  Class 1: 599 samples (50.0%)
+Target domain setup:
+  Training samples: 4802
+  Test samples: 1198
+DataLoader summary:
+  Source train: 8642 samples
+  Source test: 2158 samples
+  Target train: 4802 samples
+  Target test: 1198 samples
+Loaded model from /Users/davidharvey/Work/Dark_Matter_DA/code/models/base_models/cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_final.pth
+Saving models to models/concat/
+Training class distribution:
+  Class 0: 2521 samples
+  Class 1: 6119 samples
+Weighting scheme: inverse_frequency
+Class weights: [0: 1.7136, 1: 0.7060]
+Created separate optimizer for domain discriminator
+
+Epoch 1/10
+Train - Total: 2.0391, Task: 1.8477, Adapt: 1.3887,
+Train - Discriminator: 1.3874, LR: 0.000089
+
+Epoch 2/10
+Train - Total: 2.0343, Task: 1.8214, Adapt: 1.3883,
+Train - Discriminator: 1.3885, LR: 0.000085
+Evaluating at epoch 2...
+source_val - Accuracy: 0.6881, F1: 0.6877
+
+source_val - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.688
+
+Cross-section 0.000 (1079 samples, acc: 0.725):
+  True labels: Class 0: 1079, Class 1: 0
+  Predictions: Class 0: 782, Class 1: 297
+  Pred %: Class 0: 72.5%, Class 1: 27.5%
+
+Cross-section 0.100 (545 samples, acc: 0.550):
+  True labels: Class 0: 0, Class 1: 545
+  Predictions: Class 0: 245, Class 1: 300
+  Pred %: Class 0: 45.0%, Class 1: 55.0%
+
+Cross-section 0.300 (534 samples, acc: 0.755):
+  True labels: Class 0: 0, Class 1: 534
+  Predictions: Class 0: 131, Class 1: 403
+  Pred %: Class 0: 24.5%, Class 1: 75.5%
+
+target_test - Accuracy: 0.5868, F1: 0.5815
+
+target_test - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.587
+
+Cross-section 0.000 (599 samples, acc: 0.474):
+  True labels: Class 0: 599, Class 1: 0
+  Predictions: Class 0: 284, Class 1: 315
+  Pred %: Class 0: 47.4%, Class 1: 52.6%
+
+Cross-section 0.010 (153 samples, acc: 0.549):
+  True labels: Class 0: 0, Class 1: 153
+  Predictions: Class 0: 69, Class 1: 84
+  Pred %: Class 0: 45.1%, Class 1: 54.9%
+
+Cross-section 0.050 (168 samples, acc: 0.673):
+  True labels: Class 0: 0, Class 1: 168
+  Predictions: Class 0: 55, Class 1: 113
+  Pred %: Class 0: 32.7%, Class 1: 67.3%
+
+Cross-section 0.100 (153 samples, acc: 0.784):
+  True labels: Class 0: 0, Class 1: 153
+  Predictions: Class 0: 33, Class 1: 120
+  Pred %: Class 0: 21.6%, Class 1: 78.4%
+
+Cross-section 0.200 (125 samples, acc: 0.816):
+  True labels: Class 0: 0, Class 1: 125
+  Predictions: Class 0: 23, Class 1: 102
+  Pred %: Class 0: 18.4%, Class 1: 81.6%
+
+CDM Alignment: 0.0615
+
+Epoch 3/10
+Train - Total: 2.0247, Task: 1.8171, Adapt: 1.3885,
+Train - Discriminator: 1.3886, LR: 0.000081
+
+Epoch 4/10
+Traceback (most recent call last):
+  File "/Users/davidharvey/Work/ml_check/main.py", line 386, in <module>
+    main()
+  File "/Users/davidharvey/Work/ml_check/main.py", line 133, in main
+    train_metrics = train_epoch(
+  File "/Users/davidharvey/Work/ml_check/train.py", line 232, in train_epoch
+    train_task_loss += src_task_loss.item()/len_source + tgt_task_loss.item()/len_target
+KeyboardInterrupt

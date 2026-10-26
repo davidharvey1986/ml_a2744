@@ -1,0 +1,488 @@
+Device: mps
+Model: squeezenet1_1 (pretrained)
+Mixup: Disabled
+Adaptation: cdan
+Meta: []
+Experiment: cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_20_nob1_ft_tweakedalign
+SOURCE REDSHIFT: 1.65
+SOURCE REDSHIFT: 1.65
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Class distribution:
+  Class 0: 3600 samples
+  Class 1: 7200 samples
+Creating balanced test set with 1079 samples per class (2158 total)
+Balanced test set distribution:
+  Class 0: 1079 samples (50.0%)
+  Class 1: 1079 samples (50.0%)
+Source domain setup:
+  Training samples: 8642
+  Test samples: 2158
+Source dataset normalization - Mean: -0.0016, Std: 0.0367
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 4 files matching '100/obs/concat/bahamas*'...
+Cutting 0
+Cutting 0
+Cutting 0
+Ignoring data/100/obs/concat/bahamas_1.pkl
+Data shape: (10800, 2, 100, 100)
+Unique cross-sections: [0.  0.1 0.3]
+Classification class distribution:
+  Class 0: 3600 samples (33.3%)
+  Class 1: 7200 samples (66.7%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Loading 5 files matching '100/obs/concat/darkskies*'...
+NO MASS META FOR data/100/obs/concat/darkskies_0.01.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_cdm.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.05.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.2.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+NO MASS META FOR data/100/obs/concat/darkskies_0.1.pkl FOUND SO NO CUT APPLIED
+Cutting 0
+Data shape: (6000, 2, 100, 100)
+Unique cross-sections: [0.   0.01 0.05 0.1  0.2 ]
+Classification class distribution:
+  Class 0: 1200 samples (20.0%)
+  Class 1: 4800 samples (80.0%)
+Class distribution:
+  Class 0: 1200 samples
+  Class 1: 4800 samples
+Creating balanced test set with 599 samples per class (1198 total)
+Balanced test set distribution:
+  Class 0: 599 samples (50.0%)
+  Class 1: 599 samples (50.0%)
+Target domain setup:
+  Training samples: 4802
+  Test samples: 1198
+DataLoader summary:
+  Source train: 8642 samples
+  Source test: 2158 samples
+  Target train: 4802 samples
+  Target test: 1198 samples
+Loaded model from models/concat//cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_20_nob1_ft_tweakedalign_best.pth
+Saving models to models/concat/
+Training class distribution:
+  Class 0: 2519 samples
+  Class 1: 6121 samples
+Weighting scheme: inverse_frequency
+Class weights: [0: 1.7150, 1: 0.7058]
+Created separate optimizer for domain discriminator
+
+Epoch 1/10
+Train - Total: 2.0537, Task: 1.9092, Adapt: 1.3875,
+Train - Discriminator: 1.3864, LR: 0.000089
+
+Epoch 2/10
+Train - Total: 2.0572, Task: 1.9047, Adapt: 1.3886,
+Train - Discriminator: 1.3861, LR: 0.000085
+Evaluating at epoch 2...
+source_val - Accuracy: 0.6024, F1: 0.5981
+
+source_val - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.602
+
+Cross-section 0.000 (1079 samples, acc: 0.706):
+  True labels: Class 0: 1079, Class 1: 0
+  Predictions: Class 0: 762, Class 1: 317
+  Pred %: Class 0: 70.6%, Class 1: 29.4%
+
+Cross-section 0.100 (556 samples, acc: 0.448):
+  True labels: Class 0: 0, Class 1: 556
+  Predictions: Class 0: 307, Class 1: 249
+  Pred %: Class 0: 55.2%, Class 1: 44.8%
+
+Cross-section 0.300 (523 samples, acc: 0.553):
+  True labels: Class 0: 0, Class 1: 523
+  Predictions: Class 0: 234, Class 1: 289
+  Pred %: Class 0: 44.7%, Class 1: 55.3%
+
+target_test - Accuracy: 0.5593, F1: 0.5548
+
+target_test - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.559
+
+Cross-section 0.000 (599 samples, acc: 0.659):
+  True labels: Class 0: 599, Class 1: 0
+  Predictions: Class 0: 395, Class 1: 204
+  Pred %: Class 0: 65.9%, Class 1: 34.1%
+
+Cross-section 0.010 (155 samples, acc: 0.413):
+  True labels: Class 0: 0, Class 1: 155
+  Predictions: Class 0: 91, Class 1: 64
+  Pred %: Class 0: 58.7%, Class 1: 41.3%
+
+Cross-section 0.050 (161 samples, acc: 0.422):
+  True labels: Class 0: 0, Class 1: 161
+  Predictions: Class 0: 93, Class 1: 68
+  Pred %: Class 0: 57.8%, Class 1: 42.2%
+
+Cross-section 0.100 (139 samples, acc: 0.511):
+  True labels: Class 0: 0, Class 1: 139
+  Predictions: Class 0: 68, Class 1: 71
+  Pred %: Class 0: 48.9%, Class 1: 51.1%
+
+Cross-section 0.200 (144 samples, acc: 0.500):
+  True labels: Class 0: 0, Class 1: 144
+  Predictions: Class 0: 72, Class 1: 72
+  Pred %: Class 0: 50.0%, Class 1: 50.0%
+
+CDM Alignment: 0.0128
+
+Epoch 3/10
+Train - Total: 2.0543, Task: 1.8937, Adapt: 1.3878,
+Train - Discriminator: 1.3874, LR: 0.000081
+
+Epoch 4/10
+Train - Total: 2.0547, Task: 1.9075, Adapt: 1.3876,
+Train - Discriminator: 1.3871, LR: 0.000078
+Evaluating at epoch 4...
+source_val - Accuracy: 0.5732, F1: 0.5411
+
+source_val - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.573
+
+Cross-section 0.000 (1079 samples, acc: 0.309):
+  True labels: Class 0: 1079, Class 1: 0
+  Predictions: Class 0: 333, Class 1: 746
+  Pred %: Class 0: 30.9%, Class 1: 69.1%
+
+Cross-section 0.100 (556 samples, acc: 0.791):
+  True labels: Class 0: 0, Class 1: 556
+  Predictions: Class 0: 116, Class 1: 440
+  Pred %: Class 0: 20.9%, Class 1: 79.1%
+
+Cross-section 0.300 (523 samples, acc: 0.887):
+  True labels: Class 0: 0, Class 1: 523
+  Predictions: Class 0: 59, Class 1: 464
+  Pred %: Class 0: 11.3%, Class 1: 88.7%
+
+target_test - Accuracy: 0.5351, F1: 0.4951
+
+target_test - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.535
+
+Cross-section 0.000 (599 samples, acc: 0.254):
+  True labels: Class 0: 599, Class 1: 0
+  Predictions: Class 0: 152, Class 1: 447
+  Pred %: Class 0: 25.4%, Class 1: 74.6%
+
+Cross-section 0.010 (155 samples, acc: 0.800):
+  True labels: Class 0: 0, Class 1: 155
+  Predictions: Class 0: 31, Class 1: 124
+  Pred %: Class 0: 20.0%, Class 1: 80.0%
+
+Cross-section 0.050 (161 samples, acc: 0.789):
+  True labels: Class 0: 0, Class 1: 161
+  Predictions: Class 0: 34, Class 1: 127
+  Pred %: Class 0: 21.1%, Class 1: 78.9%
+
+Cross-section 0.100 (139 samples, acc: 0.856):
+  True labels: Class 0: 0, Class 1: 139
+  Predictions: Class 0: 20, Class 1: 119
+  Pred %: Class 0: 14.4%, Class 1: 85.6%
+
+Cross-section 0.200 (144 samples, acc: 0.826):
+  True labels: Class 0: 0, Class 1: 144
+  Predictions: Class 0: 25, Class 1: 119
+  Pred %: Class 0: 17.4%, Class 1: 82.6%
+
+CDM Alignment: 0.0265
+
+Epoch 5/10
+Transient error Service Unavailable encountered while exporting metrics batch, retrying in 1.15s.
+Train - Total: 2.0484, Task: 1.8911, Adapt: 1.3867,
+Train - Discriminator: 1.3874, LR: 0.000074
+
+Epoch 6/10
+Train - Total: 2.0494, Task: 1.9114, Adapt: 1.3877,
+Train - Discriminator: 1.3865, LR: 0.000071
+Evaluating at epoch 6...
+source_val - Accuracy: 0.6186, F1: 0.6183
+
+source_val - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.619
+
+Cross-section 0.000 (1079 samples, acc: 0.646):
+  True labels: Class 0: 1079, Class 1: 0
+  Predictions: Class 0: 697, Class 1: 382
+  Pred %: Class 0: 64.6%, Class 1: 35.4%
+
+Cross-section 0.100 (556 samples, acc: 0.527):
+  True labels: Class 0: 0, Class 1: 556
+  Predictions: Class 0: 263, Class 1: 293
+  Pred %: Class 0: 47.3%, Class 1: 52.7%
+
+Cross-section 0.300 (523 samples, acc: 0.660):
+  True labels: Class 0: 0, Class 1: 523
+  Predictions: Class 0: 178, Class 1: 345
+  Pred %: Class 0: 34.0%, Class 1: 66.0%
+
+target_test - Accuracy: 0.5317, F1: 0.5317
+
+target_test - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.532
+
+Cross-section 0.000 (599 samples, acc: 0.543):
+  True labels: Class 0: 599, Class 1: 0
+  Predictions: Class 0: 325, Class 1: 274
+  Pred %: Class 0: 54.3%, Class 1: 45.7%
+
+Cross-section 0.010 (155 samples, acc: 0.497):
+  True labels: Class 0: 0, Class 1: 155
+  Predictions: Class 0: 78, Class 1: 77
+  Pred %: Class 0: 50.3%, Class 1: 49.7%
+
+Cross-section 0.050 (161 samples, acc: 0.497):
+  True labels: Class 0: 0, Class 1: 161
+  Predictions: Class 0: 81, Class 1: 80
+  Pred %: Class 0: 50.3%, Class 1: 49.7%
+
+Cross-section 0.100 (139 samples, acc: 0.547):
+  True labels: Class 0: 0, Class 1: 139
+  Predictions: Class 0: 63, Class 1: 76
+  Pred %: Class 0: 45.3%, Class 1: 54.7%
+
+Cross-section 0.200 (144 samples, acc: 0.549):
+  True labels: Class 0: 0, Class 1: 144
+  Predictions: Class 0: 65, Class 1: 79
+  Pred %: Class 0: 45.1%, Class 1: 54.9%
+
+CDM Alignment: 0.0284
+
+Epoch 7/10
+Train - Total: 2.0482, Task: 1.8999, Adapt: 1.3872,
+Train - Discriminator: 1.3874, LR: 0.000069
+
+Epoch 8/10
+Train - Total: 2.0493, Task: 1.8963, Adapt: 1.3873,
+Train - Discriminator: 1.3875, LR: 0.000066
+Evaluating at epoch 8...
+source_val - Accuracy: 0.6112, F1: 0.6096
+
+source_val - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.611
+
+Cross-section 0.000 (1079 samples, acc: 0.676):
+  True labels: Class 0: 1079, Class 1: 0
+  Predictions: Class 0: 729, Class 1: 350
+  Pred %: Class 0: 67.6%, Class 1: 32.4%
+
+Cross-section 0.100 (556 samples, acc: 0.484):
+  True labels: Class 0: 0, Class 1: 556
+  Predictions: Class 0: 287, Class 1: 269
+  Pred %: Class 0: 51.6%, Class 1: 48.4%
+
+Cross-section 0.300 (523 samples, acc: 0.614):
+  True labels: Class 0: 0, Class 1: 523
+  Predictions: Class 0: 202, Class 1: 321
+  Pred %: Class 0: 38.6%, Class 1: 61.4%
+
+target_test - Accuracy: 0.5242, F1: 0.5239
+
+target_test - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.524
+
+Cross-section 0.000 (599 samples, acc: 0.549):
+  True labels: Class 0: 599, Class 1: 0
+  Predictions: Class 0: 329, Class 1: 270
+  Pred %: Class 0: 54.9%, Class 1: 45.1%
+
+Cross-section 0.010 (155 samples, acc: 0.471):
+  True labels: Class 0: 0, Class 1: 155
+  Predictions: Class 0: 82, Class 1: 73
+  Pred %: Class 0: 52.9%, Class 1: 47.1%
+
+Cross-section 0.050 (161 samples, acc: 0.453):
+  True labels: Class 0: 0, Class 1: 161
+  Predictions: Class 0: 88, Class 1: 73
+  Pred %: Class 0: 54.7%, Class 1: 45.3%
+
+Cross-section 0.100 (139 samples, acc: 0.576):
+  True labels: Class 0: 0, Class 1: 139
+  Predictions: Class 0: 59, Class 1: 80
+  Pred %: Class 0: 42.4%, Class 1: 57.6%
+
+Cross-section 0.200 (144 samples, acc: 0.507):
+  True labels: Class 0: 0, Class 1: 144
+  Predictions: Class 0: 71, Class 1: 73
+  Pred %: Class 0: 49.3%, Class 1: 50.7%
+
+CDM Alignment: 0.0411
+
+Epoch 9/10
+Train - Total: 2.0458, Task: 1.9037, Adapt: 1.3870,
+Train - Discriminator: 1.3870, LR: 0.000064
+
+Epoch 10/10
+Train - Total: 2.0418, Task: 1.8958, Adapt: 1.3874,
+Train - Discriminator: 1.3868, LR: 0.000062
+Evaluating at epoch 10...
+source_val - Accuracy: 0.6242, F1: 0.6155
+
+source_val - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.624
+
+Cross-section 0.000 (1079 samples, acc: 0.474):
+  True labels: Class 0: 1079, Class 1: 0
+  Predictions: Class 0: 511, Class 1: 568
+  Pred %: Class 0: 47.4%, Class 1: 52.6%
+
+Cross-section 0.100 (556 samples, acc: 0.710):
+  True labels: Class 0: 0, Class 1: 556
+  Predictions: Class 0: 161, Class 1: 395
+  Pred %: Class 0: 29.0%, Class 1: 71.0%
+
+Cross-section 0.300 (523 samples, acc: 0.843):
+  True labels: Class 0: 0, Class 1: 523
+  Predictions: Class 0: 82, Class 1: 441
+  Pred %: Class 0: 15.7%, Class 1: 84.3%
+
+target_test - Accuracy: 0.5476, F1: 0.5330
+
+target_test - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.548
+
+Cross-section 0.000 (599 samples, acc: 0.371):
+  True labels: Class 0: 599, Class 1: 0
+  Predictions: Class 0: 222, Class 1: 377
+  Pred %: Class 0: 37.1%, Class 1: 62.9%
+
+Cross-section 0.010 (155 samples, acc: 0.671):
+  True labels: Class 0: 0, Class 1: 155
+  Predictions: Class 0: 51, Class 1: 104
+  Pred %: Class 0: 32.9%, Class 1: 67.1%
+
+Cross-section 0.050 (161 samples, acc: 0.683):
+  True labels: Class 0: 0, Class 1: 161
+  Predictions: Class 0: 51, Class 1: 110
+  Pred %: Class 0: 31.7%, Class 1: 68.3%
+
+Cross-section 0.100 (139 samples, acc: 0.777):
+  True labels: Class 0: 0, Class 1: 139
+  Predictions: Class 0: 31, Class 1: 108
+  Pred %: Class 0: 22.3%, Class 1: 77.7%
+
+Cross-section 0.200 (144 samples, acc: 0.778):
+  True labels: Class 0: 0, Class 1: 144
+  Predictions: Class 0: 32, Class 1: 112
+  Pred %: Class 0: 22.2%, Class 1: 77.8%
+
+CDM Alignment: 0.0394
+
+================================================================================
+TRAINING COMPLETED
+================================================================================
+Saved final model to models/concat//cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_20_nob1_ft_tweakedalign_final.pth
+Saved best model to models/concat//cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_20_nob1_ft_tweakedalign_best.pth
+
+FINAL EVALUATION:
+source_final - Accuracy: 0.6075, F1: 0.5975
+
+source_final - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.608
+
+Cross-section 0.000 (1079 samples, acc: 0.449):
+  True labels: Class 0: 1079, Class 1: 0
+  Predictions: Class 0: 485, Class 1: 594
+  Pred %: Class 0: 44.9%, Class 1: 55.1%
+
+Cross-section 0.100 (556 samples, acc: 0.721):
+  True labels: Class 0: 0, Class 1: 556
+  Predictions: Class 0: 155, Class 1: 401
+  Pred %: Class 0: 27.9%, Class 1: 72.1%
+
+Cross-section 0.300 (523 samples, acc: 0.813):
+  True labels: Class 0: 0, Class 1: 523
+  Predictions: Class 0: 98, Class 1: 425
+  Pred %: Class 0: 18.7%, Class 1: 81.3%
+
+target_final - Accuracy: 0.5618, F1: 0.5501
+
+target_final - Predictions by Cross-Section Value:
+============================================================
+Overall Accuracy: 0.562
+
+Cross-section 0.000 (599 samples, acc: 0.401):
+  True labels: Class 0: 599, Class 1: 0
+  Predictions: Class 0: 240, Class 1: 359
+  Pred %: Class 0: 40.1%, Class 1: 59.9%
+
+Cross-section 0.010 (155 samples, acc: 0.703):
+  True labels: Class 0: 0, Class 1: 155
+  Predictions: Class 0: 46, Class 1: 109
+  Pred %: Class 0: 29.7%, Class 1: 70.3%
+
+Cross-section 0.050 (161 samples, acc: 0.671):
+  True labels: Class 0: 0, Class 1: 161
+  Predictions: Class 0: 53, Class 1: 108
+  Pred %: Class 0: 32.9%, Class 1: 67.1%
+
+Cross-section 0.100 (139 samples, acc: 0.791):
+  True labels: Class 0: 0, Class 1: 139
+  Predictions: Class 0: 29, Class 1: 110
+  Pred %: Class 0: 20.9%, Class 1: 79.1%
+
+Cross-section 0.200 (144 samples, acc: 0.736):
+  True labels: Class 0: 0, Class 1: 144
+  Predictions: Class 0: 38, Class 1: 106
+  Pred %: Class 0: 26.4%, Class 1: 73.6%
+
+
+SUMMARY:
+  Experiment: cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_20_nob1_ft_tweakedalign
+  Model: squeezenet1_1 (pretrained)
+  Domain: bahamas_obs → darkskies_obs
+  Adaptation: cdan
+  Mixup: None
+  Final Target Accuracy: 0.5618
+  Final Target F1: 0.5501
+  Final CDM Alignment: 0.0315
+  Best Target Accuracy: 0.5593
+  Best Target F1: 0.5548
+  Best CDM Alignment: 10.0000

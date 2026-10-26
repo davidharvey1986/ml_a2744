@@ -12,6 +12,13 @@ from astropy import cosmology
 from scipy.stats import chi, norm
 from scipy.ndimage import zoom
 
+# Lens and source redshift the shear/kappa maps are made at (add_shear_to_data.main).
+# rescale_lens_source_configuration rescales from these to the observed n(z); masses
+# from the stored kappa must use them too.
+MAP_ZL = 0.305
+MAP_ZS = 2.28
+SIGMA_CRIT_MAP = sigma_critical(MAP_ZL, MAP_ZS, cosmology.Planck18).value   # 2334 Msun/pc^2
+
 def get_cross_section_from_filename(filename):
     base_name = os.path.basename(filename)
     name = os.path.splitext(base_name)[0].lower()
@@ -137,7 +144,8 @@ class BalancedClusterDataset(Dataset):
         else:
             minvalue = torch.min(image_tensor)
             maxvalue = torch.max(image_tensor)
-       
+
+        this_range = (maxvalue - minvalue)
         image_tensor -= minvalue
         image_tensor /= maxvalue 
         
@@ -224,6 +232,16 @@ def create_balanced_test_set(dataset, test_size=0.2, random_state=42, verbose=Tr
 
     return test_indices
 
+def get_test_transform(args):
+    '''Forward model applied to the evaluation sets (no augmentation).'''
+    return transforms.Compose([
+            rescale_lens_source_configuration(args),
+            cluster_member_contamination( args ),
+            apply_shape_measurement_bias(args.shape_measurement_bias),
+            apply_intrinsic_ell( args),
+            Downsample(args)
+    ])
+
 def prepare_dataloaders(args):
     data_loaders = {}
     #Note that all data is in idealised form - there are transforms to forward model the data.
@@ -299,14 +317,8 @@ def prepare_dataloaders(args):
             ], p=args.aug_crop_prob),
         ]) 
         
-    test_transform = transforms.Compose([
-            rescale_lens_source_configuration(args),
-            cluster_member_contamination( args ),
-            apply_shape_measurement_bias(args.shape_measurement_bias),
-            apply_intrinsic_ell( args),
-            Downsample(args)
-    ])
-    
+    test_transform = get_test_transform(args)
+
     temp_source_dataset = [
         BalancedClusterDataset(args.data_dir, source_pattern, args=args, dtype=i, transform=train_transform) for i in args.dtypes
     ]
@@ -436,12 +448,14 @@ class apply_intrinsic_ell(object):
         a switch that turns it on or off
         
         See section 4.) in add_shear.ipynb for fitting
-        See section 2.) in prepare_data for the dump of ngal_{jwst_filter}.pkl 
+        add_shear_to_data.make_noise_model writes ngal_{jwst_filter}.pkl 
                         which is the number density of gals and the chi fit
                         with scipy
         '''
         
-        home="/Users/davidharvey/Work/Dark_Matter_DA/code/notebooks/pickles"
+        # Made by add_shear_to_data.make_noise_model from the same A2744 catalogue as
+        # the data map (previously a July catalogue in Dark_Matter_DA/code).
+        home = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "100", "a2744")
         #Intrinsic ell here is the intrinsic ellipticity for a single component.
         data_dict = pickle.load( open(f"{home}/ngal_{args.jwst_filter}.pkl","rb") )
         self.ngal = data_dict['ngal']
@@ -657,7 +671,7 @@ class cluster_member_contamination( object ):
     
 class rescale_lens_source_configuration( object ):
     '''
-    When creating the data it assumes that zs=1.72, zl=0.305
+    When creating the data it assumes that zs=MAP_ZS=1.72, zl=MAP_ZL=0.305
     '''
     def __init__(self, args ):
         self.zl = args.zl
@@ -675,7 +689,7 @@ class rescale_lens_source_configuration( object ):
         else:
             self.apply = True
             
-            sigma_crit_fid = 2334. # hard coded to speed up
+            sigma_crit_fid = SIGMA_CRIT_MAP
             
             sigma_crit = sigma_critical(self.zl, self.zs, cosmology.Planck18).value
             

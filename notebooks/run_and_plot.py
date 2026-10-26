@@ -48,10 +48,10 @@ def run_ta_models(imonte=5):
     args.source_domain = "darkskies_obs"
 
     ifilter     = "concat"
-    output_name = f"pickles/all_models_{ifilter}_nz_alignbest_ta_results.pkl"
+    output_name = f"pickles/all_models_{ifilter}_nz_alignbest_ba_results.pkl"
 
     all_models, seed_index = get_model_names(
-        model="tweakedalign_ta_best", include_str="nob1", ifilter=ifilter
+        model="tweakedalign_ba_final", include_str="nob1", ifilter=ifilter
     )
 
     all_results = pkl.load(open(output_name, "rb")) if os.path.isfile(output_name) else {}

@@ -214,7 +214,7 @@ def train_epoch( model, source_loader, target_loader, optimizer, criterion, devi
             
 
             if ~torch.isfinite(alignment_loss):
-                alignment_loss = task_loss*0.
+                alignment_loss = src_task_loss*0.
                 failed += 1.0
             
                 

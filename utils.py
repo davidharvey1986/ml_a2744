@@ -31,9 +31,9 @@ def parse_args():
     parser.add_argument("--apply_shape_measurement_bias", action="store_true", default=False)
     parser.add_argument("--cluster_member_contamination", type=float, default=0.)
     parser.add_argument("--zl", type=float, default=0.305)
-    parser.add_argument("--zs", type=float, default=1.72)
-    parser.add_argument("--default_zl", type=float, default=0.305)# This really should not change
-    parser.add_argument("--default_zs", type=float, default=1.72)    # This really should not change
+    parser.add_argument("--zs", type=float, default=2.28)
+    parser.add_argument("--default_zl", type=float, default=0.305)   # This really should not change
+    parser.add_argument("--default_zs", type=float, default=2.28)    # This really should not change
     
     parser.add_argument("--jwst_filter", type=str, default='concat')
     parser.add_argument("--med_norm", type=float, default=-1)
