@@ -100,7 +100,10 @@ def parse():
     p.add_argument("--kappa-plot", action="store_true",
                    help="BAHAMAS-only mean Delta P against reconstructed kappa, with A2744 errors from "
                         "--rotations shear-rotated maps (uses sensitivity.npz; same --seed / --clusters-per-sigma)")
-    p.add_argument("--rotations", type=int, default=100)
+    p.add_argument("--rotations", type=int, default=100, help="maps for the A2744 error estimate")
+    p.add_argument("--errors", choices=["bootstrap", "rotation"], default="bootstrap",
+                   help="A2744 errors: resample its galaxies with replacement (keeps the signal) or rotate "
+                        "every shear (noise only; underestimates the errors, the networks see an empty field)")
     p.add_argument("--out-dir", default=None)
     return p.parse_args()
 
@@ -522,13 +525,32 @@ def rotated_a2744_deltas(models, cat, ra, dec, n_rot, window, stride, device, ba
     return out
 
 
+def bootstrap_a2744_deltas(models, cat, ra, dec, n_boot, window, stride, device, batch_size, cache, seed=2):
+    '''Occlusion maps of A2744 with its galaxies resampled with replacement (signal kept), (n_boot, n, n); cached.'''
+    if cache.exists():
+        z = np.load(cache)
+        if len(z["deltas"]) >= n_boot:
+            return z["deltas"][:n_boot]
+    c1, c2 = galaxy_distortion(cat)
+    rng = np.random.default_rng(seed)
+    out = []
+    for _ in tqdm(range(n_boot), desc="bootstrapped A2744 maps"):
+        i = rng.integers(0, len(c1), len(c1))
+        raw = np.array(bin2d(ra[i], dec[i], v=(c1[i], c2[i]), npix=NPIX, extent=[-50, 50, -50, 50]), dtype=np.float32)
+        img, fill = normalise(torch.tensor(raw))
+        out.append(occlusion_map(models, img, fill, window, stride, device, batch_size)[0].mean(0))
+    out = np.array(out)
+    np.savez(cache, deltas=out)
+    return out
+
+
 def bin_means(kw, delta, bins):
     '''Mean Delta P in kappa bins over windows with galaxies.'''
     keep = (delta != 0) & np.isfinite(kw)
     return binned_statistic(kw[keep], delta[keep], statistic="mean", bins=bins)[0]
 
 
-def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bins=None):
+def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bins=None, errors="bootstrap"):
     '''
     Mean Delta P(SIDM) against reconstructed kappa: BAHAMAS per sigma/m (error: scatter between
     clusters / sqrt(N)) and output-matched BAHAMAS maps; A2744 with errors from the scatter over
@@ -550,13 +572,15 @@ def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bin
                         if abs(m["p_full"] - a2744["p_full"]) < P_MATCH])
     if len(matched):
         n = np.sum(np.isfinite(matched), 0)
-        ax.errorbar(xc, np.nanmean(matched, 0), np.nanstd(matched, 0) / np.sqrt(np.maximum(n, 1)), fmt="--",
+        mm, ms_ = np.nanmean(matched, 0), np.nanstd(matched, 0)
+        ax.fill_between(xc, mm - ms_, mm + ms_, color="k", alpha=0.1, lw=0,
+                        label="single-cluster spread ($\\pm1\\sigma$) of those")
+        ax.errorbar(xc, mm, ms_ / np.sqrt(np.maximum(n, 1)), fmt="--",
                     lw=2, color="k", capsize=2, label=f"BAHAMAS with P within {P_MATCH} of A2744 ({len(matched)})")
-    rot = np.array([bin_means(kw, r.ravel(), bins) for r in rot_deltas])
-    ax.fill_between(xc, np.nanmean(rot, 0) - np.nanstd(rot, 0), np.nanmean(rot, 0) + np.nanstd(rot, 0),
-                    color="k", alpha=0.1, lw=0, label=f"A2744 shear-rotated maps, mean $\\pm1\\sigma$ ({len(rot)})")
-    ax.errorbar(xc, bin_means(kw, dl, bins), np.nanstd(rot, 0), fmt="s", ms=8, color="k", capsize=3,
-                zorder=5, label="A2744 (errors: rotated-map scatter)")
+    err = np.array([bin_means(kw, r.ravel(), bins) for r in rot_deltas])
+    how = "bootstrapped galaxies" if errors == "bootstrap" else "shear-rotated maps"
+    ax.errorbar(xc, bin_means(kw, dl, bins), np.nanstd(err, 0), fmt="s", ms=8, color="k", capsize=3,
+                zorder=5, label=f"A2744 (errors: {len(err)} {how})")
     ax.axhline(0, color=MUTED, lw=1)
     ax.set_xlabel(r"Reconstructed convergence $\kappa$ (window mean)" if x == "kappa"
                   else r"Reconstructed $\kappa$ S/N (window mean)")
@@ -578,8 +602,12 @@ def kappa_plot(opts, out):
     a2744 = {"kappa": window_mean(reconstruct_kappa(raw_np)[0], opts.window, opts.stride),
              "snr": z["a2744_snr_windows"].reshape(z["a2744_delta"].shape[1:]),
              "delta": z["a2744_delta"].mean(0), "p_full": json.load(open(out / "sensitivity.json"))["a2744_p_sidm"]}
-    rot = rotated_a2744_deltas(models, cat, ra, dec, opts.rotations, opts.window, opts.stride, device,
-                               opts.batch_size, out / "rotated_a2744.npz")
+    if opts.errors == "bootstrap":
+        rot = bootstrap_a2744_deltas(models, cat, ra, dec, opts.rotations, opts.window, opts.stride, device,
+                                     opts.batch_size, out / "bootstrap_a2744.npz")
+    else:
+        rot = rotated_a2744_deltas(models, cat, ra, dec, opts.rotations, opts.window, opts.stride, device,
+                                   opts.batch_size, out / "rotated_a2744.npz")
     # regenerate the BAHAMAS maps of the main run (same seed, same draw order) to get their kappa
     mu, sig = a2744_mass_gaussian()
     sel = pick_clusters(opts.summaries, "bahamas", mu, sig, opts.clusters_per_sigma, np.random.default_rng(opts.seed))
@@ -594,8 +622,8 @@ def kappa_plot(opts, out):
         sims.append({"sigma": float(sel["cross_section"][i]), "p_full": float(z["bahamas_p_full"][i]),
                      "kappa": window_mean(k, opts.window, opts.stride).ravel(), "delta": z["bahamas_delta"][i].ravel(),
                      "snr": z["bahamas_snr_windows"][i]})
-    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_kappa_bahamas")
-    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_snr_bahamas", x="snr", bins=SNR_BINS)
+    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_kappa_bahamas", errors=opts.errors)
+    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_snr_bahamas", x="snr", bins=SNR_BINS, errors=opts.errors)
     print(f"wrote {out}/delta_vs_kappa_bahamas and delta_vs_snr_bahamas (.pdf/.png)")
 
 
