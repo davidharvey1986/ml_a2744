@@ -53,8 +53,8 @@ GROUPS = {
     "final": "summaries_final",
     "ta best": "summaries_ta",
     "ta final": "summaries_ta_final",
-    "ba best": "summaries_ba_best",
-    "ba final": "summaries_ba_final",
+    "ba best": "summaries_ba_best_n5",      # 5 noise draws; draw 0 is used here
+    "ba final": "summaries_ba_final_n5",
 }
 DOMAINS = ["bahamas", "darkskies"]
 COLOUR = {"bahamas": "#56B4E9", "darkskies": "#E69F00"}

@@ -14,9 +14,27 @@ and two estimators are trained:
          (or the A2744 mass measurement as the mass prior, --mass-prior a2744).
     NPE  p(theta | x), x = the 30 per-model logit P(SIDM) plus, with --latent-pcs k,
          the first k principal components of each model's 512-d latent space (PCA
-         per model, fitted on the simulated clusters). n_comp is dequantised
-         (+U(-1/2, 1/2)). Its prior is the simulated population (the sigma/m grid,
-         each simulation's mass function and merger fractions).
+         per model, fitted on the simulated clusters). n_comp is categorical: the
+         posterior is factorised as p(n_comp | x) p(sigma/m, M | n_comp, x), a
+         classifier times a flow conditioned on x and one-hot n_comp. Its prior is the
+         simulated population (the sigma/m grid, each simulation's mass function and
+         merger fractions).
+
+Apples to apples: A2744 was targeted because it is a massive, multi-component merger,
+so its mass and merger state are treated as a selection, not as data. The sigma/m
+results condition on them, p(sigma/m | x, M = M_A2744, n_comp in A2744's class), and
+never use how n_comp or mass depend on sigma/m in the simulated population:
+
+    empirical   each sigma/m sample restricted to A2744's n_comp class and weighted to
+                the A2744 mass separately
+    NLE         likelihood p(x | sigma, M, n_comp) averaged over the A2744 mass
+                Gaussian and A2744's n_comp class with weights that do not depend on
+                sigma/m; flat prior in log1p sigma/m
+    NPE (conditional)  p(sigma/m | x, M, n_comp) trained on a set rebalanced so every
+                sigma/m is equally common in each (n_comp, mass) cell, evaluated at
+                A2744's mass and n_comp class
+The population NPE p(sigma/m, M, n_comp | x) is still reported for the mass and
+n_comp posteriors, but it is not used for sigma/m.
 
 Discrepancy with CDM, per simulation:
 
@@ -83,8 +101,13 @@ def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_ta"))
     p.add_argument("--out-dir", default=None, help="default sbi/results/<summaries dir name>")
-    p.add_argument("--mass-prior", choices=["flat", "a2744"], default="flat",
-                   help="NLE mass prior: flat over the simulations or the A2744 measurement")
+    p.add_argument("--a2744-ncomp", default="3+",
+                   help="A2744's merger class in the simulations' n_comp definition, e.g. 3, 3+, 2+")
+    p.add_argument("--population-npe", action="store_true",
+                   help="also train the population NPE p(sigma/m, M, n_comp | x) (kept for reference; "
+                        "not conditioned on A2744, so not used for sigma/m)")
+    p.add_argument("--unconditioned", action="store_true",
+                   help="NLE with flat mass and n_comp priors instead of conditioning on A2744")
     p.add_argument("--noise", default="0",
                    help="noise realisation of the summaries, or 'all' to train on every cluster-draw "
                         "pair (split by cluster; checks use one draw per cluster)")
@@ -93,6 +116,12 @@ def parse():
     p.add_argument("--retrain", action="store_true")
     p.add_argument("--seed", type=int, default=0)
     return p.parse_args()
+
+
+def parse_ncomp(spec):
+    '''"3" -> [3], "3+" -> [3, ..., NCOMP_MAX].'''
+    lo = int(spec.rstrip("+"))
+    return list(range(lo, NCOMP_MAX + 1)) if spec.endswith("+") else [min(lo, NCOMP_MAX)]
 
 
 def logit(p):
@@ -195,10 +224,13 @@ def bounds(D):
 
 
 # ── empirical CDM test ─────────────────────────────────────────────────────────
-def empirical_test(D, mu, sig):
-    '''Weighted p-value of the observed summary under each simulated sigma/m.'''
+def empirical_test(D, mu, sig, ncomp_set):
+    '''
+    Weighted p-value of the observed summary under each simulated sigma/m: clusters in
+    A2744's n_comp class, weighted to the A2744 mass, each sigma/m on its own.
+    '''
     th, x, x_obs = D["theta"], D["x_ens"][:, 0], D["x_obs_ens"][0]
-    merging = th[:, 2] > 1
+    merging = np.isin(th[:, 2], ncomp_set)
     out = {}
     for s in D["sigma_grid"]:
         sel = np.isclose(D["sigma"], s) & merging
@@ -254,17 +286,31 @@ def nle_grids(D, n_sigma=200, n_mass=60):
             np.arange(1, NCOMP_MAX + 1, dtype=np.float32))
 
 
-def nle_posterior(est, x_obs, grids, mass_prior):
-    '''Joint posterior on the (sigma, mass, ncomp) grid plus the marginal likelihood in sigma.'''
+def ncomp_weights(theta, ncomp_set):
+    '''Weights over n_comp in A2744's class, pooled over all sigma/m (so they carry no sigma/m information).'''
+    counts = np.array([np.sum(theta[:, 2] == k) for k in ncomp_set], dtype=float)
+    return dict(zip(ncomp_set, counts / counts.sum()))
+
+
+def nle_posterior(est, x_obs, grids, mass_prior, n_weights=None):
+    '''
+    Joint posterior on the (sigma, mass, ncomp) grid plus the marginal likelihood in sigma.
+    mass_prior (mu, sigma) and n_weights {n_comp: weight} fix the nuisance distribution
+    (conditioning on A2744); None means flat.
+    '''
     gs, gm, gn = grids
     S, M, K = np.meshgrid(gs, gm, gn, indexing="ij")
     loglike = nle_logp(est, x_obs, np.c_[S.ravel(), M.ravel(), K.ravel()]).reshape(S.shape)
     log_prior = np.zeros_like(loglike) if mass_prior is None else norm.logpdf(M, *mass_prior)
+    if n_weights is not None:
+        with np.errstate(divide="ignore"):
+            log_prior = log_prior + np.log([n_weights.get(int(k), 0.) for k in gn])[None, None, :]
     log_post = loglike + log_prior
     post = np.exp(log_post - log_post.max())
     post /= post.sum()
     # marginal likelihood of sigma, averaging the nuisance over its prior
     w = log_prior - logsumexp(log_prior[0])
+    loglike = np.where(np.isfinite(log_prior), loglike, 0.)
     log_like_sigma = logsumexp(loglike + w, axis=(1, 2))
     return post, log_like_sigma
 
@@ -313,18 +359,168 @@ def nle_recovery(est, th_te, x_te, gs, rng, n_rep=15):
 
 
 # ── NPE ────────────────────────────────────────────────────────────────────────
-def dequantise(theta, rng):
-    th = theta.copy()
-    th[:, 2] += rng.uniform(-0.5, 0.5, len(th)).astype(np.float32)
-    return th
+class NcompClassifier(torch.nn.Module):
+    '''p(n_comp | x) for n_comp = 1 ... NCOMP_MAX (NCOMP_MAX means that many or more).'''
+
+    def __init__(self, x_mean, x_std, hidden=64):
+        super().__init__()
+        self.register_buffer("x_mean", torch.as_tensor(x_mean, dtype=torch.float32))
+        self.register_buffer("x_std", torch.as_tensor(x_std, dtype=torch.float32))
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(len(x_mean), hidden), torch.nn.ReLU(),
+            torch.nn.Linear(hidden, hidden), torch.nn.ReLU(),
+            torch.nn.Linear(hidden, NCOMP_MAX))
+
+    def forward(self, x):
+        return self.net((x - self.x_mean) / self.x_std)
+
+    @torch.no_grad()
+    def probs(self, x):
+        return torch.softmax(self(torch.as_tensor(x, dtype=torch.float32)), dim=-1)
 
 
-def train_npe(theta, x, prior):
+def train_classifier(x, ncomp, rng, val_frac=0.1, patience=20, max_epochs=500):
+    '''Cross-entropy training with early stopping on a held-out validation split.'''
+    x = torch.as_tensor(x, dtype=torch.float32)
+    y = torch.as_tensor(ncomp.astype(int) - 1)
+    val = torch.as_tensor(rng.random(len(x)) < val_frac)
+    clf = NcompClassifier(x[~val].mean(0), x[~val].std(0) + 1e-6)
+    opt = torch.optim.Adam(clf.parameters(), lr=1e-3, weight_decay=1e-4)
+    loss_fn = torch.nn.CrossEntropyLoss()
+    best, best_state, wait = np.inf, None, 0
+    xt, yt = x[~val], y[~val]
+    for _ in range(max_epochs):
+        clf.train()
+        for idx in torch.randperm(len(xt)).split(512):
+            opt.zero_grad()
+            loss_fn(clf(xt[idx]), yt[idx]).backward()
+            opt.step()
+        clf.eval()
+        with torch.no_grad():
+            v = loss_fn(clf(x[val]), y[val]).item()
+        if v < best - 1e-4:
+            best, best_state, wait = v, {k: t.clone() for k, t in clf.state_dict().items()}, 0
+        else:
+            wait += 1
+            if wait >= patience:
+                break
+    clf.load_state_dict(best_state)
+    return clf.eval()
+
+
+def one_hot(ncomp):
+    '''(..., NCOMP_MAX) one-hot of integer n_comp in 1 ... NCOMP_MAX.'''
+    n = np.asarray(ncomp, dtype=int)
+    return np.eye(NCOMP_MAX, dtype=np.float32)[n - 1]
+
+
+class FactorisedPosterior:
+    '''p(sigma, M, n_comp | x) = p(n_comp | x) p(sigma, M | n_comp, x); samples are (..., 3).'''
+
+    def __init__(self, classifier, flow):
+        self.classifier = classifier
+        self.flow = flow
+
+    def sample_batched(self, sample_shape, x, show_progress_bars=False):
+        x = np.atleast_2d(np.asarray(x, dtype=np.float32))
+        S, B = int(np.prod(sample_shape)), len(x)
+        p = self.classifier.probs(x)                                              # (B, K)
+        n = torch.multinomial(p, S, replacement=True).T.numpy() + 1              # (S, B)
+        cond = np.concatenate([np.broadcast_to(x, (S, B, x.shape[1])), one_hot(n)], axis=-1)
+        cond = torch.as_tensor(cond.reshape(S * B, -1))
+        sm = self.flow.sample_batched((1,), x=cond, show_progress_bars=False, reject_outside_prior=False)[0].detach().numpy()
+        out = np.concatenate([sm.reshape(S, B, 2), n[..., None].astype(np.float32)], axis=-1)
+        return torch.as_tensor(out)
+
+    def sample(self, sample_shape, x, show_progress_bars=False):
+        return self.sample_batched(sample_shape, x)[:, 0]
+
+
+def train_npe(theta, x, prior, rng):
+    clf = train_classifier(x, theta[:, 2], rng)
+    cond = np.c_[x, one_hot(theta[:, 2])].astype(np.float32)
     inf = NPE(prior=prior, density_estimator=posterior_nn(model="maf", hidden_features=64, num_transforms=5),
               show_progress_bars=False)
-    inf.append_simulations(torch.tensor(theta), torch.tensor(x))
+    inf.append_simulations(torch.tensor(theta[:, :2]), torch.tensor(cond))
+    est = inf.train(training_batch_size=256, learning_rate=5e-4, stop_after_epochs=20)
+    return FactorisedPosterior(clf, inf.build_posterior(est))
+
+
+def balance_sigma(theta, rng, n_mass_bins=15):
+    '''
+    Indices of a subset in which every simulated sigma/m is equally common within each
+    (n_comp, mass bin) cell, so sigma/m is independent of mass and n_comp.
+    '''
+    sig_vals = np.unique(theta[:, 0])
+    edges = np.quantile(theta[:, 1], np.linspace(0, 1, n_mass_bins + 1))
+    mbin = np.clip(np.digitize(theta[:, 1], edges[1:-1]), 0, n_mass_bins - 1)
+    keep = []
+    for k in np.unique(theta[:, 2]):
+        for b in range(n_mass_bins):
+            groups = [np.where((theta[:, 2] == k) & (mbin == b) & (theta[:, 0] == v))[0] for v in sig_vals]
+            n_min = min(len(g) for g in groups)
+            keep += [rng.choice(g, n_min, replace=False) for g in groups if n_min > 0]
+    return np.sort(np.concatenate(keep))
+
+
+def conditional_inputs(x, mass, ncomp):
+    return np.c_[x, mass, one_hot(ncomp)].astype(np.float32)
+
+
+def train_conditional_npe(theta, x, prior_sigma):
+    '''p(log1p sigma/m | x, M, n_comp) from a sigma-balanced training set.'''
+    inf = NPE(prior=prior_sigma, density_estimator=posterior_nn(model="mdn", num_components=5, hidden_features=64),
+              show_progress_bars=False)
+    inf.append_simulations(torch.tensor(theta[:, :1]), torch.tensor(conditional_inputs(x, theta[:, 1], theta[:, 2])))
     est = inf.train(training_batch_size=256, learning_rate=5e-4, stop_after_epochs=20)
     return inf.build_posterior(est)
+
+
+def conditional_sample_a2744(post, x_obs, mu, sig, n_weights, rng, n_draws=4000, per_draw=5):
+    '''sigma samples marginalised over the A2744 mass Gaussian and n_comp class.'''
+    m = rng.normal(mu, sig, n_draws)
+    n = rng.choice(list(n_weights), n_draws, p=list(n_weights.values()))
+    cond = conditional_inputs(np.broadcast_to(x_obs, (n_draws, len(x_obs))), m, n)
+    # no rejection: samples beyond the simulated sigma/m range are kept (and counted in
+    # conditional_summary); rejection sampling stalls when A2744 lies at the edge of the grid
+    smp = post.sample_batched((per_draw,), x=torch.tensor(cond), show_progress_bars=False,
+                              reject_outside_prior=False).detach().numpy()
+    return smp.reshape(-1)
+
+
+def conditional_summary(log1p_sigma, sigma_grid):
+    snapped = snap_sigma(log1p_sigma, sigma_grid)
+    probs = np.array([np.mean(snapped == v) for v in sigma_grid])
+    p_cdm, prior_cdm = float(probs[0]), 1. / len(sigma_grid)       # balanced training: uniform over the grid
+    floor = 1. / len(log1p_sigma)
+    return {
+        # samples outside the simulated range are assigned to the nearest end of the grid
+        "fraction_above_simulated_sigma": float(np.mean(log1p_sigma > np.log1p(sigma_grid.max()))),
+        "fraction_below_zero": float(np.mean(log1p_sigma < 0)),
+        "sigma_quantiles": discrete_quantiles(sigma_grid, probs),
+        "sigma_probabilities": {f"{v:g}": float(p) for v, p in zip(sigma_grid, probs)},
+        "posterior_p_cdm": p_cdm,
+        "prior_p_cdm": prior_cdm,
+        "bayes_factor_sidm_cdm": float(((1 - p_cdm) / max(p_cdm, floor)) / ((1 - prior_cdm) / prior_cdm)),
+        "bayes_factor_is_lower_limit": bool(p_cdm < floor),
+    }
+
+
+def conditional_checks(post, theta, x, sigma_grid, rng, n_clusters=1000, n_samples=300):
+    '''Held-out (sigma-balanced) clusters at their true M and n_comp: P(true sigma), MAP rate, discrete PIT.'''
+    pick = rng.choice(len(theta), min(n_clusters, len(theta)), replace=False)
+    cond = conditional_inputs(x[pick], theta[pick, 1], theta[pick, 2])
+    smp = post.sample_batched((n_samples,), x=torch.tensor(cond), show_progress_bars=False,
+                              reject_outside_prior=False).detach().numpy()[..., 0]
+    snapped = snap_sigma(smp, sigma_grid)
+    probs = np.stack([np.mean(snapped == v, axis=0) for v in sigma_grid], axis=1)
+    true = np.expm1(theta[pick, 0])
+    idx = np.array([np.argmin(abs(sigma_grid - t)) for t in true])
+    rows = np.arange(len(pick))
+    ranks = (np.sum(probs[:, None, :] * (np.arange(len(sigma_grid))[None, :, None] < idx[:, None, None]), axis=(1, 2))
+             + rng.random(len(pick)) * probs[rows, idx])
+    return {"sigma_p_true": float(probs[rows, idx].mean()), "chance": 1. / len(sigma_grid),
+            "sigma_map_correct": float(np.mean(probs.argmax(1) == idx))}, ranks
 
 
 def npe_summary(samples, sigma_grid, theta_train):
@@ -423,7 +619,9 @@ def setup_style():
 
 
 def plot_posterior(R, mu, sig, out):
-    fig, axes = plt.subplots(len(R), 4, figsize=(16, 4.2 * len(R)), constrained_layout=True, squeeze=False)
+    population = all(r["npe_samples"] is not None for r in R.values())
+    ncol = 4 if population else 2
+    fig, axes = plt.subplots(len(R), ncol, figsize=(4 * ncol, 4.2 * len(R)), constrained_layout=True, squeeze=False)
     for row, (d, r) in zip(axes, R.items()):
         gs, gm, gn = r["grids"]
         post = r["nle_post"]
@@ -435,27 +633,31 @@ def plot_posterior(R, mu, sig, out):
         res = r["results"]
         k = np.arange(len(grid_vals))
         nle_p = [res["nle"]["sigma_probabilities"][f"{v:g}"] for v in grid_vals]
-        npe_p = [res["npe"]["sigma_probabilities"][f"{v:g}"] for v in grid_vals]
+        npe_p = [res["npe_conditional"]["sigma_probabilities"][f"{v:g}"] for v in grid_vals]
         _, nle_prior = nle_cell_probs(gs, post.sum((1, 2)), grid_vals)
         ax.bar(k - 0.2, nle_p, width=0.38, color=NLE_COLOUR, label="NLE")
-        ax.bar(k + 0.2, npe_p, width=0.38, color=NPE_COLOUR, label="NPE")
+        ax.bar(k + 0.2, npe_p, width=0.38, color=NPE_COLOUR, label="NPE (conditional)")
         ax.plot(k - 0.2, nle_prior, "_", ms=22, mew=2, color=PRIOR_COLOUR, label="prior")
-        ax.plot(k + 0.2, [res["npe"]["prior_p_cdm"]] * len(k), "_", ms=22, mew=2, color=PRIOR_COLOUR)
+        ax.plot(k + 0.2, [res["npe_conditional"]["prior_p_cdm"]] * len(k), "_", ms=22, mew=2, color=PRIOR_COLOUR)
         ax.set_xticks(k)
         ax.set_xticklabels(["CDM"] + [f"{v:g}" for v in grid_vals[1:]])
         ax.set_xlabel(r"$\sigma/m$ [cm$^2$ g$^{-1}$] (nearest simulated)")
         ax.set_ylabel("Posterior probability")
-        ax.set_title(f"{d.upper()}: cross-section", color=INK)
+        ax.set_title(f"{d.upper()}: cross-section | A2744 mass, n_comp {res['a2744_ncomp_class'][0]}"
+                     + ("+" if len(res["a2744_ncomp_class"]) > 1 else ""), color=INK)
         ax.legend(loc="upper left", fontsize=8)
 
         ax = row[1]
         ax.plot(gm, post.sum((0, 2)) / trapezoid(post.sum((0, 2)), gm), color=NLE_COLOUR, lw=2, label="NLE")
-        ax.plot(gm, gaussian_kde(smp[:, 1])(gm), color=NPE_COLOUR, lw=2, ls="--", label="NPE")
-        ax.plot(gm, norm.pdf(gm, mu, sig), color=PRIOR_COLOUR, lw=1.5, ls=":", label="A2744 lensing mass")
+        if population:
+            ax.plot(gm, gaussian_kde(smp[:, 1])(gm), color=NPE_COLOUR, lw=2, ls="--", label="population NPE")
+        ax.plot(gm, norm.pdf(gm, mu, sig), color=PRIOR_COLOUR, lw=1.5, ls=":", label="A2744 lensing mass (prior)")
         ax.set_xlabel(r"$\log_{10} M(<750\,\mathrm{kpc})$ [M$_\odot$]")
         ax.set_ylabel("Posterior density")
         ax.set_title(f"{d.upper()}: mass", color=INK)
         ax.legend(loc="upper right", fontsize=8)
+        if not population:
+            continue
 
         ax = row[2]
         k = np.arange(1, NCOMP_MAX + 1)
@@ -485,7 +687,7 @@ def plot_posterior(R, mu, sig, out):
         ax.set_title(f"{d.upper()}: 68/95% regions", color=INK)
         ax.legend(handles=[plt.Line2D([], [], color=NLE_COLOUR, lw=2, label="NLE"),
                            plt.Line2D([], [], color=NPE_COLOUR, lw=2, ls="--", label="NPE")], loc="upper right")
-    fig.suptitle("A2744 posteriors", color=INK, fontsize=13)
+    fig.suptitle("A2744 posteriors, conditioned on its mass and merger state", color=INK, fontsize=13)
     save(fig, out / "posterior")
 
 
@@ -514,14 +716,15 @@ def plot_discrepancy(R, out):
         text = (f"A2744 vs CDM\n"
                 f"p = {e['p_value']:.2g}  ({z}$\\sigma$)\n"
                 f"BF$_{{\\rm SIDM:CDM}}$  NLE {res['nle']['bayes_factor_sidm_cdm']:.1f},"
-                f"  NPE {res['npe']['bayes_factor_sidm_cdm']:.1f}")
+                f"  NPE {res['npe_conditional']['bayes_factor_sidm_cdm']:.1f}")
         ax.text(0.02, 0.97, text, transform=ax.transAxes, va="top", fontsize=9, color=INK)
         ax.annotate("A2744", (x_obs, 0.5), xycoords=("data", "axes fraction"), xytext=(4, 0),
                     textcoords="offset points", fontsize=9, color=INK)
         handles, labels = ax.get_legend_handles_labels()
         ax.legend(handles[::-1], labels[::-1], title=r"$\sigma/m$", loc="upper right", fontsize=8, title_fontsize=8)
         ax.set_xlabel("logit ensemble P(SIDM)")
-        ax.set_ylabel("Density (merging, weighted to A2744 mass)")
+        cls = r["results"]["a2744_ncomp_class"]
+        ax.set_ylabel(f"Density (n_comp {cls[0]}{'+' if len(cls) > 1 else ''}, weighted to A2744 mass)")
         ax.set_title(d.upper(), color=INK)
     save(fig, out / "discrepancy")
 
@@ -545,11 +748,14 @@ def plot_validation(R, out):
         ax = axes[1, j]
         ranks = r["sbc_ranks"]
         u = np.linspace(0, 1, 101)
-        band = 1.96 * np.sqrt(u * (1 - u) / len(ranks))
+        band = 1.96 * np.sqrt(u * (1 - u) / len(r["cond_ranks"]))
         ax.fill_between(u, -band, band, color="k", alpha=0.08, lw=0)
-        for i in range(3):
-            ecdf = np.array([np.mean(ranks[:, i] <= t) for t in u])
-            ax.plot(u, ecdf - u, color=colours[i], lw=2, label=names[i])
+        if ranks is not None:
+            for i in range(3):
+                ecdf = np.array([np.mean(ranks[:, i] <= t) for t in u])
+                ax.plot(u, ecdf - u, color=colours[i], lw=1.5, alpha=0.6, label=f"{names[i]}, population NPE")
+        ecdf = np.array([np.mean(r["cond_ranks"] <= t) for t in u])
+        ax.plot(u, ecdf - u, color=colours[0], lw=2.5, label=r"$\sigma/m$, conditional NPE")
         ax.axhline(0, color=MUTED, lw=1)
         ax.set_xlabel("Rank of true value")
         ax.set_ylabel("ECDF - uniform")
@@ -575,7 +781,9 @@ def run_domain(d, opts, out, rng, mu, sig):
     print(f"  {n} clusters x {D['n_draws']} noise draws ({D['n_dropped']} without a valid mass dropped), "
           f"CDM := sigma/m < {sigma_cut:g}")
 
-    empirical, emp_summary = empirical_test(D, mu, sig)
+    ncomp_set = parse_ncomp(opts.a2744_ncomp)
+    n_weights = ncomp_weights(th, ncomp_set)
+    empirical, emp_summary = empirical_test(D, mu, sig, ncomp_set)
     print(f"  empirical: p(CDM >= A2744) = {emp_summary['p_value']:.3g} "
           f"({'>' if emp_summary['is_lower_limit'] else ''}{emp_summary['significance_sigma']:.2f} sigma, "
           f"N_eff = {emp_summary['n_eff']:.0f})")
@@ -590,32 +798,57 @@ def run_domain(d, opts, out, rng, mu, sig):
         nle = train_nle(th[~test], D["x_ens"][~test], prior)
         torch.save(nle, path)
     grids = nle_grids(D)
-    mass_prior = (mu, sig) if opts.mass_prior == "a2744" else None
-    post, log_like_sigma = nle_posterior(nle, D["x_obs_ens"][0], grids, mass_prior)
+    if opts.unconditioned:
+        post, log_like_sigma = nle_posterior(nle, D["x_obs_ens"][0], grids, None)
+    else:
+        post, log_like_sigma = nle_posterior(nle, D["x_obs_ens"][0], grids, (mu, sig), n_weights)
     nle_res = nle_summary(post, log_like_sigma, grids, D["sigma_grid"])
     print(f"  NLE: sigma/m = {nle_res['sigma_quantiles'][1]:.3f} [{nle_res['sigma_quantiles'][0]:.3f}, "
           f"{nle_res['sigma_quantiles'][2]:.3f}], BF(SIDM:CDM) = {nle_res['bayes_factor_sidm_cdm']:.2f}, "
           f"LR = {nle_res['likelihood_ratio_best_vs_cdm']:.2f}")
     recovery = nle_recovery(nle, th[check], D["x_ens"][check], grids[0], rng)
 
-    th_deq = dequantise(th, rng)
-    path = out / f"npe_{d}.pt"
+    samples = npe_res = sbc = test_metrics = None
+    if opts.population_npe:
+        path = out / f"npe_{d}.pt"
+        loaded = torch.load(path, weights_only=False) if path.exists() and not opts.retrain else None
+        if isinstance(loaded, FactorisedPosterior):
+            npe = loaded
+        else:                                    # also retrains estimators saved before n_comp was categorical
+            prior_sm = BoxUniform(prior.base_dist.low[:2], prior.base_dist.high[:2])
+            npe = train_npe(th[~test], D["x_npe"][~test], prior_sm, rng)
+            torch.save(npe, path)
+        samples = npe.sample((N_POST,), x=torch.tensor(D["x_obs_npe"][None]),
+                             show_progress_bars=False).numpy()
+        npe_res = npe_summary(samples, D["sigma_grid"], th[~test])
+        print(f"  NPE: sigma/m = {npe_res['sigma_quantiles'][1]:.3f} [{npe_res['sigma_quantiles'][0]:.3f}, "
+              f"{npe_res['sigma_quantiles'][2]:.3f}], BF(SIDM:CDM) = {npe_res['bayes_factor_sidm_cdm']:.2f}")
+    # conditional NPE for sigma/m given A2744's mass and n_comp (sigma-balanced training)
+    path = out / f"npe_conditional_{d}.pt"
+    train_idx = np.where(~test)[0][balance_sigma(th[~test], rng)]
     if path.exists() and not opts.retrain:
-        npe = torch.load(path, weights_only=False)
+        npe_c = torch.load(path, weights_only=False)
     else:
-        npe = train_npe(th_deq[~test], D["x_npe"][~test], prior)
-        torch.save(npe, path)
-    samples = npe.sample((N_POST,), x=torch.tensor(D["x_obs_npe"][None]),
-                         show_progress_bars=False).numpy()
-    npe_res = npe_summary(samples, D["sigma_grid"], th[~test])
-    print(f"  NPE: sigma/m = {npe_res['sigma_quantiles'][1]:.3f} [{npe_res['sigma_quantiles'][0]:.3f}, "
-          f"{npe_res['sigma_quantiles'][2]:.3f}], BF(SIDM:CDM) = {npe_res['bayes_factor_sidm_cdm']:.2f}")
-    sbc = npe_sbc(npe, th[check], D["x_npe"][check], D["sigma_grid"], rng)
-    test_metrics = npe_test_metrics(npe, th[check], D["x_npe"][check], D["sigma_grid"], rng)
-    print(f"  NPE on held-out single clusters: P(true sigma/m) = {test_metrics['sigma_p_true']:.2f} "
-          f"(chance {test_metrics['sigma_p_true_chance']:.2f}), most probable right "
-          f"{100 * test_metrics['sigma_map_correct']:.0f}%, mass std {test_metrics['mass_posterior_std']:.3f} "
-          f"(prior {test_metrics['mass_prior_std']:.3f}), P(true n_comp) = {test_metrics['ncomp_p_true']:.2f}")
+        prior_sigma = BoxUniform(prior.base_dist.low[:1], prior.base_dist.high[:1])
+        npe_c = train_conditional_npe(th[train_idx], D["x_npe"][train_idx], prior_sigma)
+        torch.save(npe_c, path)
+    cond_samples = conditional_sample_a2744(npe_c, D["x_obs_npe"], mu, sig, n_weights, rng)
+    cond_res = conditional_summary(cond_samples, D["sigma_grid"])
+    check_idx = np.where(check)[0][balance_sigma(th[check], rng)]
+    cond_checks, cond_ranks = conditional_checks(npe_c, th[check_idx], D["x_npe"][check_idx], D["sigma_grid"], rng)
+    cond_res["held_out_checks"] = cond_checks
+    print(f"  NPE conditional on A2744 (n_comp {opts.a2744_ncomp}): P(CDM) = {cond_res['posterior_p_cdm']:.3f}, "
+          f"{100 * cond_res['fraction_above_simulated_sigma']:.0f}% of samples above sigma/m = {D['sigma_grid'].max():g}, "
+          f"BF(SIDM:CDM) = {cond_res['bayes_factor_sidm_cdm']:.2f}; held-out P(true sigma) = "
+          f"{cond_checks['sigma_p_true']:.2f} (chance {cond_checks['chance']:.2f})")
+
+    if opts.population_npe:
+        sbc = npe_sbc(npe, th[check], D["x_npe"][check], D["sigma_grid"], rng)
+        test_metrics = npe_test_metrics(npe, th[check], D["x_npe"][check], D["sigma_grid"], rng)
+        print(f"  NPE on held-out single clusters: P(true sigma/m) = {test_metrics['sigma_p_true']:.2f} "
+              f"(chance {test_metrics['sigma_p_true_chance']:.2f}), most probable right "
+              f"{100 * test_metrics['sigma_map_correct']:.0f}%, mass std {test_metrics['mass_posterior_std']:.3f} "
+              f"(prior {test_metrics['mass_prior_std']:.3f}), P(true n_comp) = {test_metrics['ncomp_p_true']:.2f}")
 
     checks = {
         "obs_summary_percentile_mahalanobis": misspecification(D["x_npe"], D["x_obs_npe"]),
@@ -624,14 +857,17 @@ def run_domain(d, opts, out, rng, mu, sig):
     print(f"  A2744 within simulations: {100 * checks['obs_summary_percentile_mahalanobis']:.1f}% of simulated "
           f"summaries are further out; trained-on CDM clusters are {checks['cdm_training_bias_logit']:+.3f} in logit")
 
-    results = {"empirical": emp_summary, "nle": nle_res, "npe": npe_res, "checks": checks,
+    results = {"empirical": emp_summary, "nle": nle_res, "npe_conditional": cond_res,
+               "npe": npe_res, "checks": checks, "a2744_ncomp_class": ncomp_set,
+               "ncomp_weights": {str(k): v for k, v in n_weights.items()},
                "npe_test_metrics": test_metrics, "npe_input_dim": int(D["x_npe"].shape[1]),
                "latent_variance_explained": D["latent_variance_explained"],
                "cdm_definition_sigma_below": float(sigma_cut), "n_clusters": n,
                "empirical_p_by_sigma": {s: v["p_ge_obs"] for s, v in empirical.items()}}
     return results, {"grids": grids, "nle_post": post, "sigma_grid": D["sigma_grid"], "npe_samples": samples, "sigma_cut": sigma_cut,
                      "empirical": empirical, "x_obs": float(D["x_obs_ens"][0]), "recovery": recovery,
-                     "sbc_ranks": sbc, "results": results}
+                     "sbc_ranks": sbc, "cond_ranks": cond_ranks, "cond_samples": cond_samples,
+                     "results": results}
 
 
 def main():
@@ -643,7 +879,9 @@ def main():
     summaries = Path(opts.summaries).resolve()
     opts.summaries = str(summaries)
     name = (summaries.name + (f"_pc{opts.latent_pcs}" if opts.latent_pcs > 0 else "")
-            + ("_alldraws" if opts.noise == "all" else ""))
+            + ("_alldraws" if opts.noise == "all" else "")
+            + (f"_nc{opts.a2744_ncomp.replace('+', 'plus')}" if opts.a2744_ncomp != "3+" else "")
+            + ("_unconditioned" if opts.unconditioned else ""))
     out = Path(opts.out_dir) if opts.out_dir else REPO / "sbi" / "results" / name
     out.mkdir(parents=True, exist_ok=True)
     mu, sig = a2744_mass_gaussian()
@@ -654,15 +892,17 @@ def main():
 
     info = json.load(open(summaries / "info.json"))
     results["settings"] = {"summaries": summaries.name, "model": info["options"]["model"],
-                           "n_models": len(info["seeds"]), "mass_prior_nle": opts.mass_prior,
+                           "n_models": len(info["seeds"]), "nle_conditioned_on_a2744": not opts.unconditioned,
+                           "a2744_ncomp": opts.a2744_ncomp,
                            "latent_pcs": opts.latent_pcs,
                            "noise": opts.noise,
                            "a2744_log_mass": [mu, sig], "ncomp_max": NCOMP_MAX, "seed": opts.seed}
     json.dump(results, open(out / "results.json", "w"), indent=2)
     np.savez(out / "posteriors.npz", **{f"{d}_{k}": v for d, r in R.items()
                                          for k, v in [("nle_post", r["nle_post"]), ("npe_samples", r["npe_samples"]),
+                                                      ("npe_conditional_sigma", np.expm1(r["cond_samples"])),
                                                       ("sigma_grid", np.expm1(r["grids"][0])),
-                                                      ("mass_grid", r["grids"][1])]})
+                                                      ("mass_grid", r["grids"][1])] if v is not None})
     plot_posterior(R, mu, sig, out)
     plot_discrepancy(R, out)
     plot_validation(R, out)

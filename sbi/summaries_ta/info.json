@@ -1,5 +1,5 @@
 {
-  "created": "2026-10-24T10:56:27",
+  "created": "2026-10-26T11:40:40",
   "models": [
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_ft_tweakedalign_ta_best.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_2_nob1_ft_tweakedalign_ta_best.pth",
@@ -73,25 +73,26 @@
     "noise_seed": 1234,
     "batch_size": 256,
     "out_dir": "sbi/summaries_ta",
-    "legacy_dir": "sbi/summaries_ta/legacy"
+    "legacy_dir": null,
+    "no_latents": false
   },
   "obs_file": "../data/100/a2744/obs_data_concat.pkl",
   "softmax": "P(SIDM) = softmax(classification)[:, 1]",
   "mass": "log10 sum(Sigma - background) * (20 kpc)^2, from data/100/convergence",
   "inputs": {
-    "../data/100/obs/concat/bahamas_0.1.pkl": "2026-10-23T17:26:37",
-    "../data/100/obs/concat/bahamas_0.3.pkl": "2026-10-23T17:26:16",
-    "../data/100/obs/concat/bahamas_1.pkl": "2026-10-23T17:27:54",
-    "../data/100/obs/concat/bahamas_cdm.pkl": "2026-10-23T17:27:35",
-    "../data/100/obs/concat/darkskies_0.01.pkl": "2026-10-23T17:26:45",
-    "../data/100/obs/concat/darkskies_0.05.pkl": "2026-10-23T17:26:59",
-    "../data/100/obs/concat/darkskies_0.1.pkl": "2026-10-23T17:27:14",
-    "../data/100/obs/concat/darkskies_0.2.pkl": "2026-10-23T17:27:07",
-    "../data/100/obs/concat/darkskies_cdm.pkl": "2026-10-23T17:26:52",
-    "../data/100/obs/concat/flamingo.pkl": "2026-10-21T09:21:43",
-    "../data/100/obs/concat/flamingo_hi.pkl": "2026-10-21T09:21:43",
-    "../data/100/obs/concat/flamingo_lo.pkl": "2026-10-21T09:21:43",
-    "../data/100/obs/concat/tng.pkl": "2026-10-21T09:21:44",
-    "../data/100/a2744/obs_data_concat.pkl": "2026-10-19T09:37:52"
+    "../data/100/obs/concat/bahamas_0.1.pkl": "2026-10-23T18:26:37",
+    "../data/100/obs/concat/bahamas_0.3.pkl": "2026-10-23T18:26:16",
+    "../data/100/obs/concat/bahamas_1.pkl": "2026-10-23T18:27:54",
+    "../data/100/obs/concat/bahamas_cdm.pkl": "2026-10-23T18:27:35",
+    "../data/100/obs/concat/darkskies_0.01.pkl": "2026-10-23T18:26:45",
+    "../data/100/obs/concat/darkskies_0.05.pkl": "2026-10-23T18:26:59",
+    "../data/100/obs/concat/darkskies_0.1.pkl": "2026-10-23T18:27:14",
+    "../data/100/obs/concat/darkskies_0.2.pkl": "2026-10-23T18:27:07",
+    "../data/100/obs/concat/darkskies_cdm.pkl": "2026-10-23T18:26:52",
+    "../data/100/obs/concat/flamingo.pkl": "2026-10-21T10:21:43",
+    "../data/100/obs/concat/flamingo_hi.pkl": "2026-10-21T10:21:43",
+    "../data/100/obs/concat/flamingo_lo.pkl": "2026-10-21T10:21:43",
+    "../data/100/obs/concat/tng.pkl": "2026-10-21T10:21:44",
+    "../data/100/a2744/obs_data_concat.pkl": "2026-10-19T10:37:52"
   }
 }
