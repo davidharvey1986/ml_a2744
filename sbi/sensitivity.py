@@ -303,35 +303,63 @@ def binned_fraction(kappa, delta, bins):
         return frac, np.sqrt(frac * (1 - frac) / n), mean, std / np.sqrt(n), n
 
 
-def plot_vs_kappa(obs, sims, path, bins):
+SNR_BINS = np.array([-3, -2, -1, 0, 1, 2, 3, 4, 6, 10])
+P_MATCH = 0.1          # simulated maps whose unoccluded P(SIDM) is within this of A2744's
+
+
+def pooled(maps, relative):
+    '''Concatenate window kappa S/N and Delta over maps; relative subtracts each map's median Delta.'''
+    k = np.concatenate([m["snr"] for m in maps]) if maps else np.array([])
+    d = np.concatenate([m["delta"] - (np.median(m["delta"][m["delta"] != 0]) if relative else 0) for m in maps]) \
+        if maps else np.array([])
+    return k, d
+
+
+def plot_vs_kappa(obs, sims, path, bins=SNR_BINS):
+    '''
+    Rows: absolute Delta, and Delta relative to each map's median (removes the overall
+    shift that a map's own output level gives). Columns: fraction of windows pushing
+    towards SIDM, mean Delta. Simulations per sigma/m, and all simulated maps whose
+    unoccluded output is within P_MATCH of A2744's (black dashed).
+    '''
     plt = style()
     xc = 0.5 * (bins[1:] + bins[:-1])
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), constrained_layout=True)
-    for d in DOMAINS:
-        if d not in sims:
-            continue
-        sig_vals = sorted(sims[d])
-        shades = np.linspace(0.35, 0.95, len(sig_vals))
-        cmap = plt.cm.Blues if d == "bahamas" else plt.cm.Oranges
-        for s, sh in zip(sig_vals, shades):
-            frac, ferr, mean, merr, n = binned_fraction(*sims[d][s], bins)
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 8), constrained_layout=True, sharex=True)
+    matched = [m for d in sims for m in sims[d] if abs(m["p_full"] - obs["p_full"]) < P_MATCH]
+    for row, relative in enumerate([False, True]):
+        for d in DOMAINS:
+            cmap = plt.cm.Blues if d == "bahamas" else plt.cm.Oranges
+            sig_vals = sorted({m["sigma"] for m in sims.get(d, [])})
+            for s, sh in zip(sig_vals, np.linspace(0.35, 0.95, len(sig_vals))):
+                k, dl = pooled([m for m in sims[d] if m["sigma"] == s], relative)
+                frac, ferr, mean, merr, n = binned_fraction(k, dl, bins)
+                ok = n >= 20
+                lab = f"{d.upper()} " + ("CDM" if s == 0 else f"{s:g}")
+                axes[row, 0].errorbar(xc[ok], frac[ok], ferr[ok], fmt="o-", ms=3, lw=1.2, capsize=2,
+                                      color=cmap(sh), label=lab if row == 0 else None)
+                axes[row, 1].errorbar(xc[ok], mean[ok], merr[ok], fmt="o-", ms=3, lw=1.2, capsize=2, color=cmap(sh))
+        if matched:
+            k, dl = pooled(matched, relative)
+            frac, ferr, mean, merr, n = binned_fraction(k, dl, bins)
             ok = n >= 20
-            lab = f"{d.upper()} " + ("CDM" if s == 0 else f"{s:g}")
-            axes[0].errorbar(xc[ok], frac[ok], ferr[ok], fmt="o-", ms=4, lw=1.5, capsize=2, color=cmap(sh), label=lab)
-            axes[1].errorbar(xc[ok], mean[ok], merr[ok], fmt="o-", ms=4, lw=1.5, capsize=2, color=cmap(sh))
-    frac, ferr, mean, merr, n = binned_fraction(*obs, bins)
-    ok = n >= 5
-    axes[0].errorbar(xc[ok], frac[ok], ferr[ok], fmt="s", ms=7, color="k", capsize=2, label="A2744", zorder=5)
-    for ax in axes:
-        ax.set_xscale("linear")
-    axes[1].errorbar(xc[ok], mean[ok], merr[ok], fmt="s", ms=7, color="k", capsize=2, zorder=5)
-    axes[0].axhline(0.5, color=MUTED, lw=1)
-    axes[1].axhline(0, color=MUTED, lw=1)
-    axes[0].set_ylabel("Fraction of windows pushing towards SIDM")
-    axes[1].set_ylabel(r"Mean $\Delta P$(SIDM) when removed")
-    for ax in axes:
-        ax.set_xlabel(r"Reconstructed $\kappa$ (window mean)")
-    axes[0].legend(fontsize=7, ncols=2, loc="best")
+            lab = f"sims with P within {P_MATCH} of A2744 ({len(matched)} maps)"
+            axes[row, 0].errorbar(xc[ok], frac[ok], ferr[ok], fmt="--", lw=2, color="k", capsize=2,
+                                  label=lab if row == 0 else None)
+            axes[row, 1].errorbar(xc[ok], mean[ok], merr[ok], fmt="--", lw=2, color="k", capsize=2)
+        k, dl = pooled([obs], relative)
+        frac, ferr, mean, merr, n = binned_fraction(k, dl, bins)
+        ok = n >= 5
+        axes[row, 0].errorbar(xc[ok], frac[ok], ferr[ok], fmt="s", ms=7, color="k", capsize=2,
+                              label="A2744" if row == 0 else None, zorder=5)
+        axes[row, 1].errorbar(xc[ok], mean[ok], merr[ok], fmt="s", ms=7, color="k", capsize=2, zorder=5)
+        axes[row, 0].axhline(0.5, color=MUTED, lw=1)
+        axes[row, 1].axhline(0, color=MUTED, lw=1)
+        what = "relative to the map's median" if relative else "absolute"
+        axes[row, 0].set_ylabel(f"Fraction of windows pushing to SIDM\n({what})")
+        axes[row, 1].set_ylabel(f"Mean $\\Delta P$(SIDM) ({what})")
+    for ax in axes[1]:
+        ax.set_xlabel(r"Reconstructed $\kappa$ S/N (window mean)")
+    axes[0, 0].legend(fontsize=7, ncols=2, loc="upper left")
     fig.suptitle("Where the CNNs find SIDM signal: A2744 vs matched simulations (same pipeline)",
                  color=INK, fontsize=11)
     for ext in ("pdf", "png"):
@@ -382,9 +410,10 @@ def main():
     img, fill = normalise(raw)
     delta, full = occlusion_map(models, img, fill, opts.window, opts.stride, device, opts.batch_size)
     obs_kappa, obs_snr = reconstruct_kappa(raw_np)
-    obs = (window_mean(obs_kappa, opts.window, opts.stride).ravel(), delta.mean(0).ravel())
-    used = obs[1] != 0
-    print(f"A2744: P(SIDM) = {full.mean():.3f}; windows pushing to SIDM: {np.mean(obs[1][used] > 0):.2f} "
+    obs = {"snr": window_mean(obs_snr, opts.window, opts.stride).ravel(), "delta": delta.mean(0).ravel(),
+           "p_full": float(full.mean())}
+    used = obs["delta"] != 0
+    print(f"A2744: P(SIDM) = {full.mean():.3f}; windows pushing to SIDM: {np.mean(obs['delta'][used] > 0):.2f} "
           f"of {used.sum()} with galaxies")
     panel = {"title": f"A2744  (P = {full.mean():.2f})", "delta": delta.mean(0), "kappa_snr": obs_snr}
     saved = {"a2744_delta": delta, "a2744_kappa": obs_kappa, "centres": centres}
@@ -408,16 +437,15 @@ def main():
     for d in DOMAINS:
         sel = pick_clusters(opts.summaries, d, mu, sig, opts.clusters_per_sigma, rng)
         raws, kappas_true = simulated_maps(sel, args, opts.seed)
-        sims[d] = {}
+        sims[d] = []
         deltas = []
         for i in tqdm(range(len(raws)), desc=f"{d} clusters"):
             img, fill = normalise(raws[i])
             dl, p_full = occlusion_map(models, img, fill, opts.window, opts.stride, device, opts.batch_size)
             k_rec, k_snr = reconstruct_kappa(raws[i].numpy())
             s = float(sel["cross_section"][i])
-            kw, dw = window_mean(k_rec, opts.window, opts.stride).ravel(), dl.mean(0).ravel()
-            prev = sims[d].get(s, (np.array([]), np.array([])))
-            sims[d][s] = (np.r_[prev[0], kw], np.r_[prev[1], dw])
+            sims[d].append({"sigma": s, "p_full": float(p_full.mean()), "delta": dl.mean(0).ravel(),
+                            "snr": window_mean(k_snr, opts.window, opts.stride).ravel()})
             deltas.append(dl.mean(0))
             # example panels: the first matched CDM and largest-sigma cluster of bahamas
             if d == "bahamas" and (s == 0 or s == sel["cross_section"].max()) and \
@@ -426,18 +454,23 @@ def main():
                                + f"  (P = {p_full.mean():.2f})", "delta": dl.mean(0), "kappa_snr": k_snr,
                                "kappa_true": kappas_true[i], "sigma": s})
         saved[f"{d}_delta"] = np.array(deltas)
+        saved[f"{d}_p_full"] = np.array([m["p_full"] for m in sims[d]])
+        saved[f"{d}_snr_windows"] = np.array([m["snr"] for m in sims[d]])
         saved[f"{d}_sigma"] = sel["cross_section"]
         saved[f"{d}_log10_mass_750"] = sel["log10_mass_750"]
         print(f"{d}: {len(raws)} matched clusters; fraction of windows pushing to SIDM by sigma/m: "
-              + ", ".join(f"{s:g}: {np.mean(v[1][v[1] != 0] > 0):.2f}" for s, v in sorted(sims[d].items())))
+              + ", ".join(f"{s:g}: {np.mean(np.concatenate([m['delta'] for m in sims[d] if m['sigma'] == s]) > 0):.2f}"
+                          for s in sorted({m['sigma'] for m in sims[d]})))
 
-    np.savez(out / "sensitivity.npz", **saved)
     json.dump({"model": opts.model, "n_models": len(models), "window": opts.window, "stride": opts.stride,
                "clusters_per_sigma": opts.clusters_per_sigma, "a2744_p_sidm": float(full.mean()), **stats},
               open(out / "sensitivity.json", "w"), indent=2)
     plot_maps(panels, centres, opts.stride, out / "sensitivity_maps")
-    allk = np.concatenate([obs[0][obs[1] != 0]] + [v[0][v[1] != 0] for d in sims for v in sims[d].values()])
-    plot_vs_kappa(obs, sims, out / "sensitivity_vs_kappa", bins=np.quantile(allk[np.isfinite(allk)], np.linspace(0, 1, 11)))
+    saved["a2744_snr_windows"] = obs["snr"]
+    np.savez(out / "sensitivity.npz", **saved)
+    n_match = sum(abs(m["p_full"] - obs["p_full"]) < P_MATCH for d in sims for m in sims[d])
+    print(f"simulated maps with P(SIDM) within {P_MATCH} of A2744: {n_match}")
+    plot_vs_kappa(obs, sims, out / "sensitivity_vs_kappa")
     print(f"wrote {out}")
 
 
