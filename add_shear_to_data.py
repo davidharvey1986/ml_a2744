@@ -34,6 +34,10 @@ from model import create_model
 # Directory holding the extracted halo components (*.comps), relative to the repo root
 COMPONENTS_DIR = "notebooks/pickles"
 
+# Galaxies where the convergence (at zs=1.72) is at least this are dropped when the
+# simulated shear is sampled at the A2744 galaxy positions
+KAPPA_THRESH = 0.9
+
 # Shear-catalogue cuts used for the A2744 data map (prepare_uncovers_data)
 SHEAR_CUTS = {'f115w': {'signal_noise_cut': 0, 'stat_type': 'snr'},
               'f150w': {'signal_noise_cut': 5, 'stat_type': 'snr'}}
@@ -68,7 +72,7 @@ def crop_center(img, cropx, cropy):
 def main(
     search_path="data/100/convergence/*.pkl",
     filter_list=['concat'],
-    thresh_k=0.6,
+    thresh_k=KAPPA_THRESH,
     sample_data=True,
     data_dir="data/100/a2744",
     reduce_shear=True,
@@ -790,13 +794,13 @@ def return_error_in_mean(all_thresholds, model_correlation=0.283):
 if __name__ == "__main__":
 
     main(
-        search_path="data/100/convergence/flamingo*.pkl",
+        search_path="data/100/convergence/*.pkl",
         sample_data=False,
         add_ncomps=True
     )
 
     main(
-        search_path="data/100/convergence/flamingo*.pkl",
+        search_path="data/100/convergence/*.pkl",
         sample_data=True,
         data_dir='data/100/a2744'
     )

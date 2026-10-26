@@ -62,7 +62,7 @@ sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
 
 import make_summaries as ms  # noqa: E402  (chdirs to notebooks/, loads the default args)
 from add_shear_to_data import (  # noqa: E402
-    data_to_shear, get_background_sigma, get_boxsize, get_obs_data, get_surface_density_norms,
+    KAPPA_THRESH, data_to_shear, get_background_sigma, get_boxsize, get_obs_data, get_surface_density_norms,
     ra_dec_to_simulation_image_pos, sample_maps_on_galaxies,
 )
 from dataset import (  # noqa: E402
@@ -203,7 +203,7 @@ class SimMaps:
         return out
 
     def sample(self, ra, dec):
-        maps, _ = sample_maps_on_galaxies(self.e1, self.e2, self.k, ra, dec, thresh_k=0.6, reduce_shear=True, npix=NPIX)
+        maps, _ = sample_maps_on_galaxies(self.e1, self.e2, self.k, ra, dec, thresh_k=KAPPA_THRESH, reduce_shear=True, npix=NPIX)
         return maps.astype(np.float32)
 
 

@@ -199,7 +199,7 @@ def plot(M, out, suffix="", label="merging, weighted to A2744 mass"):
 def plot_response(M, out, suffix="", label="merging, weighted to A2744 mass", cdm_x=3e-3):
     '''Mass-matched ensemble P(SIDM) against sigma/m, one panel per model group.'''
     groups = list(M)
-    ncol = 3
+    ncol = min(3, len(groups))
     nrow = int(np.ceil(len(groups) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(4.6 * ncol, 3.6 * nrow), sharex=True, sharey=True,
                              constrained_layout=True, squeeze=False)
@@ -238,6 +238,8 @@ def plot_response(M, out, suffix="", label="merging, weighted to A2744 mass", cd
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--match-ncomp", action="store_true", help="also match the n_comp mix between simulations")
+    ap.add_argument("--groups", nargs="+", default=list(GROUPS), choices=list(GROUPS),
+                    help="model groups to include, e.g. --groups 'ba best' 'ba final'")
     opts = ap.parse_args()
     mu, sig = a2744_mass_gaussian()
     target, suffix, label = None, "", "merging, weighted to A2744 mass"
@@ -248,6 +250,8 @@ def main():
         suffix, label = "_ncomp", "merging, weighted to A2744 mass and a common n_comp mix"
     M = {}
     for g, name in GROUPS.items():
+        if g not in opts.groups:
+            continue
         S = REPO / "sbi" / name
         if not (S / "softmax_bahamas.npy").exists():
             print(f"skipping {g}: no summaries in {S}")
