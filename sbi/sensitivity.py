@@ -97,6 +97,10 @@ def parse():
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--excess-map", default=str(EXCESS_MAP), help="Lenstool excess_kappa.fits ('' to skip)")
     p.add_argument("--replot", action="store_true", help="only redraw the correlation figure from sensitivity.npz")
+    p.add_argument("--kappa-plot", action="store_true",
+                   help="BAHAMAS-only mean Delta P against reconstructed kappa, with A2744 errors from "
+                        "--rotations shear-rotated maps (uses sensitivity.npz; same --seed / --clusters-per-sigma)")
+    p.add_argument("--rotations", type=int, default=100)
     p.add_argument("--out-dir", default=None)
     return p.parse_args()
 
@@ -494,10 +498,109 @@ def plot_vs_excess(excess_w, delta_w, valid, rho, p, null, path):
 
 
 # ── main ───────────────────────────────────────────────────────────────────────
+def rotated_a2744_deltas(models, cat, ra, dec, n_rot, window, stride, device, batch_size, cache, seed=1):
+    '''
+    Occlusion maps of A2744 with every galaxy's distortion rotated by a random angle (amplitude kept):
+    shape noise only, same galaxies. Mean over models, (n_rot, n, n); cached.
+    '''
+    if cache.exists():
+        z = np.load(cache)
+        if len(z["deltas"]) >= n_rot:
+            return z["deltas"][:n_rot]
+    c1, c2 = galaxy_distortion(cat)
+    amp = np.hypot(c1, c2)
+    rng = np.random.default_rng(seed)
+    out = []
+    for _ in tqdm(range(n_rot), desc="rotated A2744 maps"):
+        ang = rng.uniform(0, np.pi, len(amp))
+        raw = np.array(bin2d(ra, dec, v=(amp * np.cos(2 * ang), amp * np.sin(2 * ang)), npix=NPIX,
+                             extent=[-50, 50, -50, 50]), dtype=np.float32)
+        img, fill = normalise(torch.tensor(raw))
+        out.append(occlusion_map(models, img, fill, window, stride, device, batch_size)[0].mean(0))
+    out = np.array(out)
+    np.savez(cache, deltas=out)
+    return out
+
+
+def bin_means(kw, delta, bins):
+    '''Mean Delta P in kappa bins over windows with galaxies.'''
+    keep = (delta != 0) & np.isfinite(kw)
+    return binned_statistic(kw[keep], delta[keep], statistic="mean", bins=bins)[0]
+
+
+def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10):
+    '''
+    Mean Delta P(SIDM) against reconstructed kappa: BAHAMAS per sigma/m (error: scatter between
+    clusters / sqrt(N)) and output-matched BAHAMAS maps; A2744 with errors from the scatter over
+    shear-rotated (noise-only) versions of the map, binned with A2744's own kappa windows.
+    '''
+    plt = style()
+    kw, dl = a2744["kappa"].ravel(), a2744["delta"].ravel()
+    bins = np.quantile(kw[np.isfinite(kw)], np.linspace(0, 1, n_bins + 1))
+    xc = 0.5 * (bins[1:] + bins[:-1])
+    fig, ax = plt.subplots(figsize=(7.5, 5), constrained_layout=True)
+    sig_vals = sorted({m["sigma"] for m in sims})
+    for s, sh in zip(sig_vals, np.linspace(0.35, 0.95, len(sig_vals))):
+        per = np.array([bin_means(m["kappa"], m["delta"], bins) for m in sims if m["sigma"] == s])
+        n = np.sum(np.isfinite(per), 0)
+        ax.errorbar(xc, np.nanmean(per, 0), np.nanstd(per, 0) / np.sqrt(np.maximum(n, 1)), fmt="o-", ms=4,
+                    lw=1.5, capsize=2, color=plt.cm.Blues(sh), label="BAHAMAS " + ("CDM" if s == 0 else f"$\\sigma/m={s:g}$"))
+    matched = np.array([bin_means(m["kappa"], m["delta"], bins) for m in sims
+                        if abs(m["p_full"] - a2744["p_full"]) < P_MATCH])
+    if len(matched):
+        n = np.sum(np.isfinite(matched), 0)
+        ax.errorbar(xc, np.nanmean(matched, 0), np.nanstd(matched, 0) / np.sqrt(np.maximum(n, 1)), fmt="--",
+                    lw=2, color="k", capsize=2, label=f"BAHAMAS with P within {P_MATCH} of A2744 ({len(matched)})")
+    rot = np.array([bin_means(kw, r.ravel(), bins) for r in rot_deltas])
+    ax.fill_between(xc, np.nanmean(rot, 0) - np.nanstd(rot, 0), np.nanmean(rot, 0) + np.nanstd(rot, 0),
+                    color="k", alpha=0.1, lw=0, label=f"A2744 shear-rotated maps, mean $\\pm1\\sigma$ ({len(rot)})")
+    ax.errorbar(xc, bin_means(kw, dl, bins), np.nanstd(rot, 0), fmt="s", ms=8, color="k", capsize=3,
+                zorder=5, label="A2744 (errors: rotated-map scatter)")
+    ax.axhline(0, color=MUTED, lw=1)
+    ax.set_xlabel(r"Reconstructed convergence $\kappa$ (window mean)")
+    ax.set_ylabel(r"Mean $\Delta P$(SIDM) when the window is removed")
+    ax.set_title("Where the CNNs find SIDM signal: A2744 vs BAHAMAS", color=INK)
+    ax.legend(fontsize=7, loc="lower left")
+    for ext in ("pdf", "png"):
+        fig.savefig(path.with_suffix(f".{ext}"), dpi=180)
+
+
+def kappa_plot(opts, out):
+    '''BAHAMAS-only Delta P vs kappa from sensitivity.npz, with rotated-shear errors for A2744.'''
+    z = np.load(out / "sensitivity.npz")
+    device = ms.get_device()
+    args = ms.setup_args("concat")
+    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
+                                            nmodels=opts.nmodels), args, device)
+    raw_np, cat, ra, dec = a2744_map()
+    a2744 = {"kappa": window_mean(reconstruct_kappa(raw_np)[0], opts.window, opts.stride),
+             "delta": z["a2744_delta"].mean(0), "p_full": json.load(open(out / "sensitivity.json"))["a2744_p_sidm"]}
+    rot = rotated_a2744_deltas(models, cat, ra, dec, opts.rotations, opts.window, opts.stride, device,
+                               opts.batch_size, out / "rotated_a2744.npz")
+    # regenerate the BAHAMAS maps of the main run (same seed, same draw order) to get their kappa
+    mu, sig = a2744_mass_gaussian()
+    sel = pick_clusters(opts.summaries, "bahamas", mu, sig, opts.clusters_per_sigma, np.random.default_rng(opts.seed))
+    assert np.array_equal(sel["cross_section"], z["bahamas_sigma"]), "cluster draw differs from the saved run"
+    raws, _ = simulated_maps(sel, args, opts.seed)
+    sims = []
+    for i, r in enumerate(tqdm(raws, desc="BAHAMAS kappa")):
+        k, snr = reconstruct_kappa(r.numpy())
+        if i == 0:
+            assert np.allclose(window_mean(snr, opts.window, opts.stride).ravel(), z["bahamas_snr_windows"][0], atol=1e-4), \
+                "regenerated maps differ from the saved run"
+        sims.append({"sigma": float(sel["cross_section"][i]), "p_full": float(z["bahamas_p_full"][i]),
+                     "kappa": window_mean(k, opts.window, opts.stride).ravel(), "delta": z["bahamas_delta"][i].ravel()})
+    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_kappa_bahamas")
+    print(f"wrote {out / 'delta_vs_kappa_bahamas'}.pdf/.png")
+
+
 def main():
     opts = parse()
     out = LAUNCH_DIR / (opts.out_dir or REPO / "sbi" / "results" / f"sensitivity_{opts.model}")
     out.mkdir(parents=True, exist_ok=True)
+    if opts.kappa_plot:
+        kappa_plot(opts, out)
+        return
     if opts.replot:
         stats = plot_correlations(out / "sensitivity.npz", opts.window, opts.stride, out / "sensitivity_correlations")
         print(json.dumps(stats, indent=1))
