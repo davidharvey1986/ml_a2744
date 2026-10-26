@@ -101,6 +101,8 @@ def parse():
                    help="BAHAMAS-only mean Delta P against reconstructed kappa, with A2744 errors from "
                         "--rotations shear-rotated maps (uses sensitivity.npz; same --seed / --clusters-per-sigma)")
     p.add_argument("--rotations", type=int, default=100, help="maps for the A2744 error estimate")
+    p.add_argument("--bin-factor", type=int, default=2,
+                   help="--kappa-plot: multiply the number of bins (10 kappa quantile bins, 9 S/N bins) by this")
     p.add_argument("--errors", choices=["bootstrap", "rotation"], default="bootstrap",
                    help="A2744 errors: resample its galaxies with replacement (keeps the signal) or rotate "
                         "every shear (noise only; underestimates the errors, the networks see an empty field)")
@@ -622,8 +624,11 @@ def kappa_plot(opts, out):
         sims.append({"sigma": float(sel["cross_section"][i]), "p_full": float(z["bahamas_p_full"][i]),
                      "kappa": window_mean(k, opts.window, opts.stride).ravel(), "delta": z["bahamas_delta"][i].ravel(),
                      "snr": z["bahamas_snr_windows"][i]})
-    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_kappa_bahamas", errors=opts.errors)
-    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_snr_bahamas", x="snr", bins=SNR_BINS, errors=opts.errors)
+    f = opts.bin_factor
+    snr_bins = np.interp(np.linspace(0, len(SNR_BINS) - 1, f * (len(SNR_BINS) - 1) + 1),
+                         np.arange(len(SNR_BINS)), SNR_BINS)          # split each S/N bin into f
+    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_kappa_bahamas", n_bins=10 * f, errors=opts.errors)
+    plot_delta_vs_kappa(a2744, rot, sims, out / "delta_vs_snr_bahamas", x="snr", bins=snr_bins, errors=opts.errors)
     print(f"wrote {out}/delta_vs_kappa_bahamas and delta_vs_snr_bahamas (.pdf/.png)")
 
 
