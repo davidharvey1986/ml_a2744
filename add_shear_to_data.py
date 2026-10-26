@@ -123,7 +123,8 @@ def main(
     ### This is for the final masked models
     for ifilter in filter_list:
 
-        obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True)
+        # same catalogue as the A2744 map and the shape-noise model
+        obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True, cuts=SHEAR_CUTS)
 
         delta_ra, delta_dec = ra_dec_to_simulation_image_pos(
             obs_data, zl=zl, image_size=image_size
@@ -561,14 +562,48 @@ def combine_catalogues(cat_a_name, cat_b_name, identifier='NUMBER'):
     return fits.BinTableHDU.from_columns(new_cols).data
 
 
+def galaxy_distortion(obs_data):
+    '''Per-galaxy distortion chi = 2 gamma / (1 + |gamma|^2) from the shear estimates (as the simulations).'''
+    g = np.sqrt(obs_data['gamma1']**2 + obs_data['gamma2']**2)
+    return 2.*obs_data['gamma1'] / (1.+g**2), 2.*obs_data['gamma2'] / (1.+g**2)
+
+
+def normalise_map(e1, e2):
+    '''As BalancedClusterDataset: subtract the minimum of both channels, divide by their maximum.'''
+    max_val, min_val = np.max([e1, e2]), np.min([e1, e2])
+    return (e1 - min_val) / max_val, (e2 - min_val) / max_val
+
+
+def make_obs_maps(ifilter='concat', data_dir='data/100/a2744', cuts=None, nmonte=2, seed=0, out=None):
+    '''
+    Build <data_dir>/obs_data_<ifilter>.pkl, the CNN input for A2744: map 0 is the data
+    (bin_obs_data), maps 1..nmonte are noise-only versions in which every galaxy keeps its
+    distortion amplitude |chi| but gets a random orientation, so they carry exactly the
+    shape noise of the data map and no shear signal. Saved as [{}, (1 + nmonte, 2, 100, 100)].
+    '''
+    obs_data = get_obs_data(ifilter, data_dir=data_dir, cuts=SHEAR_CUTS if cuts is None else cuts)
+    binned = bin_obs_data(obs_data)
+    c1, c2 = galaxy_distortion(obs_data)
+    amplitude = np.hypot(c1, c2)
+    rng = np.random.default_rng(seed)
+    extent = [-50, 50, -50, 50]
+    maps = [np.array([binned['e1'], binned['e2']])]
+    for _ in range(nmonte):
+        angle = rng.uniform(0, np.pi, amplitude.shape[0])
+        e1, e2 = bin2d(binned['delta_ra'], binned['delta_dec'],
+                       v=(amplitude*np.cos(2*angle), amplitude*np.sin(2*angle)), npix=100, extent=extent)
+        maps.append(np.array(normalise_map(e1, e2)))
+    stacked = np.array(maps)
+    out = out or f"{data_dir}/obs_data_{ifilter}.pkl"
+    save_pickle([{}, stacked], out)
+    return stacked
+
+
 def bin_obs_data(in_obs_data, image_size=100, npix=100):
 
     obs_data = in_obs_data.copy()
 
-    g = np.sqrt(obs_data['gamma1']**2 + obs_data['gamma2']**2)
-
-    obs_data['gamma1'] = 2.*obs_data['gamma1'] / (1.+g**2)
-    obs_data['gamma2'] = 2.*obs_data['gamma2'] / (1.+g**2)
+    obs_data['gamma1'], obs_data['gamma2'] = galaxy_distortion(in_obs_data)
 
     delta_ra, delta_dec = ra_dec_to_simulation_image_pos(obs_data)
 
@@ -598,14 +633,7 @@ def bin_obs_data(in_obs_data, image_size=100, npix=100):
 
     ngal = bin2d(delta_ra, delta_dec, v=None, npix=npix, extent=extent)
 
-    max_val = np.max([e1_radec, e2_radec])
-    min_val = np.min([e1_radec, e2_radec])
-
-    e1_radec -= min_val
-    e1_radec /= max_val
-
-    e2_radec -= min_val
-    e2_radec /= max_val
+    e1_radec, e2_radec = normalise_map(e1_radec, e2_radec)
 
     return {'e1': e1_radec, 'e2': e2_radec, 'ngal': ngal,
             'delta_ra': delta_ra, 'delta_dec': delta_dec,
