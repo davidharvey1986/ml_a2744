@@ -96,6 +96,7 @@ def parse():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--excess-map", default=str(EXCESS_MAP), help="Lenstool excess_kappa.fits ('' to skip)")
+    p.add_argument("--replot", action="store_true", help="only redraw the correlation figure from sensitivity.npz")
     p.add_argument("--out-dir", default=None)
     return p.parse_args()
 
@@ -366,6 +367,108 @@ def plot_vs_kappa(obs, sims, path, bins=SNR_BINS):
         fig.savefig(path.with_suffix(f".{ext}"), dpi=180)
 
 
+def partial_spearman(a, b, c):
+    '''Spearman correlation of a and b with c held fixed (ranks, linear residuals on c).'''
+    from scipy.stats import rankdata
+    ra, rb, rc = (rankdata(v) for v in (a, b, c))
+    res = [r - np.polyval(np.polyfit(rc, r, 1), rc) for r in (ra, rb)]
+    return float(np.corrcoef(*res)[0, 1])
+
+
+def shift_null_partial(delta, field, control, valid):
+    '''Partial Spearman of delta vs field given control, with the circular-shift null on delta.'''
+    rho = partial_spearman(delta[valid], field[valid], control[valid])
+    n, null = delta.shape[0], []
+    for dy in range(n):
+        for dx in range(n):
+            if dx or dy:
+                d = np.roll(np.roll(delta, dy, 0), dx, 1)
+                v = np.roll(np.roll(valid, dy, 0), dx, 1) & valid
+                null.append(partial_spearman(d[v], field[v], control[v]))
+    null = np.array(null)
+    return rho, float(np.mean(np.abs(null) >= abs(rho))), null
+
+
+def plot_correlations(npz, window, stride, path):
+    '''
+    Correlation of the window sensitivity with the reconstructed kappa and with the Lenstool
+    excess kappa: A2744 scatter + Spearman rho (circular-shift nulls), the excess correlation
+    with kappa held fixed, and the per-cluster rho(sensitivity, kappa) of the simulations.
+    '''
+    plt = style()
+    z = np.load(npz)
+    n = len(z["centres"])
+    delta = z["a2744_delta"].mean(0)
+    k_w = z["a2744_snr_windows"].reshape(n, n)
+    valid = (delta != 0) & np.isfinite(k_w)
+    rho_k, p_k, null_k = shift_null(delta, k_w, valid)
+    has_excess = "a2744_excess_snr" in z
+    if has_excess:
+        e_w = window_mean(z["a2744_excess_snr"], window, stride)
+        valid &= np.isfinite(e_w)
+        rho_e, p_e, null_e = shift_null(delta, e_w, valid)
+        rho_ep, p_ep, null_ep = shift_null_partial(delta, e_w, k_w, valid)
+        rho_ke = spearmanr(k_w[valid], e_w[valid]).statistic
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.6), constrained_layout=True)
+    ax = axes[0]
+    ax.hexbin(k_w[valid], delta[valid], gridsize=40, mincnt=1, cmap="Greys", bins="log")
+    ax.axhline(0, color=MUTED, lw=1)
+    ax.set_xlabel(r"Reconstructed $\kappa$ S/N (window mean)")
+    ax.set_ylabel(r"$\Delta P$(SIDM) when removed")
+    ax.set_title(f"A2744 vs $\\kappa$: $\\rho$ = {rho_k:+.2f} (p = {p_k:.3f})", color=INK)
+
+    ax = axes[1]
+    if has_excess:
+        ax.hexbin(e_w[valid], delta[valid], gridsize=40, mincnt=1, cmap="Greens", bins="log")
+        ax.axhline(0, color=MUTED, lw=1)
+        ax.set_xlabel(r"Lenstool excess $\kappa$ S/N (window mean)")
+        ax.set_title(f"A2744 vs excess: $\\rho$ = {rho_e:+.2f} (p = {p_e:.3f})", color=INK)
+        ax.text(0.02, 0.97, f"with $\\kappa$ held fixed: $\\rho$ = {rho_ep:+.2f} (p = {p_ep:.3f})\n"
+                f"$\\rho(\\kappa$, excess) = {rho_ke:+.2f}", transform=ax.transAxes, va="top", fontsize=8,
+                color=INK)
+    else:
+        ax.set_axis_off()
+
+    ax = axes[2]
+    xpos, labels = 0, []
+    for d in DOMAINS:
+        if f"{d}_delta" not in z:
+            continue
+        sig = z[f"{d}_sigma"]
+        cmap = plt.cm.Blues if d == "bahamas" else plt.cm.Oranges
+        for s, sh in zip(np.unique(sig), np.linspace(0.35, 0.95, len(np.unique(sig)))):
+            rhos = []
+            for dm, kw in zip(z[f"{d}_delta"][sig == s], z[f"{d}_snr_windows"][sig == s]):
+                kw = kw.reshape(n, n)
+                v = (dm != 0) & np.isfinite(kw)
+                if v.sum() > 20:
+                    rhos.append(spearmanr(dm[v], kw[v]).statistic)
+            jit = xpos + 0.15 * np.random.default_rng(0).standard_normal(len(rhos))
+            ax.plot(jit, rhos, "o", ms=4, alpha=0.6, color=cmap(sh))
+            ax.errorbar(xpos, np.mean(rhos), np.std(rhos) / np.sqrt(len(rhos)), fmt="_", ms=18, mew=2,
+                        color=INK, capsize=3)
+            labels.append(f"{d[:4].upper()}\n" + ("CDM" if s == 0 else f"{s:g}"))
+            xpos += 1
+    ax.axhline(rho_k, color="k", lw=2, label=f"A2744 ({rho_k:+.2f})")
+    lo, hi = np.percentile(null_k, [2.5, 97.5])
+    ax.axhspan(lo, hi, color="k", alpha=0.08, lw=0, label="A2744 shift null, 95%")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, fontsize=7)
+    ax.set_ylabel(r"Spearman $\rho$(sensitivity, $\kappa$ S/N) per cluster")
+    ax.set_title("Matched simulations vs A2744", color=INK)
+    ax.legend(fontsize=8, loc="best")
+    fig.suptitle("Does the CNN look where the mass is? Sensitivity vs reconstructed and excess convergence",
+                 color=INK, fontsize=11)
+    for ext in ("pdf", "png"):
+        fig.savefig(path.with_suffix(f".{ext}"), dpi=180)
+    out = {"a2744_rho_kappa": rho_k, "a2744_p_kappa": p_k}
+    if has_excess:
+        out.update(a2744_rho_excess=rho_e, a2744_p_excess=p_e, a2744_partial_rho_excess_given_kappa=rho_ep,
+                   a2744_partial_p=p_ep, rho_kappa_excess=float(rho_ke))
+    return out
+
+
 def plot_vs_excess(excess_w, delta_w, valid, rho, p, null, path):
     plt = style()
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), constrained_layout=True)
@@ -395,6 +498,10 @@ def main():
     opts = parse()
     out = LAUNCH_DIR / (opts.out_dir or REPO / "sbi" / "results" / f"sensitivity_{opts.model}")
     out.mkdir(parents=True, exist_ok=True)
+    if opts.replot:
+        stats = plot_correlations(out / "sensitivity.npz", opts.window, opts.stride, out / "sensitivity_correlations")
+        print(json.dumps(stats, indent=1))
+        return
     rng = np.random.default_rng(opts.seed)
     device = ms.get_device()
     args = ms.setup_args("concat")
@@ -471,6 +578,8 @@ def main():
     n_match = sum(abs(m["p_full"] - obs["p_full"]) < P_MATCH for d in sims for m in sims[d])
     print(f"simulated maps with P(SIDM) within {P_MATCH} of A2744: {n_match}")
     plot_vs_kappa(obs, sims, out / "sensitivity_vs_kappa")
+    corr = plot_correlations(out / "sensitivity.npz", opts.window, opts.stride, out / "sensitivity_correlations")
+    print("correlations:", json.dumps(corr))
     print(f"wrote {out}")
 
 
