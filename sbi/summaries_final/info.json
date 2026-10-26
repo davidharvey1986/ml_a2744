@@ -1,6 +1,7 @@
 {
-  "created": "2026-10-25T16:22:35",
+  "created": "2026-10-26T08:40:11",
   "models": [
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_2_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_3_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_4_nob1_ft_tweakedalign_final.pth",
@@ -12,6 +13,8 @@
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_10_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_11_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_12_nob1_ft_tweakedalign_final.pth",
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_13_nob1_ft_tweakedalign_final.pth",
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_14_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_15_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_16_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_17_nob1_ft_tweakedalign_final.pth",
@@ -22,9 +25,15 @@
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_22_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_23_nob1_ft_tweakedalign_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_24_nob1_ft_tweakedalign_final.pth",
-    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_25_nob1_ft_tweakedalign_final.pth"
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_25_nob1_ft_tweakedalign_final.pth",
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_26_nob1_ft_tweakedalign_final.pth",
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_27_nob1_ft_tweakedalign_final.pth",
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_28_nob1_ft_tweakedalign_final.pth",
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_29_nob1_ft_tweakedalign_final.pth",
+    "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_30_nob1_ft_tweakedalign_final.pth"
   ],
   "seeds": [
+    1,
     2,
     3,
     4,
@@ -36,6 +45,8 @@
     10,
     11,
     12,
+    13,
+    14,
     15,
     16,
     17,
@@ -46,7 +57,12 @@
     22,
     23,
     24,
-    25
+    25,
+    26,
+    27,
+    28,
+    29,
+    30
   ],
   "options": {
     "model": "tweakedalign_final",
