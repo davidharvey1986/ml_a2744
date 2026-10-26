@@ -1,74 +1,74 @@
 {
   "bahamas": {
     "empirical": {
-      "p_value": 0.052696703218907535,
+      "p_value": 0.019065193622415908,
       "p_value_floor": 0.001176558756213114,
-      "significance_sigma": 1.6192503602572736,
+      "significance_sigma": 2.0734503500520125,
       "is_lower_limit": false,
       "n_eff": 849.9363034096248,
-      "p_value_all_cdm_unweighted": 0.04583333333333333
+      "p_value_all_cdm_unweighted": 0.011833333333333333
     },
     "nle": {
       "sigma_quantiles": [
-        0.20594344956928617,
-        0.516605664094005,
-        0.8353945639149121
+        0.27669323366750226,
+        0.5978370153573362,
+        0.8732929252718609
       ],
       "sigma_probabilities": {
-        "0": 0.02950741091077537,
-        "0.1": 0.12325332557634805,
-        "0.3": 0.48945371010066147,
-        "1": 0.35778555341221513
+        "0": 0.01627367765168176,
+        "0.1": 0.0819108911387777,
+        "0.3": 0.45919747940086525,
+        "1": 0.4426179518086754
       },
-      "posterior_p_cdm": 0.02950741091077537,
+      "posterior_p_cdm": 0.01627367765168176,
       "prior_p_cdm": 0.075,
-      "bayes_factor_sidm_cdm": 2.666739841813658,
-      "savage_dickey_bf_sidm_cdm": 3.056643761155241,
-      "likelihood_ratio_best_vs_cdm": 3.980162030654447,
-      "lr_significance_sigma": 1.662120651268961,
+      "bayes_factor_sidm_cdm": 4.901264201683074,
+      "savage_dickey_bf_sidm_cdm": 5.813899586248467,
+      "likelihood_ratio_best_vs_cdm": 10.16185902513328,
+      "lr_significance_sigma": 2.153435116425457,
       "best_sigma": 1.0,
       "mass_quantiles": [
-        14.45397837874436,
-        14.520162156309945,
-        14.586226582060764
+        14.44739925837215,
+        14.511793306841676,
+        14.576291386584153
       ],
       "ncomp_probabilities": {
         "1": 0.0,
-        "2": 0.5289978752695749,
-        "3": 0.2974468761952705,
-        "4": 0.12118991599113663,
-        "5": 0.038964647163866016,
-        "6": 0.013400685380148858
+        "2": 0.492110813019615,
+        "3": 0.32479793946695623,
+        "4": 0.13011109472985455,
+        "5": 0.039711263722727826,
+        "6": 0.013268889060844946
       }
     },
     "npe_conditional": {
-      "fraction_above_simulated_sigma": 0.23605,
-      "fraction_below_zero": 0.02125,
+      "fraction_above_simulated_sigma": 0.2737,
+      "fraction_below_zero": 0.02305,
       "sigma_quantiles": [
         0.1,
-        0.3,
+        1.0,
         1.0
       ],
       "sigma_probabilities": {
-        "0": 0.0966,
-        "0.1": 0.15995,
-        "0.3": 0.28145,
-        "1": 0.462
+        "0": 0.0575,
+        "0.1": 0.1285,
+        "0.3": 0.2651,
+        "1": 0.5489
       },
-      "posterior_p_cdm": 0.0966,
+      "posterior_p_cdm": 0.0575,
       "prior_p_cdm": 0.25,
-      "bayes_factor_sidm_cdm": 3.117322291235334,
+      "bayes_factor_sidm_cdm": 5.463768115942028,
       "bayes_factor_is_lower_limit": false,
       "held_out_checks": {
         "sigma_p_true": 0.32923,
         "chance": 0.25,
-        "sigma_map_correct": 0.4
+        "sigma_map_correct": 0.421
       }
     },
     "npe": null,
     "checks": {
-      "obs_summary_percentile_mahalanobis": 0.880375,
-      "cdm_training_bias_logit": -0.0021182596683502197
+      "obs_summary_percentile_mahalanobis": 0.8084166666666667,
+      "cdm_training_bias_logit": 0.0006181597709655762
     },
     "a2744_ncomp_class": [
       2,
@@ -90,84 +90,84 @@
     "cdm_definition_sigma_below": 0.05,
     "n_clusters": 14400,
     "empirical_p_by_sigma": {
-      "0": 0.052696703218907535,
-      "0.1": 0.12990311522733636,
-      "0.3": 0.2359733044722908,
-      "1": 0.5027188181049183
+      "0": 0.019065193622415908,
+      "0.1": 0.051995266819542904,
+      "0.3": 0.13047674241744187,
+      "1": 0.3995068442726603
     }
   },
   "darkskies": {
     "empirical": {
-      "p_value": 0.03928694689752939,
+      "p_value": 0.008701708425229911,
       "p_value_floor": 0.0028983694894786235,
-      "significance_sigma": 1.7590212823544762,
+      "significance_sigma": 2.3780722229840885,
       "is_lower_limit": false,
       "n_eff": 345.0215728636745,
-      "p_value_all_cdm_unweighted": 0.09233333333333334
+      "p_value_all_cdm_unweighted": 0.0085
     },
     "nle": {
       "sigma_quantiles": [
-        0.03958187415475214,
-        0.10860966407594423,
-        0.17105860212460128
+        0.04323693558509738,
+        0.11427953690823921,
+        0.17460282225752724
       ],
       "sigma_probabilities": {
-        "0": 0.020009153880116523,
-        "0.01": 0.09832837362310116,
-        "0.05": 0.2023841908938456,
-        "0.1": 0.4007156543002241,
-        "0.2": 0.2785626273027126
+        "0": 0.017092595707315413,
+        "0.01": 0.08899710377516919,
+        "0.05": 0.19062382484076265,
+        "0.1": 0.39561438948206823,
+        "0.2": 0.3076720861946845
       },
-      "posterior_p_cdm": 0.020009153880116523,
+      "posterior_p_cdm": 0.017092595707315413,
       "prior_p_cdm": 0.03,
-      "bayes_factor_sidm_cdm": 1.5147564670857854,
-      "savage_dickey_bf_sidm_cdm": 1.5263990137956567,
-      "likelihood_ratio_best_vs_cdm": 1.8553662907990611,
-      "lr_significance_sigma": 1.1118292476038534,
+      "bayes_factor_sidm_cdm": 1.7785009714994489,
+      "savage_dickey_bf_sidm_cdm": 1.8085572643884298,
+      "likelihood_ratio_best_vs_cdm": 2.580396924762288,
+      "lr_significance_sigma": 1.3769119317570082,
       "best_sigma": 0.20000000298023224,
       "mass_quantiles": [
-        14.459398846994478,
-        14.527259540258159,
-        14.59490385401353
+        14.447464405010141,
+        14.510491402258657,
+        14.574046635341949
       ],
       "ncomp_probabilities": {
         "1": 0.0,
-        "2": 0.5029056483364216,
-        "3": 0.27511171275124946,
-        "4": 0.13722194555749193,
-        "5": 0.0612305582916481,
-        "6": 0.023530135063187355
+        "2": 0.42505104856590725,
+        "3": 0.3085756343935687,
+        "4": 0.16625084139257704,
+        "5": 0.07242269016979315,
+        "6": 0.02769978547815051
       }
     },
     "npe_conditional": {
-      "fraction_above_simulated_sigma": 0.11695,
-      "fraction_below_zero": 0.0459,
+      "fraction_above_simulated_sigma": 0.1495,
+      "fraction_below_zero": 0.0361,
       "sigma_quantiles": [
         0.01,
         0.1,
         0.2
       ],
       "sigma_probabilities": {
-        "0": 0.123,
-        "0.01": 0.15435,
-        "0.05": 0.18755,
-        "0.1": 0.24695,
-        "0.2": 0.28815
+        "0": 0.09625,
+        "0.01": 0.1423,
+        "0.05": 0.1876,
+        "0.1": 0.24235,
+        "0.2": 0.3315
       },
-      "posterior_p_cdm": 0.123,
+      "posterior_p_cdm": 0.09625,
       "prior_p_cdm": 0.2,
-      "bayes_factor_sidm_cdm": 1.782520325203252,
+      "bayes_factor_sidm_cdm": 2.3474025974025974,
       "bayes_factor_is_lower_limit": false,
       "held_out_checks": {
-        "sigma_p_true": 0.20930666666666667,
+        "sigma_p_true": 0.207168,
         "chance": 0.2,
-        "sigma_map_correct": 0.232
+        "sigma_map_correct": 0.2192
       }
     },
     "npe": null,
     "checks": {
-      "obs_summary_percentile_mahalanobis": 0.8612333333333333,
-      "cdm_training_bias_logit": -0.013209346681833267
+      "obs_summary_percentile_mahalanobis": 0.6495666666666666,
+      "cdm_training_bias_logit": -0.0014963746070861816
     },
     "a2744_ncomp_class": [
       2,
@@ -189,11 +189,11 @@
     "cdm_definition_sigma_below": 0.005,
     "n_clusters": 6000,
     "empirical_p_by_sigma": {
-      "0": 0.03928694689752939,
-      "0.01": 0.06248778453478006,
-      "0.05": 0.06407959066994441,
-      "0.1": 0.09629521148615046,
-      "0.2": 0.1297375992198614
+      "0": 0.008701708425229911,
+      "0.01": 0.015615277338543756,
+      "0.05": 0.022464228588842835,
+      "0.1": 0.033889125679405704,
+      "0.2": 0.052842832333555724
     }
   },
   "settings": {
