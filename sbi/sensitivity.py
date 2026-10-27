@@ -581,7 +581,7 @@ def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bin
                     lw=2, color="k", capsize=2, label=f"BAHAMAS with P within {P_MATCH} of A2744 ({len(matched)})")
     err = np.array([bin_means(kw, r.ravel(), bins) for r in rot_deltas])
     how = "bootstrapped galaxies" if errors == "bootstrap" else "shear-rotated maps"
-    ax.errorbar(xc, bin_means(kw, dl, bins), np.nanstd(err, 0), fmt="s", ms=8, color="k", capsize=3,
+    ax.errorbar(xc, bin_means(kw, dl, bins), np.nanstd(err, 0), fmt="o-", ms=4, lw=1.5, color="k", capsize=2,
                 zorder=5, label=f"A2744 (errors: {len(err)} {how})")
     ax.axhline(0, color=MUTED, lw=1)
     ax.set_xlabel(r"Reconstructed convergence $\kappa$ (window mean)" if x == "kappa"
