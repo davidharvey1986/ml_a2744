@@ -37,6 +37,11 @@ COMPONENTS_DIR = "notebooks/pickles"
 # Galaxies where the convergence (at zs=1.72) is at least this are dropped when the
 # simulated shear is sampled at the A2744 galaxy positions
 KAPPA_THRESH = 0.9
+# Centre of the 100x100 (2 Mpc) stamp in catalogue pixels (x, y; 0.02 arcsec): the main
+# mass peak of A2744, Lenstool halo O2 in the southern core (RA 3.5882, Dec -30.4027).
+# It used to be the median galaxy position, which put this peak ~720 kpc from the centre
+# while every simulated cluster is centred (sbi/obs_map_checks.py).
+A2744_STAMP_CENTRE = (12949.2, 8049.1)
 
 # Shear-catalogue cuts used for the A2744 data map (prepare_uncovers_data)
 SHEAR_CUTS = {'f115w': {'signal_noise_cut': 0, 'stat_type': 'snr'},
@@ -652,12 +657,13 @@ def ra_dec_to_simulation_image_pos(
     jwst_pixel_size=0.02*units.arcsecond,
     zl=0.305,
     image_size=100,
-    ra_0=None, dec_0=None,
+    ra_0=A2744_STAMP_CENTRE[0], dec_0=A2744_STAMP_CENTRE[1],
     ):
     '''
     Convert catalogue pixel positions (x, y) to simulation pixel coordinates,
-    centred on (ra_0, dec_0) (default: the median position) and scaled so that
-    fov_sim at zl spans [-image_size//2, image_size//2].
+    centred on (ra_0, dec_0) (default: A2744_STAMP_CENTRE, the main mass peak; None
+    for the median galaxy position) and scaled so that fov_sim at zl spans
+    [-image_size//2, image_size//2].
     '''
     arcsec_per_kpc = units.radian.to(units.arcsecond)/Planck18.angular_diameter_distance(zl).to(units.kpc)
 
