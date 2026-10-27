@@ -55,6 +55,8 @@ GROUPS = {
     "ta final": "summaries_ta_final",
     "ba best": "summaries_ba_best_n5",      # 5 noise draws; draw 0 is used here
     "ba final": "summaries_ba_final_n5",
+    "k0p9 best": "summaries_k0p9_bonsai_best_n5",   # trained on kappa_thresh = 0.9 maps
+    "k0p9 final": "summaries_k0p9_bonsai_final_n5",
 }
 DOMAINS = ["bahamas", "darkskies"]
 COLOUR = {"bahamas": "#56B4E9", "darkskies": "#E69F00"}
