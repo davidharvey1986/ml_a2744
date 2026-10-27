@@ -71,6 +71,7 @@ from lenspack.utils import bin2d  # noqa: E402
 from mass_weighting import a2744_mass_gaussian, gaussian_mass_weights  # noqa: E402
 
 NPIX = 100
+SUBSET_DEX = 0.45                      # --all-clusters: clusters within this of the A2744 mass
 A2744_NCOMP = (3, 4, 5, 6)
 DOMAINS = ["bahamas", "darkskies"]
 KAPPA_SMOOTH = 1.5                      # pixels, for the reconstructed kappa
@@ -91,6 +92,10 @@ def parse():
     p.add_argument("--window", type=int, default=4, help="occluded window size [pixels]")
     p.add_argument("--stride", type=int, default=4, help="step between windows [pixels]")
     p.add_argument("--clusters-per-sigma", type=int, default=20)
+    p.add_argument("--all-clusters", action="store_true",
+                   help="use every cluster in A2744's merger class within SUBSET_DEX of its mass, weighted to the "
+                        "A2744 mass, instead of drawing --clusters-per-sigma")
+    p.add_argument("--domains", nargs="+", default=DOMAINS, choices=DOMAINS)
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_ba_best_n5"),
                    help="any summaries dir: only cluster masses / n_comp / file indices are used")
     p.add_argument("--seed", type=int, default=0)
@@ -173,18 +178,28 @@ def a2744_map():
     return raw, cat, ra, dec
 
 
-def pick_clusters(summaries, domain, mu, sig, k, rng):
-    '''k clusters per sigma/m, drawn with probability proportional to the A2744 mass / merger weights.'''
+def pick_clusters(summaries, domain, mu, sig, k, rng, all_clusters=False):
+    '''
+    Clusters in A2744's merger class, per sigma/m: either k drawn with probability proportional
+    to the A2744 mass weights (equal weights afterwards), or all within SUBSET_DEX of its mass
+    carrying those weights.
+    '''
     P = dict(np.load(Path(summaries) / f"params_{domain}.npz"))
     cs, m, nc = P["cross_section"], P["log10_mass_750"], np.minimum(P["ncomponents"], 6)
-    picks = []
+    picks, weights = [], []
     for c in np.unique(cs):
         rows = np.where((cs == c) & np.isin(nc, A2744_NCOMP) & np.isfinite(m))[0]
-        w = gaussian_mass_weights(m[rows], mu, sig)
-        picks.append(rng.choice(rows, min(k, len(rows)), replace=False, p=w / w.sum()))
+        if all_clusters:
+            rows = rows[np.abs(m[rows] - mu) < SUBSET_DEX]
+            picks.append(rows)
+            weights.append(gaussian_mass_weights(m[rows], mu, sig))
+        else:
+            w = gaussian_mass_weights(m[rows], mu, sig)
+            picks.append(rng.choice(rows, min(k, len(rows)), replace=False, p=w / w.sum()))
+            weights.append(np.ones(len(picks[-1])))
     rows = np.concatenate(picks)
     return {"filename": P["filename"][rows], "image_idx": P["image_idx"][rows], "cross_section": cs[rows],
-            "log10_mass_750": m[rows], "ncomponents": P["ncomponents"][rows]}
+            "log10_mass_750": m[rows], "ncomponents": P["ncomponents"][rows], "weight": np.concatenate(weights)}
 
 
 def simulated_maps(sel, args, seed):
@@ -552,6 +567,19 @@ def bin_means(kw, delta, bins):
     return binned_statistic(kw[keep], delta[keep], statistic="mean", bins=bins)[0]
 
 
+def weighted_stats(per, w):
+    '''Per bin: weighted mean, weighted single-cluster std and error of the mean (Kish effective N).'''
+    ok = np.isfinite(per)
+    W = np.where(ok, w[:, None], 0.)
+    m = np.where(ok, per, 0.)
+    sw = W.sum(0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = (W * m).sum(0) / sw
+        std = np.sqrt((W * (m - mean)**2).sum(0) / sw)
+        neff = sw**2 / (W**2).sum(0)
+        return mean, std, std / np.sqrt(neff)
+
+
 def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bins=None, errors="bootstrap"):
     '''
     Mean Delta P(SIDM) against reconstructed kappa: BAHAMAS per sigma/m (error: scatter between
@@ -566,19 +594,19 @@ def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bin
     fig, ax = plt.subplots(figsize=(7.5, 5), constrained_layout=True)
     sig_vals = sorted({m["sigma"] for m in sims})
     for s, sh in zip(sig_vals, np.linspace(0.35, 0.95, len(sig_vals))):
-        per = np.array([bin_means(m[x], m["delta"], bins) for m in sims if m["sigma"] == s])
-        n = np.sum(np.isfinite(per), 0)
-        ax.errorbar(xc, np.nanmean(per, 0), np.nanstd(per, 0) / np.sqrt(np.maximum(n, 1)), fmt="o-", ms=4,
-                    lw=1.5, capsize=2, color=plt.cm.Blues(sh), label="BAHAMAS " + ("CDM" if s == 0 else f"$\\sigma/m={s:g}$"))
-    matched = np.array([bin_means(m[x], m["delta"], bins) for m in sims
-                        if abs(m["p_full"] - a2744["p_full"]) < P_MATCH])
-    if len(matched):
-        n = np.sum(np.isfinite(matched), 0)
-        mm, ms_ = np.nanmean(matched, 0), np.nanstd(matched, 0)
+        sub = [m for m in sims if m["sigma"] == s]
+        per = np.array([bin_means(m[x], m["delta"], bins) for m in sub])
+        mean, _, sem = weighted_stats(per, np.array([m.get("weight", 1.) for m in sub]))
+        ax.errorbar(xc, mean, sem, fmt="o-", ms=4, lw=1.5, capsize=2, color=plt.cm.Blues(sh),
+                    label=f"BAHAMAS " + ("CDM" if s == 0 else f"$\\sigma/m={s:g}$") + f" ({len(sub)})")
+    sub = [m for m in sims if abs(m["p_full"] - a2744["p_full"]) < P_MATCH]
+    if sub:
+        per = np.array([bin_means(m[x], m["delta"], bins) for m in sub])
+        mm, ms_, sem = weighted_stats(per, np.array([m.get("weight", 1.) for m in sub]))
         ax.fill_between(xc, mm - ms_, mm + ms_, color="k", alpha=0.1, lw=0,
                         label="single-cluster spread ($\\pm1\\sigma$) of those")
-        ax.errorbar(xc, mm, ms_ / np.sqrt(np.maximum(n, 1)), fmt="--",
-                    lw=2, color="k", capsize=2, label=f"BAHAMAS with P within {P_MATCH} of A2744 ({len(matched)})")
+        ax.errorbar(xc, mm, sem, fmt="--", lw=2, color="k", capsize=2,
+                    label=f"BAHAMAS with P within {P_MATCH} of A2744 ({len(sub)})")
     err = np.array([bin_means(kw, r.ravel(), bins) for r in rot_deltas])
     how = "bootstrapped galaxies" if errors == "bootstrap" else "shear-rotated maps"
     ax.errorbar(xc, bin_means(kw, dl, bins), np.nanstd(err, 0), fmt="o-", ms=4, lw=1.5, color="k", capsize=2,
@@ -610,7 +638,12 @@ def kappa_plot(opts, out):
     else:
         rot = rotated_a2744_deltas(models, cat, ra, dec, opts.rotations, opts.window, opts.stride, device,
                                    opts.batch_size, out / "rotated_a2744.npz")
-    # regenerate the BAHAMAS maps of the main run (same seed, same draw order) to get their kappa
+    if "bahamas_kappa_windows" in z:                 # saved by the main run
+        sims = [{"sigma": float(s), "p_full": float(p), "kappa": k, "delta": d.ravel(), "snr": n, "weight": float(w)}
+                for s, p, k, d, n, w in zip(z["bahamas_sigma"], z["bahamas_p_full"], z["bahamas_kappa_windows"],
+                                            z["bahamas_delta"], z["bahamas_snr_windows"], z["bahamas_weight"])]
+        return finish_kappa_plot(opts, out, a2744, rot, sims)
+    # older runs: regenerate the BAHAMAS maps (same seed, same draw order) to get their kappa
     mu, sig = a2744_mass_gaussian()
     sel = pick_clusters(opts.summaries, "bahamas", mu, sig, opts.clusters_per_sigma, np.random.default_rng(opts.seed))
     assert np.array_equal(sel["cross_section"], z["bahamas_sigma"]), "cluster draw differs from the saved run"
@@ -623,7 +656,11 @@ def kappa_plot(opts, out):
                 "regenerated maps differ from the saved run"
         sims.append({"sigma": float(sel["cross_section"][i]), "p_full": float(z["bahamas_p_full"][i]),
                      "kappa": window_mean(k, opts.window, opts.stride).ravel(), "delta": z["bahamas_delta"][i].ravel(),
-                     "snr": z["bahamas_snr_windows"][i]})
+                     "snr": z["bahamas_snr_windows"][i], "weight": 1.0})
+    finish_kappa_plot(opts, out, a2744, rot, sims)
+
+
+def finish_kappa_plot(opts, out, a2744, rot, sims):
     f = opts.bin_factor
     snr_bins = np.interp(np.linspace(0, len(SNR_BINS) - 1, f * (len(SNR_BINS) - 1) + 1),
                          np.arange(len(SNR_BINS)), SNR_BINS)          # split each S/N bin into f
@@ -682,8 +719,8 @@ def main():
 
     # matched simulations
     sims = {}
-    for d in DOMAINS:
-        sel = pick_clusters(opts.summaries, d, mu, sig, opts.clusters_per_sigma, rng)
+    for d in opts.domains:
+        sel = pick_clusters(opts.summaries, d, mu, sig, opts.clusters_per_sigma, rng, opts.all_clusters)
         raws, kappas_true = simulated_maps(sel, args, opts.seed)
         sims[d] = []
         deltas = []
@@ -693,6 +730,8 @@ def main():
             k_rec, k_snr = reconstruct_kappa(raws[i].numpy())
             s = float(sel["cross_section"][i])
             sims[d].append({"sigma": s, "p_full": float(p_full.mean()), "delta": dl.mean(0).ravel(),
+                            "kappa": window_mean(k_rec, opts.window, opts.stride).ravel(),
+                            "weight": float(sel["weight"][i]),
                             "snr": window_mean(k_snr, opts.window, opts.stride).ravel()})
             deltas.append(dl.mean(0))
             # example panels: the first matched CDM and largest-sigma cluster of bahamas
@@ -704,6 +743,8 @@ def main():
         saved[f"{d}_delta"] = np.array(deltas)
         saved[f"{d}_p_full"] = np.array([m["p_full"] for m in sims[d]])
         saved[f"{d}_snr_windows"] = np.array([m["snr"] for m in sims[d]])
+        saved[f"{d}_kappa_windows"] = np.array([m["kappa"] for m in sims[d]])
+        saved[f"{d}_weight"] = sel["weight"]
         saved[f"{d}_sigma"] = sel["cross_section"]
         saved[f"{d}_log10_mass_750"] = sel["log10_mass_750"]
         print(f"{d}: {len(raws)} matched clusters; fraction of windows pushing to SIDM by sigma/m: "
