@@ -95,7 +95,7 @@ def main(
             meta, data = load_pickle(idata_set)
 
             if add_ncomps:
-                meta['ncomponents'] = get_num_merging_components(idata_set)
+                meta['ncomponents'] = get_num_merging_components(idata_set, nmaps=data.shape[0])
 
             if 'redshift' not in meta.keys():
                 meta['redshift'] = np.full(data.shape[0], 0.250, dtype=np.float64)
@@ -275,13 +275,19 @@ def get_num_merging_components(
         dataset,
         mass_ratio_limit=10,
         components_dir=COMPONENTS_DIR,
+        nmaps=None,
     ):
     '''
     Number of components with mass (flux) ratio to the main one below mass_ratio_limit,
-    per map. If the component file does not exist it is made first with
-    extract_num_merging_components, from the matching convergence map.
+    per map. If the component file does not exist, or (given nmaps, the number of maps
+    in the dataset) it has a different number of entries because the maps were remade,
+    it is made first with extract_num_merging_components from the matching convergence
+    map; a stale file is kept as <name>.stale.
     '''
     comp_name = get_components_file(dataset, components_dir)
+    if os.path.isfile(comp_name) and nmaps is not None and len(load_pickle(comp_name)) != nmaps:
+        print(f"{comp_name} has {len(load_pickle(comp_name))} entries for {nmaps} maps: re-extracting")
+        os.replace(comp_name, comp_name + ".stale")
     if not os.path.isfile(comp_name):
         print(f"{comp_name} not found: extracting components from {get_convergence_file(dataset)}")
         extract_num_merging_components([get_convergence_file(dataset)], components_dir=components_dir)
@@ -822,13 +828,13 @@ def return_error_in_mean(all_thresholds, model_correlation=0.283):
 if __name__ == "__main__":
 
     main(
-        search_path="data/100/convergence/*.pkl",
+        search_path="data/100/convergence/flamingo*.pkl",
         sample_data=False,
         add_ncomps=True
     )
 
     main(
-        search_path="data/100/convergence/*.pkl",
+        search_path="data/100/convergence/flamingo*.pkl",
         sample_data=True,
         data_dir='data/100/a2744'
     )

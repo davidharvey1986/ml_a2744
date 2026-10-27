@@ -190,7 +190,7 @@ def cluster_params(filenames, image_idx, ifilter):
             out["log10_mass"][rows] = np.log10(sigma.sum((-1, -2)) * PIXEL_PC**2)
             out["log10_mass_750"][rows] = np.log10(sigma[:, RGRID < APERTURE_KPC].sum(-1) * PIXEL_PC**2)
 
-        ncomp = get_num_merging_components(conv, components_dir=str(NOTEBOOKS / "pickles"))
+        ncomp = get_num_merging_components(conv, components_dir=str(NOTEBOOKS / "pickles"), nmaps=data.shape[0])
         assert len(ncomp) == data.shape[0], f"{fname}: {len(ncomp)} components vs {data.shape[0]} maps"
         out["ncomponents"][rows] = ncomp[idx]
         out["cross_section"][rows] = get_cross_section_from_filename(fname)
