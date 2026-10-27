@@ -224,20 +224,32 @@ def bounds(D):
 
 
 # ── empirical CDM test ─────────────────────────────────────────────────────────
-def empirical_test(D, mu, sig, ncomp_set):
+def empirical_test(D, mu, sig, ncomp_set, n_weights):
     '''
-    Weighted p-value of the observed summary under each simulated sigma/m: clusters in
-    A2744's n_comp class, weighted to the A2744 mass, each sigma/m on its own.
+    Weighted p-value of the observed summary under each simulated sigma/m. Every sigma/m
+    sample is reweighted to the same conditioning distribution: within each n_comp of
+    A2744's class the clusters are weighted to the A2744 mass, and the n_comp values are
+    weighted to the common mix n_weights (the one the NLE and NPE use), so neither mass nor
+    merger state differs between the cross-sections being compared.
     '''
     th, x, x_obs = D["theta"], D["x_ens"][:, 0], D["x_obs_ens"][0]
-    merging = np.isin(th[:, 2], ncomp_set)
     out = {}
     for s in D["sigma_grid"]:
-        sel = np.isclose(D["sigma"], s) & merging
-        w = gaussian_mass_weights(th[sel, 1], mu, sig)
+        sel = np.where(np.isclose(D["sigma"], s) & np.isin(th[:, 2], ncomp_set))[0]
+        w = np.zeros(len(sel))
+        for k, frac in n_weights.items():
+            rows = th[sel, 2] == k
+            if rows.sum() > 1:
+                wk = gaussian_mass_weights(th[sel[rows], 1], mu, sig)
+                w[rows] = frac * wk / wk.sum()
+        sel = np.isin(np.arange(len(th)), sel)                   # back to a mask, same order as w
         p = float(np.sum(w * (x[sel] >= x_obs)) / w.sum())
         n_eff = effective_sample_size(w) / D["n_draws"]          # clusters, not cluster-draw pairs
-        out[f"{s:g}"] = {"p_ge_obs": p, "n_eff": float(n_eff), "x": x[sel], "w": w}
+        out[f"{s:g}"] = {"p_ge_obs": p, "n_eff": float(n_eff), "x": x[sel], "w": w,
+                         # conditioning check: identical for every sigma/m if nothing leaks
+                         "mean_log_mass": float(np.average(th[sel, 1], weights=w)),
+                         "std_log_mass": float(np.sqrt(np.average((th[sel, 1] - np.average(th[sel, 1], weights=w))**2, weights=w))),
+                         "ncomp_mix": {str(k): float(w[th[sel, 2] == k].sum() / w.sum()) for k in n_weights}}
     cdm = out["0"]
     p_floor = 1. / cdm["n_eff"]
     p = max(cdm["p_ge_obs"], p_floor)
@@ -783,7 +795,11 @@ def run_domain(d, opts, out, rng, mu, sig):
 
     ncomp_set = parse_ncomp(opts.a2744_ncomp)
     n_weights = ncomp_weights(th, ncomp_set)
-    empirical, emp_summary = empirical_test(D, mu, sig, ncomp_set)
+    empirical, emp_summary = empirical_test(D, mu, sig, ncomp_set, n_weights)
+    print("  conditioning check, empirical samples (weighted log M mean/std, n_comp mix):")
+    for s_, v in empirical.items():
+        print(f"    sigma/m={s_:>5s}: log M {v['mean_log_mass']:.3f} +/- {v['std_log_mass']:.3f}, n_comp "
+              + " ".join(f"{k}:{f:.2f}" for k, f in v['ncomp_mix'].items()))
     print(f"  empirical: p(CDM >= A2744) = {emp_summary['p_value']:.3g} "
           f"({'>' if emp_summary['is_lower_limit'] else ''}{emp_summary['significance_sigma']:.2f} sigma, "
           f"N_eff = {emp_summary['n_eff']:.0f})")
@@ -826,6 +842,12 @@ def run_domain(d, opts, out, rng, mu, sig):
     # conditional NPE for sigma/m given A2744's mass and n_comp (sigma-balanced training)
     path = out / f"npe_conditional_{d}.pt"
     train_idx = np.where(~test)[0][balance_sigma(th[~test], rng)]
+    # conditioning check, conditional NPE: sigma/m must be equally common in every n_comp (and mass) cell
+    tb = th[train_idx]
+    frac = np.array([[np.mean(np.isclose(tb[tb[:, 2] == k, 0], v)) for v in np.unique(tb[:, 0])]
+                     for k in np.unique(tb[:, 2])])
+    print(f"  conditioning check, NPE training set: sigma/m fractions per n_comp all within "
+          f"{np.max(np.abs(frac - 1 / frac.shape[1])):.3f} of uniform ({len(train_idx)} pairs)")
     if path.exists() and not opts.retrain:
         npe_c = torch.load(path, weights_only=False)
     else:
@@ -858,6 +880,8 @@ def run_domain(d, opts, out, rng, mu, sig):
           f"summaries are further out; trained-on CDM clusters are {checks['cdm_training_bias_logit']:+.3f} in logit")
 
     results = {"empirical": emp_summary, "nle": nle_res, "npe_conditional": cond_res,
+               "conditioning_check": {s_: {k: v[k] for k in ("mean_log_mass", "std_log_mass", "ncomp_mix")}
+                                      for s_, v in empirical.items()},
                "npe": npe_res, "checks": checks, "a2744_ncomp_class": ncomp_set,
                "ncomp_weights": {str(k): v for k, v in n_weights.items()},
                "npe_test_metrics": test_metrics, "npe_input_dim": int(D["x_npe"].shape[1]),
