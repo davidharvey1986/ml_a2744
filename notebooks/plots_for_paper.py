@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # ml_check modules
 
 from get_model_probabilities import *
-from add_shear_to_data import combine_catalogues, get_source_redshift, return_error_in_mean, get_model_names
+from add_shear_to_data import combine_catalogues, get_source_redshift, return_error_in_mean, get_model_names, SHEAR_CUTS
 from sidm_inference_on_data_and_models import infer_sidm
 import scienceplots
 plt.style.use(["science","grid"])
@@ -78,7 +78,8 @@ def figure1():
             obs_noisy_tgt = obs_sampled_data[i][0].dataset.dataset[idx]
 
 
-    obs_cat = get_obs_data( 'concat', data_dir='../data/100/a2744/')
+    # same catalogue cuts as the CNN input map (add_shear_to_data.make_obs_maps)
+    obs_cat = get_obs_data( 'concat', data_dir='../data/100/a2744/', cuts=SHEAR_CUTS)
     obs_data = bin_obs_data( obs_cat )
     obs_cat['x'] = obs_data['delta_ra']
     obs_cat['y'] = obs_data['delta_dec']
@@ -100,7 +101,7 @@ def figure1():
     ax[0,2].imshow(ideal_src[0][0]-ideal_src[0][0].max()/2., cmap=cmap, origin='lower',vmin=vmin,vmax=vmax)
     ax[0,2].text( 5, 90, 'Ideal source domain ($\gamma_1$)', color='white', fontweight='bold')
 
-    im = ax[1,2].imshow(ideal_tgt[0][1]-ideal_tgt[0][0].max()/2., cmap=cmap, origin='lower',vmin=vmin,vmax=vmax)
+    im = ax[1,2].imshow(ideal_tgt[0][1]-ideal_tgt[0][1].max()/2., cmap=cmap, origin='lower',vmin=vmin,vmax=vmax)
     ax[1,2].text( 5, 90, 'Ideal target domain ($\gamma_2$)', color='white', fontweight='bold')
 
     cax = inset_axes(
@@ -201,7 +202,7 @@ def figure1():
     for iax in ax.flatten():
         iax.set_xticklabels([])
         iax.set_yticklabels([])
-        iax.errorbar( 15, 5,xerr=10, capsize=2, color='white')
+        iax.errorbar( 15, 5,xerr=5, capsize=2, color='white')       # 10 pixels = 200 kpc
         iax.text( 15, 5, '200kpc', ha='center', va='bottom', color='white')
         iax.plot([ 80, 90], [5,5], '-', color='white')
         iax.plot([90, 90],[5, 15], '-', color='white')
@@ -2062,6 +2063,9 @@ def figureA5(log_max_like, log_error):
 
     
 if __name__ == "__main__":
+    if sys.argv[1:] == ["figure1"]:
+        figure1()
+        sys.exit()
     if sys.argv[1:] == ["figure2"]:
         # python plots_for_paper.py figure2: only Figure 2 from the current summaries
         figure2_summaries()

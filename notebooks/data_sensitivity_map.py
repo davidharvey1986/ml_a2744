@@ -185,7 +185,7 @@ def annotate(ax, label):
     ax.set_xticklabels([])
     ax.set_yticklabels([])
     ax.grid(False)
-    ax.errorbar(15 - 50, 5 - 50, xerr=10, capsize=2, color="white", lw=2, capthick=2)
+    ax.errorbar(15 - 50, 5 - 50, xerr=5, capsize=2, color="white", lw=2, capthick=2)     # 10 pixels = 200 kpc
     ax.text(15 - 50, 5 - 50, "200kpc", ha="center", va="bottom", color="white", weight="bold")
     ax.plot([80 - 50, 90 - 50], [85 - 50, 85 - 50], "-", color="white", lw=2)
     ax.plot([90 - 50, 90 - 50], [95 - 50, 85 - 50], "-", color="white", lw=2)
