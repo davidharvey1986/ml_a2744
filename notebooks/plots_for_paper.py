@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # ml_check modules
 
 from get_model_probabilities import *
 from add_shear_to_data import combine_catalogues, get_source_redshift, return_error_in_mean, get_model_names
@@ -406,6 +409,122 @@ def figure2():
     print(f"Signficance is {significance}")
     print(f"Inter CDM variance of variance: {np.std(cdm_vals)}, and mean intra CDM variance {np.mean(cdm_val_err)}")
     print(f"Discrepancy of {obsprob.mean()-xpdf[ np.argmax(marginalised_pdf) ]}")
+
+def summary_curve(summaries, domain, mu, sig, min_ncomp=2):
+    '''
+    Per model, the A2744-mass-weighted mean P(SIDM) at each simulated cross-section,
+    over every cluster with at least min_ncomp components and every shape-noise draw
+    (sbi/make_summaries.py output). Returns (cross_sections, (n_models, n_cross)).
+    '''
+    P = np.load(f"{summaries}/params_{domain}.npz")
+    soft = np.load(f"{summaries}/softmax_{domain}.npy")                 # (n_models, n_noise, N)
+    cs, mass, ncomp = P["cross_section"], P["log10_mass_750"], P["ncomponents"]
+    sigmas = np.unique(cs)
+    out = np.zeros((soft.shape[0], len(sigmas)))
+    for j, s in enumerate(sigmas):
+        rows = (cs == s) & (ncomp >= min_ncomp) & np.isfinite(mass)
+        w = gaussian_mass_weights(mass[rows], mu, sig)
+        out[:, j] = (soft[:, :, rows] * w).sum(-1).mean(1) / w.sum()
+    return sigmas, out
+
+
+def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
+                      extra={"flamingo": "../sbi/summaries_ba_best_n5_flamingo"},
+                      min_ncomp=2, tag="ba_best"):
+    '''
+    Figure 2 from the current pipeline (sbi/make_summaries.py): the same CNNs, five
+    shape-noise draws per cluster, clusters with >= min_ncomp components weighted to
+    the A2744 mass (mass_weighting.gaussian_mass_weights), and A2744 from obs.npz.
+    extra adds CDM-only simulations (e.g. FLAMINGO) to both panels and to the
+    marginalised CDM distribution.
+    '''
+    from mass_weighting import a2744_mass_gaussian
+
+    cdm = 3e-3
+    mu, sig = a2744_mass_gaussian(study="harvey")
+    curves = {d: summary_curve(summaries, d, mu, sig, min_ncomp) for d in ["bahamas", "darkskies"]}
+    curves.update({d: summary_curve(path, d, mu, sig, min_ncomp) for d, path in extra.items()})
+    obsprob = np.load(f"{summaries}/obs.npz")["softmax"][:, 0]           # (n_models,), P(SIDM)
+    obs_mean, obs_err = obsprob.mean(), return_error_in_mean(obsprob)
+
+    fig, axarr = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
+    cdm_vals, cdm_val_err = [], []
+    for domain, (sigmas, per_model) in curves.items():
+        means, errors = per_model.mean(0), return_error_in_mean(per_model)
+        colour = COLOUR_SCHEME[domain]
+        cdm_vals.append(means[0])
+        cdm_val_err.append(errors[0])
+        x = sigmas.copy()
+        x[0] += cdm
+        if len(x) > 1:
+            axarr[0].errorbar(x, means, errors, fmt="-o", capsize=2, markersize=8, color=colour)
+            axarr[0].plot(x, means, "o", label=domain.upper(), markersize=8, color=colour)
+        axarr[0].errorbar(cdm, means[0], errors[0], fmt="*", capsize=2, markersize=15, color=colour,
+                          label=domain.upper() if len(x) == 1 else None)
+        print(f"{domain}: CDM {means[0]:.4f} +/- {errors[0]:.4f}; "
+              + ", ".join(f"{s:g}: {m:.4f}" for s, m in zip(sigmas[1:], means[1:])))
+
+    lo = min(cdm_vals) - 0.06
+    hi = max(max(cdm_vals) + 0.06, obs_mean + 3.5 * obs_err)
+    npts = 10000
+    xpdf = np.linspace(lo, hi, npts)
+    marginalised_pdf = np.zeros(npts)
+    for domain, m, e in zip(curves, cdm_vals, cdm_val_err):
+        ypdf = norm.pdf(xpdf, m, e)
+        marginalised_pdf += ypdf
+        colour = COLOUR_SCHEME[domain]
+        axarr[1].plot(xpdf, ypdf, color=colour)
+        axarr[1].fill_between(xpdf, ypdf, np.zeros(npts), color=colour, alpha=0.2, label=domain.upper())
+    marginalised_pdf /= np.sum(marginalised_pdf) * (xpdf[1] - xpdf[0])
+    axarr[1].plot(xpdf, marginalised_pdf, lw=2, ls="--", color="k", label="Marginalised CDM")
+    axarr[1].fill_between(xpdf, marginalised_pdf, np.zeros(npts), color="k", alpha=0.2)
+
+    # A2744: band in the left panel, pdf in the right
+    xr = np.logspace(-3, 1, 100)
+    axarr[0].plot(xr, np.full(100, obs_mean), lw=2, color="k")
+    for ns, level in [(1, 68), (2, 95)]:
+        axarr[0].fill_between(xr, obs_mean - ns * obs_err, obs_mean + ns * obs_err, alpha=0.2, color="k", lw=0)
+        axarr[0].plot(xr, np.full(100, obs_mean - ns * obs_err), "--", color="k")
+        axarr[0].plot(xr, np.full(100, obs_mean + ns * obs_err), "--", color="k")
+    axarr[0].text(0.0012, obs_mean + 2.2 * obs_err, "A2744 UNCOVER DATA (68, 95\\%)", ha="left", va="bottom", fontsize=11)
+    obs_pdf = norm.pdf(xpdf, obs_mean, obs_err)
+    axarr[1].plot(xpdf, obs_pdf, lw=2, color="k")
+    axarr[1].fill_between(xpdf, obs_pdf, np.zeros(npts), alpha=0.1, color="k")
+
+    axarr[0].set_xscale("log")
+    axarr[0].set_xlabel(r"Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
+    axarr[0].set_ylabel("Model output", fontsize=15)
+    axarr[0].set_xlim(1e-3, 1.5)
+    axarr[0].set_ylim(min(cdm_vals) - 0.04, obs_mean + 2 * obs_err + 0.045)
+    axarr[0].legend(loc=4, ncols=2)
+
+    top = 1.35 * max(np.max(marginalised_pdf), np.max(obs_pdf), max(norm.pdf(0, 0, e) for e in cdm_val_err))
+    edges = [np.min(cdm_vals) - 0.02, np.max(cdm_vals) + 0.02]
+    curly_brace(axarr[1], edges[0], edges[1], 0.78 * top, 0.06 * top, upward=True)
+    axarr[1].text(np.mean(edges), 0.87 * top, "Collisionless\nDark Matter", ha="center", fontsize=12)
+    axarr[1].text(obs_mean, 1.05 * norm.pdf(0, 0, obs_err), "Observation\n(A2744 UNCOVER)", ha="center", fontsize=12)
+    axarr[1].set_xlabel("Model output", fontsize=15)
+    axarr[1].set_ylabel("Probability distribution", fontsize=15)
+    axarr[1].set_xlim(lo, hi)
+    axarr[1].set_ylim(0, top)
+    axarr[1].grid(False)
+    axarr[1].legend(ncols=2, loc=1, fontsize=8)
+    fig.align_xlabels()
+
+    filename = f"plots/final_model_weighting_with_data_{tag}.pdf"
+    plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    print(f"Saved {filename}")
+
+    # Significance, as in figure2: A2744 against the marginalised CDM distribution
+    peak = xpdf[np.argmax(marginalised_pdf)]
+    marg_sigma = np.sqrt(np.sum((xpdf - peak) ** 2 * marginalised_pdf) / np.sum(marginalised_pdf))
+    total_sigma = np.sqrt(marg_sigma ** 2 + obs_err ** 2)
+    ot_prob = norm.sf(obs_mean, peak, total_sigma)
+    print(f"A2744 {obs_mean:.4f} +/- {obs_err:.4f}; marginalised CDM peak {peak:.4f}, width {marg_sigma:.4f}")
+    print(f"Discrepancy {obs_mean - peak:.4f}: one-tailed p = {ot_prob:.3g} ({norm.isf(ot_prob):.2f} sigma)")
+    print(f"Inter-CDM scatter {np.std(cdm_vals):.4f}, mean intra-CDM error {np.mean(cdm_val_err):.4f}")
+
 
 def figure3and4():
     # # Get sensitivity plots
@@ -1943,6 +2062,10 @@ def figureA5(log_max_like, log_error):
 
     
 if __name__ == "__main__":
+    if sys.argv[1:] == ["figure2"]:
+        # python plots_for_paper.py figure2: only Figure 2 from the current summaries
+        figure2_summaries()
+        sys.exit()
     print("Making Figure 1")
     figure1()
     print("Making Figure 2")

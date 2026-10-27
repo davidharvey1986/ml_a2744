@@ -97,6 +97,10 @@ def parse():
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--out-dir", default=str(REPO / "sbi" / "summaries"))
     p.add_argument("--legacy-dir", default=None, help="also write the old Dark_Matter_DA/sbi pickles here")
+    p.add_argument("--domains", nargs="+", default=DOMAINS,
+                   help="simulations to run: a prefix (bahamas -> bahamas*.pkl) or, if that file exists, an exact "
+                        "file stem (flamingo -> flamingo.pkl only). Domains the models were not trained on "
+                        "are held out for every model")
     p.add_argument("--no-latents", action="store_true",
                    help="do not save the simulated latents (~1 GB), only softmax and parameters")
     return p.parse_args()
@@ -235,8 +239,9 @@ def held_out_mask(models, domain, filenames, image_idx, ifilter):
 
 
 def run_domain(domain, models, args, opts, out_dir, device):
+    exact = os.path.isfile(os.path.join(args.data_dir, f"{args.image_size}/obs/{opts.filter}/{domain}.pkl"))
     dataset = BalancedClusterDataset(
-        args.data_dir, f"{args.image_size}/obs/{opts.filter}/{domain}*",
+        args.data_dir, f"{args.image_size}/obs/{opts.filter}/{domain}" + (".pkl" if exact else "*"),
         transform=get_test_transform(args), args=args, dtype="image",
     )
     filenames = np.array([dataset.files_data[f]["filename"] for f, _ in dataset.file_indices])
@@ -246,7 +251,8 @@ def run_domain(domain, models, args, opts, out_dir, device):
 
     params = cluster_params(filenames, image_idx, opts.filter)
     assert np.allclose(params["cross_section"], dataset.cross_sections)
-    params["held_out"] = held_out_mask(models, domain, filenames, image_idx, opts.filter)
+    params["held_out"] = (held_out_mask(models, domain, filenames, image_idx, opts.filter) if domain in DOMAINS
+                          else np.ones((len(models), n), dtype=bool))          # never trained on
     print(f"  held out per model: {params['held_out'].sum(1).min()}-{params['held_out'].sum(1).max()} of {n}")
 
     softmax = np.zeros((len(models), opts.n_noise, n), dtype=np.float32)
@@ -311,7 +317,7 @@ def main():
     models = load_models(opts, args, device)
     print(f"{len(models)} models, seeds {[m.args.seed for m in models]}, device {device}")
 
-    for domain in DOMAINS:
+    for domain in opts.domains:
         run_domain(domain, models, args, opts, out_dir, device)
     obs_file = run_obs(models, opts, out_dir, device)
 
