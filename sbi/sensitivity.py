@@ -111,6 +111,10 @@ def parse():
     p.add_argument("--errors", choices=["bootstrap", "rotation"], default="bootstrap",
                    help="A2744 errors: resample its galaxies with replacement (keeps the signal) or rotate "
                         "every shear (noise only; underestimates the errors, the networks see an empty field)")
+    p.add_argument("--example-grid", type=int, default=0,
+                   help="redraw the BAHAMAS CDM / largest-sigma example panels for this many clusters each, one "
+                        "row per cluster, from sensitivity.npz (needs the run's --seed, --clusters-per-sigma, "
+                        "--window, --stride)")
     p.add_argument("--out-dir", default=None)
     return p.parse_args()
 
@@ -288,26 +292,37 @@ def plot_maps(panels, centres, stride, path):
     vmax = max(np.percentile(np.abs(p["delta"]), 99) for p in panels)
     fig, axes = plt.subplots(1, len(panels), figsize=(4.6 * len(panels), 4.6), constrained_layout=True)
     for ax, p in zip(np.atleast_1d(axes), panels):
-        im = ax.imshow(np.ma.masked_equal(p["delta"], 0), origin="lower", extent=extent, cmap="RdBu_r",
-                       vmin=-vmax, vmax=vmax)
-        ax.contour(p["kappa_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[2, 3, 4, 6, 8],
-                   colors="k", linewidths=1)
-        if p.get("kappa_true") is not None:
-            ax.contour(gaussian_filter(p["kappa_true"], 1), origin="lower", extent=[-50, 50, -50, 50],
-                       levels=np.linspace(0.1, 0.8, 8), colors="k", linewidths=0.8, linestyles=":")
-        if p.get("excess_snr") is not None:
-            ax.contour(p["excess_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[2, 3, 4],
-                       colors="#2ca02c", linewidths=1.5)
-            ax.contour(p["excess_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[-4, -3, -2],
-                       colors="#2ca02c", linewidths=1, linestyles="--")
-            for name, (hx, hy) in p["halos"].items():
-                ax.plot(hx, hy, "x", color="#2ca02c", ms=9, mew=2)
-                ax.text(hx + 2, hy + 2, name, color="#2ca02c", fontsize=8)
-        ax.set_title(p["title"], color=INK)
-        ax.set_xticks([])
-        ax.set_yticks([])
+        im = draw_panel(ax, p, extent, vmax)
+    finish_maps(fig, axes, im, path)
+
+
+def draw_panel(ax, p, extent, vmax, scalebar=True):
+    '''Delta map with reconstructed kappa S/N (solid), true kappa (dotted) and Lenstool excess (green) contours.'''
+    im = ax.imshow(np.ma.masked_equal(p["delta"], 0), origin="lower", extent=extent, cmap="RdBu_r",
+                   vmin=-vmax, vmax=vmax)
+    ax.contour(p["kappa_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[2, 3, 4, 6, 8],
+               colors="k", linewidths=1)
+    if p.get("kappa_true") is not None:
+        ax.contour(gaussian_filter(p["kappa_true"], 1), origin="lower", extent=[-50, 50, -50, 50],
+                   levels=np.linspace(0.1, 0.8, 8), colors="k", linewidths=0.8, linestyles=":")
+    if p.get("excess_snr") is not None:
+        ax.contour(p["excess_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[2, 3, 4],
+                   colors="#2ca02c", linewidths=1.5)
+        ax.contour(p["excess_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[-4, -3, -2],
+                   colors="#2ca02c", linewidths=1, linestyles="--")
+        for name, (hx, hy) in p["halos"].items():
+            ax.plot(hx, hy, "x", color="#2ca02c", ms=9, mew=2)
+            ax.text(hx + 2, hy + 2, name, color="#2ca02c", fontsize=8)
+    ax.set_title(p["title"], color=INK)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    if scalebar:
         ax.errorbar(-35, -45, xerr=10, capsize=2, color=INK, lw=1.5)
         ax.text(-35, -44, "400 kpc", ha="center", va="bottom", fontsize=8, color=INK)
+    return im
+
+
+def finish_maps(fig, axes, im, path):
     cbar = fig.colorbar(im, ax=axes, fraction=0.03, pad=0.02)
     cbar.set_label(r"$\Delta P$(SIDM) when removed (red: pushes to SIDM)")
     fig.suptitle("Occlusion sensitivity. Black: reconstructed $\\kappa$ S/N 2,3,4,6,8 (dotted: true $\\kappa$); "
@@ -669,12 +684,67 @@ def finish_kappa_plot(opts, out, a2744, rot, sims):
     print(f"wrote {out}/delta_vs_kappa_bahamas and delta_vs_snr_bahamas (.pdf/.png)")
 
 
+def example_grid(opts, out):
+    '''
+    The BAHAMAS CDM and largest-sigma example panels of sensitivity_maps for the first
+    opts.example_grid clusters of each (one row per cluster, CDM left). The Delta maps
+    are read from sensitivity.npz; the selection and noisy maps are regenerated with the
+    run's seed and checked against the saved window kappa.
+    '''
+    S = dict(np.load(out / "sensitivity.npz"))
+    rng = np.random.default_rng(opts.seed)
+    mu, sig = a2744_mass_gaussian()
+    sel = pick_clusters(opts.summaries, "bahamas", mu, sig, opts.clusters_per_sigma, rng, opts.all_clusters)
+    assert np.array_equal(sel["cross_section"], S["bahamas_sigma"]) and \
+        np.allclose(sel["log10_mass_750"], S["bahamas_log10_mass_750"]), "selection differs from sensitivity.npz"
+    raws, kappas_true = simulated_maps(sel, ms.setup_args("concat"), opts.seed)
+    p_full, delta = S["bahamas_p_full"], S["bahamas_delta"]
+    cols = [np.where(sel["cross_section"] == 0)[0], np.where(sel["cross_section"] == sel["cross_section"].max())[0]]
+    n = min(opts.example_grid, *(len(c) for c in cols))
+    rows = []
+    for k in range(n):
+        row = []
+        for idx in cols:
+            i = idx[k]
+            k_rec, k_snr = reconstruct_kappa(raws[i].numpy())
+            assert np.allclose(window_mean(k_snr, opts.window, opts.stride).ravel(), S["bahamas_snr_windows"][i],
+                               atol=1e-4), f"cluster {i}: regenerated map differs from the saved run"
+            s = float(sel["cross_section"][i])
+            row.append({"title": ("CDM" if s == 0 else f"$\\sigma/m={s:g}$") + f"  P = {p_full[i]:.2f}, "
+                                 f"log M = {sel['log10_mass_750'][i]:.2f}, n$_{{\\rm comp}}$ = {int(sel['ncomponents'][i])}",
+                        "delta": delta[i], "kappa_snr": k_snr, "kappa_true": kappas_true[i]})
+        rows.append(row)
+
+    plt = style()
+    _, centres = windows(opts.window, opts.stride)
+    half = opts.stride / 2.
+    extent = [centres[0] - half, centres[-1] + half, centres[0] - half, centres[-1] + half]
+    vmax = max(np.percentile(np.abs(p["delta"]), 99) for r in rows for p in r)
+    fig, axes = plt.subplots(n, 2, figsize=(8.4, 4.1 * n), constrained_layout=True, squeeze=False)
+    for k, row in enumerate(rows):
+        for j, p in enumerate(row):
+            im = draw_panel(axes[k, j], p, extent, vmax, scalebar=(k == 0))
+            axes[k, j].title.set_fontsize(9)
+    cbar = fig.colorbar(im, ax=axes, fraction=0.02, pad=0.01, shrink=0.5, location="top")
+    cbar.set_label(r"$\Delta P$(SIDM) when removed (red: pushes to SIDM)")
+    fig.suptitle(f"BAHAMAS, mass-weighted draws matched to A2744, n$_{{\\rm comp}}\\geq$3\n"
+                 f"CDM (left), $\\sigma/m$={sel['cross_section'].max():g} (right); rows are different halos\n"
+                 "black: reconstructed $\\kappa$ S/N 2,3,4,6,8; dotted: true $\\kappa$", color=INK, fontsize=10)
+    path = out / f"sensitivity_maps_bahamas_{n}rows"
+    for ext in ("pdf", "png"):
+        fig.savefig(path.with_suffix(f".{ext}"), dpi=110)
+    print(f"wrote {path}.png")
+
+
 def main():
     opts = parse()
     out = LAUNCH_DIR / (opts.out_dir or REPO / "sbi" / "results" / f"sensitivity_{opts.model}")
     out.mkdir(parents=True, exist_ok=True)
     if opts.kappa_plot:
         kappa_plot(opts, out)
+        return
+    if opts.example_grid:
+        example_grid(opts, out)
         return
     if opts.replot:
         stats = plot_correlations(out / "sensitivity.npz", opts.window, opts.stride, out / "sensitivity_correlations")
