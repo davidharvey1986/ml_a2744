@@ -536,6 +536,63 @@ def conditional_checks(post, theta, x, sigma_grid, rng, n_clusters=1000, n_sampl
             "sigma_map_correct": float(np.mean(probs.argmax(1) == idx))}, ranks
 
 
+def held_out_probs(post, theta, x, sigma_grid, n_samples=500):
+    '''Posterior probability of each simulated sigma/m for held-out clusters at their true M and n_comp.'''
+    cond = conditional_inputs(x, theta[:, 1], theta[:, 2])
+    probs = []
+    for chunk in np.array_split(np.arange(len(cond)), max(1, len(cond) // 1000)):
+        smp = post.sample_batched((n_samples,), x=torch.tensor(cond[chunk]), show_progress_bars=False,
+                                  reject_outside_prior=False).detach().numpy()[..., 0]
+        snapped = snap_sigma(smp, sigma_grid)
+        probs.append(np.stack([np.mean(snapped == v, axis=0) for v in sigma_grid], axis=1))
+    probs = np.concatenate(probs)
+    true = np.array([np.argmin(abs(sigma_grid - t)) for t in np.expm1(theta[:, 0])])
+    return probs, true, 0.5 / n_samples
+
+
+def recalibrate(probs, params, floor):
+    '''Temperature and per-sigma offset on the log posterior: p ∝ exp(log p / T + b), b[CDM] = 0.'''
+    T, b = np.exp(params[0]), np.r_[0., params[1:]]
+    z = np.log(np.maximum(probs, floor)) / T + b
+    z -= z.max(axis=-1, keepdims=True)
+    e = np.exp(z)
+    return e / e.sum(axis=-1, keepdims=True)
+
+
+def calibration_metrics(probs, true, n_bins=10):
+    rows = np.arange(len(true))
+    p_true = probs[rows, true]
+    conf = np.array([probs[true == i].mean(0) for i in range(probs.shape[1])])     # rows: true sigma
+    # reliability over every (cluster, sigma) pair
+    flat_p, flat_y = probs.ravel(), (np.arange(probs.shape[1])[None] == true[:, None]).ravel()
+    edges = np.linspace(0, 1, n_bins + 1)
+    b = np.clip(np.digitize(flat_p, edges[1:-1]), 0, n_bins - 1)
+    rel = [(flat_p[b == k].mean(), flat_y[b == k].mean(), int(np.sum(b == k))) for k in range(n_bins) if np.any(b == k)]
+    ece = sum(n * abs(pm - fy) for pm, fy, n in rel) / len(flat_p)
+    return {"nll": float(-np.mean(np.log(np.maximum(p_true, 1e-6)))), "p_true": float(p_true.mean()),
+            "ece": float(ece), "confusion": conf, "reliability": np.array(rel)}
+
+
+def calibration_check(post, theta, x, sigma_grid, rng):
+    '''
+    Held-out calibration of the conditional NPE, and a recalibration map fitted on half
+    of the held-out clusters and tested on the other half.
+    '''
+    from scipy.optimize import minimize
+    probs, true, floor = held_out_probs(post, theta, x, sigma_grid)
+    fit = rng.random(len(true)) < 0.5
+    K = probs.shape[1]
+
+    def nll(params, sel):
+        q = recalibrate(probs[sel], params, floor)
+        return -np.mean(np.log(np.maximum(q[np.arange(sel.sum()), true[sel]], 1e-12)))
+
+    params = minimize(nll, np.zeros(K), args=(fit,), method="Nelder-Mead",
+                      options={"maxiter": 4000, "xatol": 1e-4, "fatol": 1e-6}).x
+    raw, cal = calibration_metrics(probs[~fit], true[~fit]), calibration_metrics(recalibrate(probs[~fit], params, floor), true[~fit])
+    return {"params": params, "floor": floor, "raw": raw, "calibrated": cal, "n_test": int((~fit).sum())}
+
+
 def npe_summary(samples, sigma_grid, theta_train):
     s, m, n = samples.T
     snapped = snap_sigma(s, sigma_grid)
@@ -793,6 +850,34 @@ def plot_validation(R, out):
     save(fig, out / "validation")
 
 
+def plot_calibration(R, out):
+    '''Held-out confusion matrices (mean posterior per true sigma/m) and reliability, raw and recalibrated.'''
+    fig, axes = plt.subplots(len(R), 3, figsize=(15, 4.6 * len(R)), constrained_layout=True, squeeze=False)
+    for j, (d, r) in enumerate(R.items()):
+        c, labels = r["calibration"], ["CDM"] + [f"{v:g}" for v in r["sigma_grid"][1:]]
+        for ax, key in zip(axes[j, :2], ("raw", "calibrated")):
+            m = c[key]["confusion"]
+            ax.imshow(m, cmap=RAMP[d], vmin=0, vmax=1)
+            for (a, b), v in np.ndenumerate(m):
+                ax.text(b, a, f"{v:.2f}", ha="center", va="center", fontsize=9, color="white" if v > 0.5 else INK)
+            ax.set_xticks(range(len(labels)), labels)
+            ax.set_yticks(range(len(labels)), labels)
+            ax.set_xlabel(r"posterior $\sigma/m$")
+            ax.set_ylabel(r"true $\sigma/m$")
+            ax.grid(False)
+            ax.set_title(f"{d.upper()}: {key} (mean posterior per true $\\sigma/m$)", color=INK)
+        ax = axes[j, 2]
+        ax.plot([0, 1], [0, 1], "--", color=MUTED)
+        for key, col in (("raw", RAMP[d](0.5)), ("calibrated", RAMP[d](0.9))):
+            rel = c[key]["reliability"]
+            ax.plot(rel[:, 0], rel[:, 1], "o-", color=col, label=f"{key} (ECE {c[key]['ece']:.3f})")
+        ax.set_xlabel("posterior probability")
+        ax.set_ylabel("fraction true")
+        ax.set_title(f"{d.upper()}: reliability, {c['n_test']} held-out", color=INK)
+        ax.legend(loc="upper left")
+    save(fig, out / "calibration")
+
+
 def save(fig, stem):
     for ext in ("pdf", "png"):
         fig.savefig(f"{stem}.{ext}", dpi=180)
@@ -876,6 +961,28 @@ def run_domain(d, opts, out, rng, mu, sig):
     check_idx = np.where(check)[0][balance_sigma(th[check], rng)]
     cond_checks, cond_ranks = conditional_checks(npe_c, th[check_idx], D["x_npe"][check_idx], D["sigma_grid"], rng)
     cond_res["held_out_checks"] = cond_checks
+    # calibration on held-out clusters in A2744's n_comp class (every noise draw), sigma-balanced
+    in_class = test & np.isin(th[:, 2], ncomp_set)
+    cal_rng = np.random.default_rng(opts.seed + 1)      # own stream: keeps the shared rng (and later splits) unchanged
+    cal_idx = np.where(in_class)[0][balance_sigma(th[in_class], cal_rng)]
+    calib = calibration_check(npe_c, th[cal_idx], D["x_npe"][cal_idx], D["sigma_grid"], cal_rng)
+    p_a2744 = np.array([cond_res["sigma_probabilities"][f"{v:g}"] for v in D["sigma_grid"]])
+    p_cal = recalibrate(p_a2744, calib["params"], calib["floor"])
+    cond_res["calibration"] = {
+        "n_held_out": calib["n_test"],
+        "temperature": float(np.exp(calib["params"][0])),
+        "offsets": {f"{v:g}": float(b) for v, b in zip(D["sigma_grid"], np.r_[0., calib["params"][1:]])},
+        **{f"{k}_{m}": calib[k][m] for k in ("raw", "calibrated") for m in ("nll", "p_true", "ece")},
+        "confusion_raw": calib["raw"]["confusion"].tolist(),
+        "confusion_calibrated": calib["calibrated"]["confusion"].tolist(),
+        "a2744_sigma_probabilities_calibrated": {f"{v:g}": float(q) for v, q in zip(D["sigma_grid"], p_cal)},
+    }
+    print(f"  calibration ({calib['n_test']} held-out cluster-draws, n_comp {opts.a2744_ncomp}): "
+          f"NLL {calib['raw']['nll']:.3f} -> {calib['calibrated']['nll']:.3f}, "
+          f"ECE {calib['raw']['ece']:.3f} -> {calib['calibrated']['ece']:.3f}, T = {np.exp(calib['params'][0]):.2f}")
+    print("    P(true sigma) by sigma, raw:        " + " ".join(f"{v:g}:{calib['raw']['confusion'][i, i]:.2f}"
+                                                          for i, v in enumerate(D["sigma_grid"])))
+    print("    A2744 calibrated:                   " + " ".join(f"{v:g}:{q:.2f}" for v, q in zip(D["sigma_grid"], p_cal)))
     print(f"  NPE conditional on A2744 (n_comp {opts.a2744_ncomp}): P(CDM) = {cond_res['posterior_p_cdm']:.3f}, "
           f"{100 * cond_res['fraction_above_simulated_sigma']:.0f}% of samples above sigma/m = {D['sigma_grid'].max():g}, "
           f"BF(SIDM:CDM) = {cond_res['bayes_factor_sidm_cdm']:.2f}; held-out P(true sigma) = "
@@ -907,7 +1014,7 @@ def run_domain(d, opts, out, rng, mu, sig):
                "empirical_p_by_sigma": {s: v["p_ge_obs"] for s, v in empirical.items()}}
     return results, {"grids": grids, "nle_post": post, "sigma_grid": D["sigma_grid"], "npe_samples": samples, "sigma_cut": sigma_cut,
                      "empirical": empirical, "x_obs": float(D["x_obs_ens"][0]), "recovery": recovery,
-                     "sbc_ranks": sbc, "cond_ranks": cond_ranks, "cond_samples": cond_samples,
+                     "sbc_ranks": sbc, "cond_ranks": cond_ranks, "calibration": calib, "cond_samples": cond_samples,
                      "results": results}
 
 
@@ -947,6 +1054,7 @@ def main():
     plot_posterior(R, mu, sig, out, show_nle=opts.plot_nle)
     plot_discrepancy(R, out, show_nle=opts.plot_nle)
     plot_validation(R, out)
+    plot_calibration(R, out)
     print(f"\nwrote {out}")
 
 
