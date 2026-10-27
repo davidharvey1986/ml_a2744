@@ -106,6 +106,7 @@ def parse():
     p.add_argument("--population-npe", action="store_true",
                    help="also train the population NPE p(sigma/m, M, n_comp | x) (kept for reference; "
                         "not conditioned on A2744, so not used for sigma/m)")
+    p.add_argument("--plot-nle", action="store_true", help="also show the NLE in the figures")
     p.add_argument("--unconditioned", action="store_true",
                    help="NLE with flat mass and n_comp priors instead of conditioning on A2744")
     p.add_argument("--noise", default="0",
@@ -630,10 +631,14 @@ def setup_style():
     })
 
 
-def plot_posterior(R, mu, sig, out):
+def plot_posterior(R, mu, sig, out, show_nle=False):
     population = all(r["npe_samples"] is not None for r in R.values())
-    ncol = 4 if population else 2
-    fig, axes = plt.subplots(len(R), ncol, figsize=(4 * ncol, 4.2 * len(R)), constrained_layout=True, squeeze=False)
+    ncol = 4 if population else (2 if show_nle else 1)
+    if ncol == 1:                                                   # sigma/m only: simulations side by side
+        fig, axes = plt.subplots(1, len(R), figsize=(6 * len(R), 4.5), constrained_layout=True, squeeze=False)
+        axes = axes.T
+    else:
+        fig, axes = plt.subplots(len(R), ncol, figsize=(4 * ncol, 4.2 * len(R)), constrained_layout=True, squeeze=False)
     for row, (d, r) in zip(axes, R.items()):
         gs, gm, gn = r["grids"]
         post = r["nle_post"]
@@ -646,19 +651,30 @@ def plot_posterior(R, mu, sig, out):
         k = np.arange(len(grid_vals))
         nle_p = [res["nle"]["sigma_probabilities"][f"{v:g}"] for v in grid_vals]
         npe_p = [res["npe_conditional"]["sigma_probabilities"][f"{v:g}"] for v in grid_vals]
-        _, nle_prior = nle_cell_probs(gs, post.sum((1, 2)), grid_vals)
-        ax.bar(k - 0.2, nle_p, width=0.38, color=NLE_COLOUR, label="NLE")
-        ax.bar(k + 0.2, npe_p, width=0.38, color=NPE_COLOUR, label="NPE (conditional)")
-        ax.plot(k - 0.2, nle_prior, "_", ms=22, mew=2, color=PRIOR_COLOUR, label="prior")
-        ax.plot(k + 0.2, [res["npe_conditional"]["prior_p_cdm"]] * len(k), "_", ms=22, mew=2, color=PRIOR_COLOUR)
+        npe_prior = [res["npe_conditional"]["prior_p_cdm"]] * len(k)
+        if show_nle:
+            _, nle_prior = nle_cell_probs(gs, post.sum((1, 2)), grid_vals)
+            ax.bar(k - 0.2, nle_p, width=0.38, color=NLE_COLOUR, label="NLE")
+            ax.bar(k + 0.2, npe_p, width=0.38, color=NPE_COLOUR, label="NPE (conditional)")
+            ax.plot(k - 0.2, nle_prior, "_", ms=22, mew=2, color=PRIOR_COLOUR, label="prior")
+            ax.plot(k + 0.2, npe_prior, "_", ms=22, mew=2, color=PRIOR_COLOUR)
+        else:
+            ax.bar(k, npe_p, width=0.6, color=NPE_COLOUR)
         ax.set_xticks(k)
         ax.set_xticklabels(["CDM"] + [f"{v:g}" for v in grid_vals[1:]])
         ax.set_xlabel(r"$\sigma/m$ [cm$^2$ g$^{-1}$] (nearest simulated)")
         ax.set_ylabel("Posterior probability")
-        ax.set_title(f"{d.upper()}: cross-section | A2744 mass, n_comp {res['a2744_ncomp_class'][0]}"
-                     + ("+" if len(res["a2744_ncomp_class"]) > 1 else ""), color=INK)
-        ax.legend(loc="upper left", fontsize=8)
+        cls = res["a2744_ncomp_class"]
+        ax.set_title(f"{d.upper()}  |  A2744 mass, n$_{{\\rm comp}}$ " + (f"$\\geq${cls[0]}" if len(cls) > 1 else f"= {cls[0]}"),
+                     color=INK)
+        if show_nle:
+            ax.legend(loc="upper left", fontsize=8)
+            ax.set_ylim(0, max(max(npe_p), npe_prior[0]) * 1.25)
+        else:
+            ax.set_ylim(0, max(npe_p) * 1.15)
 
+        if ncol == 1:
+            continue
         ax = row[1]
         ax.plot(gm, post.sum((0, 2)) / trapezoid(post.sum((0, 2)), gm), color=NLE_COLOUR, lw=2, label="NLE")
         if population:
@@ -709,7 +725,7 @@ def credible_levels(density, masses):
     return sorted(float(flat[np.searchsorted(c, m)]) for m in masses)
 
 
-def plot_discrepancy(R, out):
+def plot_discrepancy(R, out, show_nle=False):
     fig, axes = plt.subplots(1, len(R), figsize=(6.5 * len(R), 4.2), constrained_layout=True, squeeze=False)
     for ax, (d, r) in zip(axes[0], R.items()):
         emp = r["empirical"]
@@ -727,8 +743,9 @@ def plot_discrepancy(R, out):
         z = (">" if e["is_lower_limit"] else "") + f"{e['significance_sigma']:.1f}"
         text = (f"A2744 vs CDM\n"
                 f"p = {e['p_value']:.2g}  ({z}$\\sigma$)\n"
-                f"BF$_{{\\rm SIDM:CDM}}$  NLE {res['nle']['bayes_factor_sidm_cdm']:.1f},"
-                f"  NPE {res['npe_conditional']['bayes_factor_sidm_cdm']:.1f}")
+                + (f"BF$_{{\\rm SIDM:CDM}}$  NLE {res['nle']['bayes_factor_sidm_cdm']:.1f},"
+                   f"  NPE {res['npe_conditional']['bayes_factor_sidm_cdm']:.1f}" if show_nle else
+                   f"BF$_{{\\rm SIDM:CDM}}$ (conditional NPE) {res['npe_conditional']['bayes_factor_sidm_cdm']:.1f}"))
         ax.text(0.02, 0.97, text, transform=ax.transAxes, va="top", fontsize=9, color=INK)
         ax.annotate("A2744", (x_obs, 0.5), xycoords=("data", "axes fraction"), xytext=(4, 0),
                     textcoords="offset points", fontsize=9, color=INK)
@@ -927,8 +944,8 @@ def main():
                                                       ("npe_conditional_sigma", np.expm1(r["cond_samples"])),
                                                       ("sigma_grid", np.expm1(r["grids"][0])),
                                                       ("mass_grid", r["grids"][1])] if v is not None})
-    plot_posterior(R, mu, sig, out)
-    plot_discrepancy(R, out)
+    plot_posterior(R, mu, sig, out, show_nle=opts.plot_nle)
+    plot_discrepancy(R, out, show_nle=opts.plot_nle)
     plot_validation(R, out)
     print(f"\nwrote {out}")
 
