@@ -57,6 +57,8 @@ GROUPS = {
     "ba final": "summaries_ba_final_n5",
     "k0p9 best": "summaries_k0p9_bonsai_best_n5",   # trained on kappa_thresh = 0.9 maps
     "k0p9 final": "summaries_k0p9_bonsai_final_n5",
+    "k0p9 ctr best": "summaries_k0p9_ctr_best_n5",  # stamp centred on the A2744 main peak
+    "k0p9 ctr final": "summaries_k0p9_ctr_final_n5",
 }
 DOMAINS = ["bahamas", "darkskies"]
 COLOUR = {"bahamas": "#56B4E9", "darkskies": "#E69F00"}
