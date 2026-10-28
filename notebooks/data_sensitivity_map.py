@@ -14,7 +14,8 @@ so Delta > 0 means that region pushes the output towards SIDM. As in the noteboo
   * A2744: map 0 of ../data/100/a2744/obs_data_concat.pkl
   * the A2744 analogue (pickles/a2744_analogue.pkl, a CDM and an SIDM cluster) and the
     first --nclusters clusters of each BAHAMAS cross-section, forward modelled with the
-    test transform with no shape noise (apply_intrinsic_ell = 0) and zs = 1.65
+    test transform with no shape noise (apply_intrinsic_ell = 0) and zs = default_zs (2.28,
+    the redshift the maps are made at)
   * Figure 1 (plots/sensitivity_map.pdf): mean Delta over models in units of its standard
     deviation, for the analogue and A2744, over the convergence (Kaiser-Squires for A2744,
     true kappa for the analogue)
@@ -86,7 +87,7 @@ def parse():
     p.add_argument("--nclusters", type=int, default=40, help="first n clusters of each BAHAMAS file")
     p.add_argument("--min-ncomp", type=int, default=0, help="Figure 2 uses clusters with n_comp > this")
     p.add_argument("--analogue", default="pickles/a2744_analogue.pkl")
-    p.add_argument("--zs", type=float, default=1.65)
+    p.add_argument("--zs", type=float, default=None, help="source redshift (default: args.default_zs, 2.28)")
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--recompute", action="store_true")
     return p.parse_args()
@@ -289,7 +290,7 @@ def main():
 
     args.source_domain = args.target_domain = "a2744"
     args.apply_intrinsic_ell = 0.
-    args.zs = opts.zs
+    args.zs = args.default_zs if opts.zs is None else opts.zs
     args.verbose = False
     transform = get_test_transform(args)
     models = load_models(opts, device)
