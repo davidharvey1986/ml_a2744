@@ -61,8 +61,7 @@ def profile(raw, occupied):
 
 def source_redshift_map():
     '''As get_model_probabilities.get_variable_redshift_dist, about A2744's main halo.'''
-    cuts = {"f115w": {"signal_noise_cut": 0, "stat_type": "snr"}, "f150w": {"signal_noise_cut": 5, "stat_type": "snr"}}
-    cat = get_obs_data("concat", data_dir="../data/100/a2744/", photoz=True, cuts=cuts)
+    cat = get_obs_data("concat", data_dir="../data/100/a2744/", photoz=True, cuts=SHEAR_CUTS)
     ra, dec = ra_dec_to_simulation_image_pos(cat, ra_0=O2_PX[0], dec_0=O2_PX[1])
     nz = binned_statistic_2d(ra, dec, cat["redshift"], range=[[-50, 50], [-50, 50]],
                              statistic=np.median, bins=NPIX).statistic.T

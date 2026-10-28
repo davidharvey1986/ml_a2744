@@ -112,6 +112,7 @@ from sklearn.gaussian_process.kernels import ConstantKernel, Matern, WhiteKernel
 # Project-local
 # ---------------------------------------------------------------------------
 from add_shear_to_data import (
+    SHEAR_CUTS,
     bin_obs_data,
     get_obs_data,
     get_source_redshift,
@@ -651,11 +652,7 @@ def get_variable_redshift_dist(data_dir="../data/100/a2744/", ifilter="concat"):
     -------
     np.ndarray, shape (image_size, image_size)
     """
-    cuts = {
-        "f115w": {"signal_noise_cut": 0, "stat_type": "snr"},
-        "f150w": {"signal_noise_cut": 5, "stat_type": "snr"},
-    }
-    obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True, cuts=cuts)
+    obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True, cuts=SHEAR_CUTS)
     delta_ra, delta_dec = ra_dec_to_simulation_image_pos(obs_data)
 
     half = args.image_size // 2

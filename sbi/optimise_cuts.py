@@ -37,13 +37,15 @@ from pyRRG.calc_shear import calc_shear
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO)]
-from add_shear_to_data import SHEAR_CUTS, ra_dec_to_simulation_image_pos  # noqa: E402
+from add_shear_to_data import KAPPA_THRESH, SHEAR_CUTS, ra_dec_to_simulation_image_pos, strong_lensing_kappa  # noqa: E402
 
 FILTERS = ["f115w", "f150w"]
 NAME = "abell2744clu-grizli-v5.4-{}-clear_drc_sci_clean.shears"
-FID_CUTS = {"size_cut": [2, 200], "signal_noise_cut": 0, "stat_type": "median", "mag_cut": [0, 30]}   # get_obs_data defaults
+FID_CUTS = {"size_cut": [2, 200], "signal_noise_cut": 0, "stat_type": "median", "mag_cut": [0, 30],
+            "RS_info": False}   # get_obs_data defaults
 MEMBER_Z = 0.305 + 0.05 * 3
 R_EDGES = np.array([5, 10, 15, 20, 30, 40, 50, 71])     # pixels (20 kpc)
+INNER_RMAX = 15                                          # --objective inner_chi_t: r < 300 kpc
 
 GRID = {
     "signal_noise_cut": [0, 3, 5, 7, 10, 15],
@@ -57,6 +59,13 @@ def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--cats", required=True, help="directory with <filter>/" + NAME.format("<filter>") + " or the files themselves")
     p.add_argument("--uncover", default=str(REPO / "data" / "100" / "a2744" / "UNCOVER_DR4_SPS_catalog.fits"))
+    p.add_argument("--snr-cuts", type=float, nargs="+", default=GRID["signal_noise_cut"])
+    p.add_argument("--size-lo", type=float, nargs="+", default=GRID["size_lo"])
+    p.add_argument("--size-hi", type=float, nargs="+", default=GRID["size_hi"])
+    p.add_argument("--mag-hi", type=float, nargs="+", default=GRID["mag_hi"])
+    p.add_argument("--objective", choices=["snr_t", "inner_chi_t"], default="snr_t",
+                   help="snr_t: tangential S/N 100 kpc-1.4 Mpc; inner_chi_t: mean chi_t of the data-map galaxies "
+                        "(strong-lensing kappa < 0.9) within 300 kpc of the main halo")
     p.add_argument("--out-dir", default=str(REPO / "sbi" / "results" / "optimise_cuts"))
     return p.parse_args()
 
@@ -101,7 +110,7 @@ def combine(cat):
     extra_a = np.setdiff1d(np.arange(len(a)), ia)
     extra_b = np.setdiff1d(np.arange(len(b)), ib)
     out = {}
-    for k in ("x", "y"):
+    for k in ("x", "y", "RA", "DEC"):
         out[k] = np.r_[a[k][ia], a[k][extra_a], b[k][extra_b]]
     for k in ("gamma1", "gamma2"):
         out[k] = np.r_[(a[k][ia] + b[k][ib]) / 2, a[k][extra_a], b[k][extra_b]]
@@ -123,7 +132,11 @@ def statistics(d, model=None):
     mt = np.bincount(b, weights=ct[ins], minlength=len(n)) / np.maximum(n, 1)
     mx = np.bincount(b, weights=cx[ins], minlength=len(n)) / np.maximum(n, 1)
     err = sig / np.sqrt(np.maximum(n, 1))
+    inner = (r < INNER_RMAX) & (strong_lensing_kappa(d) < KAPPA_THRESH)
+    n_in = int(inner.sum())
     res = {"n_stamp": int(ins.sum()), "sigma_chi": float(sig), "chi_t": mt, "err": err,
+           "inner_chi_t": float(ct[inner].mean()) if n_in else np.nan,
+           "inner_chi_t_err": float(sig / np.sqrt(max(n_in, 1))), "n_inner": n_in,
            "snr_t": float(np.sqrt(np.sum((mt / err) ** 2))), "snr_x": float(np.sqrt(np.sum((mx / err) ** 2)))}
     if model is not None:
         res["n_total"] = int(len(ra))
@@ -133,6 +146,7 @@ def statistics(d, model=None):
 
 def main():
     opts = parse()
+    GRID.update({"signal_noise_cut": opts.snr_cuts, "size_lo": opts.size_lo, "size_hi": opts.size_hi, "mag_hi": opts.mag_hi})
     out = Path(opts.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     raw = {f: raw_catalogue(opts.cats, f) for f in FILTERS}
@@ -165,8 +179,8 @@ def main():
         return statistics(combine({"f115w": shears["f115w"][c115], "f150w": shears["f150w"][c150]}), model)
 
     # baseline: the current SHEAR_CUTS (signal_noise_cut 0 / 5, default size and magnitude limits)
-    base = {f: (SHEAR_CUTS[f]["signal_noise_cut"], FID_CUTS["size_cut"][0], FID_CUTS["size_cut"][1], FID_CUTS["mag_cut"][1])
-            for f in FILTERS}
+    base = {f: (SHEAR_CUTS[f]["signal_noise_cut"], *SHEAR_CUTS[f].get("size_cut", FID_CUTS["size_cut"]),
+                SHEAR_CUTS[f].get("mag_cut", FID_CUTS["mag_cut"])[1]) for f in FILTERS}
     b = evaluate(base["f115w"], base["f150w"])
     rk = 10. * (R_EDGES[1:] + R_EDGES[:-1])
     ok = b["chi_t"] > 0
@@ -176,7 +190,7 @@ def main():
         return np.exp(amp) * r_kpc ** slope
 
     b = evaluate(base["f115w"], base["f150w"], model)
-    print(f"baseline {base}: n {b['n_total']} after cuts (get_obs_data: 16552 for the 28/10 catalogues), {b['n_stamp']} in stamp, S/N_t {b['snr_t']:.2f}, S/N_x {b['snr_x']:.2f}, S/N_model {b['snr_model']:.2f}"
+    print(f"baseline {base}: n {b['n_total']} after cuts, {b['n_stamp']} in stamp, inner chi_t {b['inner_chi_t']:.4f}±{b['inner_chi_t_err']:.4f} (n {b['n_inner']}), S/N_t {b['snr_t']:.2f}, S/N_x {b['snr_x']:.2f}, S/N_model {b['snr_model']:.2f}"
           f"  (model chi_t = {np.exp(amp):.3g} r^{slope:.2f})")
 
     # coordinate ascent on the measured S/N: each filter's cuts in turn, the other held fixed
@@ -186,32 +200,35 @@ def main():
         if (c115, c150) not in seen:
             s = evaluate(c115, c150, model)
             seen[(c115, c150)] = {"f115w": c115, "f150w": c150,
-                                  **{k: s[k] for k in ("n_stamp", "sigma_chi", "snr_t", "snr_x", "snr_model")}}
+                                  **{k: s[k] for k in ("n_stamp", "sigma_chi", "snr_t", "snr_x", "snr_model", "inner_chi_t", "inner_chi_t_err", "n_inner")}}
         return seen[(c115, c150)]
 
     cur = dict(base)
     for it in range(4):
         prev = dict(cur)
-        cur["f115w"] = max(shears["f115w"], key=lambda c: row(c, cur["f150w"])["snr_t"])
-        cur["f150w"] = max(shears["f150w"], key=lambda c: row(cur["f115w"], c)["snr_t"])
-        print(f"round {it + 1}: S/N_t {row(cur['f115w'], cur['f150w'])['snr_t']:.2f}  {cur}")
+        obj = opts.objective
+        cur["f115w"] = max(shears["f115w"], key=lambda c: np.nan_to_num(row(c, cur["f150w"])[obj], nan=-np.inf))
+        cur["f150w"] = max(shears["f150w"], key=lambda c: np.nan_to_num(row(cur["f115w"], c)[obj], nan=-np.inf))
+        r = row(cur["f115w"], cur["f150w"])
+        print(f"round {it + 1}: {obj} {r[obj]:.4f}  (S/N_t {r['snr_t']:.2f})  {cur}")
         if cur == prev:
             break
     rows = list(seen.values())
-    rows.sort(key=lambda r: -r["snr_t"])
+    rows.sort(key=lambda r: -np.nan_to_num(r[opts.objective], nan=-np.inf))
     keys = ("signal_noise_cut", "size_lo", "size_hi", "mag_hi")
     fmt = lambda c: " ".join(f"{k.split('_')[0]}={v:g}" for k, v in zip(keys, c))  # noqa: E731
-    print(f"\n{len(rows)} combinations evaluated; top by measured S/N_t")
+    print(f"\n{len(rows)} combinations evaluated; top by {opts.objective}")
     for r in rows[:15]:
-        print(f"  S/N_t {r['snr_t']:6.2f}  S/N_model {r['snr_model']:6.2f}  S/N_x {r['snr_x']:5.2f}  n {r['n_stamp']:5d}  "
+        print(f"  inner chi_t {r['inner_chi_t']:.4f}±{r['inner_chi_t_err']:.4f} (n {r['n_inner']:4d})  "
+              f"S/N_t {r['snr_t']:6.2f}  S/N_model {r['snr_model']:6.2f}  S/N_x {r['snr_x']:5.2f}  n {r['n_stamp']:5d}  "
               f"sigma {r['sigma_chi']:.3f} | f115w {fmt(r['f115w'])} | f150w {fmt(r['f150w'])}")
     best_model = max(rows, key=lambda r: r["snr_model"])
     print(f"\nbest by S/N_model: {best_model['snr_model']:.2f} (S/N_t {best_model['snr_t']:.2f}, n {best_model['n_stamp']}) | "
           f"f115w {fmt(best_model['f115w'])} | f150w {fmt(best_model['f150w'])}")
-    json.dump({"grid": GRID, "baseline": {"cuts": base, **{k: b[k] for k in ("n_stamp", "sigma_chi", "snr_t", "snr_x", "snr_model")}},
+    json.dump({"grid": GRID, "baseline": {"cuts": base, **{k: b[k] for k in ("n_stamp", "sigma_chi", "snr_t", "snr_x", "snr_model", "inner_chi_t", "inner_chi_t_err", "n_inner")}},
                "model": {"amplitude": float(np.exp(amp)), "slope": float(slope)},
                "rows": [{**r, "f115w": list(r["f115w"]), "f150w": list(r["f150w"])} for r in rows]},
-              open(out / "optimise_cuts.json", "w"), indent=1)
+              open(out / f"optimise_cuts_{opts.objective}.json", "w"), indent=1)
 
 
 if __name__ == "__main__":

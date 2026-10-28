@@ -62,7 +62,7 @@ sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
 
 import make_summaries as ms  # noqa: E402  (chdirs to notebooks/, loads the default args)
 from add_shear_to_data import (  # noqa: E402
-    A2744_STAMP_CENTRE, KAPPA_THRESH, data_to_shear, strong_lensing_kappa, get_background_sigma, get_boxsize, get_obs_data,
+    A2744_STAMP_CENTRE, KAPPA_THRESH, SHEAR_CUTS, data_to_shear, strong_lensing_kappa, get_background_sigma, get_boxsize, get_obs_data,
     get_surface_density_norms,
     ra_dec_to_simulation_image_pos, sample_maps_on_galaxies,
 )
@@ -77,8 +77,7 @@ from sidm_inference_on_data_and_models import infer_sidm  # noqa: E402
 
 DOMAINS = ["bahamas", "darkskies"]
 DATA_DIR = "../data/100/a2744/"
-FILTER_CUTS = {"f115w": {"signal_noise_cut": 0, "stat_type": "snr"},
-               "f150w": {"signal_noise_cut": 5, "stat_type": "snr"}}
+FILTER_CUTS = SHEAR_CUTS
 NPIX = 100
 NCOMP_MAX = 6
 A2744_NCOMP = (3, 4, 5, 6)            # n_comp >= 3 (core, NW, N have mass ratios < 10)

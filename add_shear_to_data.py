@@ -49,9 +49,12 @@ A2744_STAMP_CENTRE = (12949.2, 8049.1)
 # sampled at every catalogue galaxy and apply their own kappa cut.
 SL_KAPPA_MAP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "100", "a2744", "sl_kappa_zs2.28.fits")
 
-# Shear-catalogue cuts used for the A2744 data map (prepare_uncovers_data)
-SHEAR_CUTS = {'f115w': {'signal_noise_cut': 0, 'stat_type': 'snr'},
-              'f150w': {'signal_noise_cut': 5, 'stat_type': 'snr'}}
+# Shear-catalogue cuts used for the A2744 data map, its galaxy positions and noise model,
+# and the source-redshift map: the highest mean tangential shear within 300 kpc of the main
+# halo with S/N cut <= 5, 2 <= lower size cut <= 3 and magnitude limit >= 27.5
+# (sbi/optimise_cuts.py --objective inner_chi_t, 28/10 catalogues and pyRRG G1 fit to all S/N).
+SHEAR_CUTS = {'f115w': {'signal_noise_cut': 4, 'size_cut': [2.75, 200], 'mag_cut': [0, 27.5], 'stat_type': 'snr'},
+              'f150w': {'signal_noise_cut': 0, 'size_cut': [2.75, 200], 'mag_cut': [0, 27.5], 'stat_type': 'snr'}}
 
 
 def load_pickle(path):
@@ -468,7 +471,8 @@ def get_obs_data(
             'signal_noise_cut': 0,
             'stat_type': 'median',
             'mag_cut': [0, 30],
-            'verbose': False
+            'verbose': False,
+            'RS_info': False,       # pyRRG >= 28/10: red-sequence cut off (members are removed below)
         }
 
     for this_filter in ['f115w', 'f150w']:
@@ -530,12 +534,16 @@ def get_obs_data(
     return obs_data
 
 
+_SL_MAPS = {}
+
+
 def strong_lensing_kappa(obs_data, path=SL_KAPPA_MAP):
     '''Strong-lensing convergence at each galaxy (nearest map pixel; 0 outside the map).'''
     from astropy.wcs import WCS
-    with fits.open(path) as h:
-        kappa = h[0].data
-        wcs = WCS(h[0].header)
+    if path not in _SL_MAPS:
+        with fits.open(path) as h:
+            _SL_MAPS[path] = (h[0].data, WCS(h[0].header))
+    kappa, wcs = _SL_MAPS[path]
     i, j = wcs.world_to_pixel_values(np.asarray(obs_data['RA']), np.asarray(obs_data['DEC']))
     i, j = np.round(i).astype(int), np.round(j).astype(int)
     inside = (i >= 0) & (j >= 0) & (i < kappa.shape[1]) & (j < kappa.shape[0])

@@ -19,7 +19,7 @@ import scienceplots
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from add_shear_to_data import get_obs_data, get_model_names
+from add_shear_to_data import SHEAR_CUTS, get_obs_data, get_model_names
 from get_model_probabilities import args, get_variable_redshift_dist, get_probabilities
 
 plt.style.use(["science", "grid"])
@@ -30,10 +30,7 @@ plt.style.use(["science", "grid"])
 # ---------------------------------------------------------------------------
 
 DATA_DIR = "../data/100/a2744/"
-FILTER_CUTS = {
-    "f115w": {"signal_noise_cut": 0,  "stat_type": "snr"},
-    "f150w": {"signal_noise_cut": 5,  "stat_type": "snr"},
-}
+FILTER_CUTS = SHEAR_CUTS
 DOMAIN_MAP = {
     "tgt": "darkskies_obs",
     "src": "bahamas_obs",
