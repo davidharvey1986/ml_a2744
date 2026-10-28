@@ -62,8 +62,7 @@ sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
 
 import make_summaries as ms  # noqa: E402  (chdirs to notebooks/, loads the default args)
 from add_shear_to_data import (  # noqa: E402
-    A2744_STAMP_CENTRE, KAPPA_THRESH, data_to_shear, get_background_sigma, get_boxsize, get_obs_data,
-    get_surface_density_norms,
+    KAPPA_THRESH, data_to_shear, get_background_sigma, get_boxsize, get_obs_data, get_surface_density_norms,
     ra_dec_to_simulation_image_pos, sample_maps_on_galaxies,
 )
 from dataset import (  # noqa: E402
@@ -121,7 +120,7 @@ class Catalogue:
 
     def __init__(self, data):
         self.full = data
-        self.ra_0, self.dec_0 = A2744_STAMP_CENTRE
+        self.ra_0, self.dec_0 = np.median(data["x"]), np.median(data["y"])
 
     def select(self, kind=None, value=None):
         d = self.full
