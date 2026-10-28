@@ -30,7 +30,43 @@ the paper. These include=
 if not os.path.isdir("plots"):
     os.system("mkdir plots")
 
-def figure1():
+def kappa_on_stamp(path, cat, downsample=2):
+    '''
+    A convergence map (FITS with a celestial WCS) in the figure-1 pixel frame (stamp pixel
+    index, 0-99 with origin lower), via an affine map from (RA, Dec) to stamp position
+    fitted on the catalogue itself (cat['x'], cat['y'] already in stamp coordinates).
+    Returns X, Y, kappa for ax.contour, and kappa interpolated at the galaxies.
+    '''
+    from astropy.wcs import WCS
+    with fits.open(path) as h:
+        kappa = h[0].data.astype(float)
+        wcs = WCS(h[0].header)
+    ra0, dec0 = np.median(cat['RA']), np.median(cat['DEC'])
+    def design(ra, dec):
+        return np.c_[(np.asarray(ra) - ra0) * np.cos(np.deg2rad(dec0)), np.asarray(dec) - dec0, np.ones(np.size(ra))]
+    A = design(cat['RA'], cat['DEC'])
+    cx = np.linalg.lstsq(A, cat['x'], rcond=None)[0]
+    cy = np.linalg.lstsq(A, cat['y'], rcond=None)[0]
+    rms = np.sqrt(np.mean((A @ cx - cat['x'])**2 + (A @ cy - cat['y'])**2))
+    print(f"sky -> stamp affine fit: rms residual {rms:.3f} stamp pixels")
+    jj, ii = np.mgrid[0:kappa.shape[0]:downsample, 0:kappa.shape[1]:downsample]
+    ra, dec = wcs.pixel_to_world_values(ii, jj)
+    D = design(ra.ravel(), dec.ravel())
+    X = (D @ cx).reshape(ra.shape) + 49.5
+    Y = (D @ cy).reshape(ra.shape) + 49.5
+    gi, gj = wcs.world_to_pixel_values(np.asarray(cat['RA']), np.asarray(cat['DEC']))
+    inside = (gi >= 0) & (gj >= 0) & (gi <= kappa.shape[1] - 1) & (gj <= kappa.shape[0] - 1)
+    k_gal = np.full(len(gi), np.nan)
+    k_gal[inside] = kappa[np.round(gj[inside]).astype(int), np.round(gi[inside]).astype(int)]
+    return X, Y, kappa[::downsample, ::downsample], k_gal
+
+
+def figure1(sl_kappa=None, kappa_level=0.9):
+    '''
+    Postage stamp examples (plots/data_examples.png). With sl_kappa (a strong-lensing
+    convergence map) the kappa = kappa_level contour is drawn on the A2744 panels and the
+    figure is written to plots/data_examples_kappa<level>.png instead.
+    '''
     # ## Postage stamp examples
 
     # ### Get the ideal data
@@ -186,6 +222,17 @@ def figure1():
     ax[1,1].imshow(kappa_b, cmap=cmap, origin='lower', vmin=-0.2,vmax=0.8)
     ax[1,1].text( 5, 90, 'A2744 $\kappa_B$', color='white', fontweight='bold')
 
+    if sl_kappa is not None:
+        X, Y, k_sl, k_gal = kappa_on_stamp(sl_kappa, obs_cat)
+        n_in = np.sum(k_gal >= kappa_level)
+        print(f"strong-lensing kappa >= {kappa_level}: {n_in} of {len(k_gal)} catalogue galaxies "
+              f"({n_in / len(k_gal):.1%}); {np.sum((k_gal >= kappa_level) & (np.abs(obs_cat['x']) < 50) & (np.abs(obs_cat['y']) < 50))} in the stamp")
+        for iax in [ax[0,0], ax[1,0], ax[0,1], ax[1,1]]:
+            iax.contour(X, Y, k_sl, levels=[kappa_level], colors='cyan', linewidths=1.3)
+            iax.set_xlim(-0.5, 99.5)
+            iax.set_ylim(-0.5, 99.5)
+        ax[0,0].text( 5, 82, f'cyan: SL model $\\kappa={kappa_level:g}$', color='cyan', fontsize=8)
+
     cax = inset_axes(
             ax[1,2],
             width="100%",      # same width as axes
@@ -211,7 +258,7 @@ def figure1():
         iax.set_xticks([])
         iax.set_yticks([])
 
-    filename = "plots/data_examples.png"
+    filename = "plots/data_examples.png" if sl_kappa is None else f"plots/data_examples_kappa{kappa_level:g}.png"
     plt.savefig(filename)
 
 def figure2():
@@ -2063,8 +2110,9 @@ def figureA5(log_max_like, log_error):
 
     
 if __name__ == "__main__":
-    if sys.argv[1:] == ["figure1"]:
-        figure1()
+    if sys.argv[1:2] == ["figure1"]:
+        # python plots_for_paper.py figure1 [strong-lensing kappa.fits]
+        figure1(*sys.argv[2:3])
         sys.exit()
     if sys.argv[1:] == ["figure2"]:
         # python plots_for_paper.py figure2: only Figure 2 from the current summaries
