@@ -38,11 +38,14 @@ COMPONENTS_DIR = "notebooks/pickles"
 # Galaxies where the convergence (at zs=MAP_ZS, the default source redshift 2.28) is at
 # least this are dropped when the simulated shear is sampled at the A2744 galaxy positions
 KAPPA_THRESH = 0.9
-# Centre of the 100x100 (2 Mpc) stamp in catalogue pixels (x, y; 0.02 arcsec): the main
-# mass peak of A2744, Lenstool halo O2 in the southern core (RA 3.5882, Dec -30.4027).
-# It used to be the median galaxy position, which put this peak ~720 kpc from the centre
-# while every simulated cluster is centred (sbi/obs_map_checks.py).
-A2744_STAMP_CENTRE = (12949.2, 8049.1)
+# Centre of the 100x100 (2 Mpc) stamp in catalogue pixels (x, y; 0.02 arcsec): the centre of
+# the projected NFW that best fits the main peak's tangential shear (30 kpc - 1 Mpc, 28/10
+# catalogues; RA 3.58958, Dec -30.40511), 45 kpc from the Lenstool halo O2 (RA 3.5882,
+# Dec -30.4027), whose profile has negative shear inside 100 kpc. It used to be O2, and
+# before that the median galaxy position, ~720 kpc from the peak, while every simulated
+# cluster is centred (sbi/obs_map_checks.py).
+A2744_LENSTOOL_O2 = (12949.2, 8049.1)
+A2744_STAMP_CENTRE = (12734.1, 7619.0)
 # Strong-lensing convergence of A2744 (zs = 2.28). Galaxies of the A2744 *data* map where it
 # is at least KAPPA_THRESH are dropped (get_obs_data(drop_strong_lensing=True)), the data
 # counterpart of the per-cluster kappa cut in the simulations. The simulations are still

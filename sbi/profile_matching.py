@@ -31,13 +31,13 @@ sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
 
 import make_summaries as ms  # noqa: E402  (chdirs to notebooks/)
 import sensitivity as sens  # noqa: E402
-from add_shear_to_data import SHEAR_CUTS, galaxy_distortion, get_obs_data, normalise_map, ra_dec_to_simulation_image_pos  # noqa: E402
+from add_shear_to_data import A2744_STAMP_CENTRE, SHEAR_CUTS, galaxy_distortion, get_obs_data, normalise_map, ra_dec_to_simulation_image_pos  # noqa: E402
 from dataset import SIGMA_CRIT_MAP  # noqa: E402
 from mass_weighting import a2744_mass_gaussian, gaussian_mass_weights  # noqa: E402
 from obs_map_checks import RG, tangential  # noqa: E402
 
 NPIX = 100
-O2_PX = (12949.2, 8049.1)                       # A2744 main halo (Lenstool O2), catalogue pixels
+O2_PX = A2744_STAMP_CENTRE                      # stamp centre (main halo), catalogue pixels
 FIT_BINS = np.array([5, 10, 15, 20, 30, 40, 50, 71])   # pixels (20 kpc); inner 100 kpc left out
 N_ROT = 500
 
