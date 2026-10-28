@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import transforms
+import torchvision.transforms.functional as TF
 from collections import defaultdict
 from lenspack.utils import sigma_critical, bin2d
 from astropy import cosmology
@@ -289,33 +290,34 @@ def prepare_dataloaders(args):
 
         
 
-    if args.aug_rotation_prob > 0:
-        train_transform = transforms.Compose([
-            rescale_lens_source_configuration(args),
-            apply_intrinsic_ell( args ),
-            transforms.RandomHorizontalFlip(args.aug_h_flip_prob),
-            transforms.RandomVerticalFlip(args.aug_v_flip_prob),
-            transforms.Pad( int( args.image_size//2*(np.sqrt(2)-1)), padding_mode='reflect'),
-            transforms.RandomApply([transforms.RandomRotation(degrees=args.aug_rotation_degrees, fill=0)], p=args.aug_rotation_prob),
-            transforms.CenterCrop( size=(args.image_size, args.image_size)),
-            transforms.RandomApply([
-                transforms.RandomResizedCrop(size=(args.image_size, args.image_size), 
-                                           scale=(args.aug_crop_scale_min, args.aug_crop_scale_max), 
-                                           ratio=(1.0, 1.0))
-            ], p=args.aug_crop_prob),
-        ])
+    crop = transforms.RandomApply([
+        transforms.RandomResizedCrop(size=(args.image_size, args.image_size),
+                                     scale=(args.aug_crop_scale_min, args.aug_crop_scale_max),
+                                     ratio=(1.0, 1.0))
+    ], p=args.aug_crop_prob)
+    if getattr(args, "legacy_spin_aug", False):
+        # Models trained before the spin-2 fix: flips and rotations move the pixels only, so
+        # the shear orientations are scrambled relative to the positions (E/B blind).
+        geometry = [transforms.RandomHorizontalFlip(args.aug_h_flip_prob),
+                    transforms.RandomVerticalFlip(args.aug_v_flip_prob)]
+        if args.aug_rotation_prob > 0:
+            geometry += [
+                transforms.Pad( int( args.image_size//2*(np.sqrt(2)-1)), padding_mode='reflect'),
+                transforms.RandomApply([transforms.RandomRotation(degrees=args.aug_rotation_degrees, fill=0)], p=args.aug_rotation_prob),
+                transforms.CenterCrop( size=(args.image_size, args.image_size)),
+            ]
     else:
-        train_transform = transforms.Compose([
-            rescale_lens_source_configuration(args),
-            apply_intrinsic_ell( args ),
-            transforms.RandomHorizontalFlip(args.aug_h_flip_prob),
-            transforms.RandomVerticalFlip(args.aug_v_flip_prob),
-            transforms.RandomApply([
-                transforms.RandomResizedCrop(size=(args.image_size, args.image_size), 
-                                           scale=(args.aug_crop_scale_min, args.aug_crop_scale_max), 
-                                           ratio=(1.0, 1.0))
-            ], p=args.aug_crop_prob),
-        ]) 
+        # Flips and rotations transform the shear as a spin-2 field. No reflect padding: a
+        # mirrored border would carry the wrong handedness; rotated-in corners are empty.
+        geometry = [SpinFlip(args.aug_h_flip_prob, dim=-1), SpinFlip(args.aug_v_flip_prob, dim=-2)]
+        if args.aug_rotation_prob > 0:
+            geometry.append(SpinRotation(args.aug_rotation_degrees, args.aug_rotation_prob))
+    train_transform = transforms.Compose([
+        rescale_lens_source_configuration(args),
+        apply_intrinsic_ell( args ),
+        *geometry,
+        crop,
+    ])
         
     test_transform = get_test_transform(args)
 
@@ -559,6 +561,47 @@ from scipy.ndimage import zoom
 
 import torch
 import torch.nn.functional as F
+
+
+class SpinFlip:
+    '''
+    Flip a shear map (e1, e2 in channels 0, 1) left-right (dim=-1) or up-down (dim=-2) with
+    probability p. A reflection reverses the handedness of a spin-2 field, so e2 -> -e2.
+    '''
+    def __init__(self, p=0.5, dim=-1):
+        self.p = p
+        self.dim = dim
+
+    def __call__(self, sample):
+        if torch.rand(1).item() < self.p:
+            sample = torch.flip(sample, dims=[self.dim])
+            sample[1] = -sample[1]
+        return sample
+
+
+class SpinRotation:
+    '''
+    Rotate a shear map (e1, e2 in channels 0, 1) by a random angle with probability p,
+    moving the pixels with TF.rotate (nearest neighbour, emptied corners filled with 0 =
+    no galaxies) and rotating the spin-2 components with them: for TF.rotate by theta,
+    (e1 + i e2) -> (e1 + i e2) exp(-2 i theta). Without the second step the shear orientations
+    are randomised relative to the positions and the CNN cannot tell E- from B-modes
+    (sbi/eb_swap_test.py).
+    '''
+    def __init__(self, degrees=360, p=1.0):
+        self.degrees = degrees
+        self.p = p
+
+    def __call__(self, sample):
+        if torch.rand(1).item() >= self.p:
+            return sample
+        theta = float(torch.empty(1).uniform_(-self.degrees, self.degrees))
+        sample = TF.rotate(sample, theta, fill=0.)
+        c, s = np.cos(np.deg2rad(2 * theta)), np.sin(np.deg2rad(2 * theta))
+        e1, e2 = sample[0].clone(), sample[1].clone()
+        sample[0] = c * e1 + s * e2
+        sample[1] = -s * e1 + c * e2
+        return sample
 
 
 class Downsample:
