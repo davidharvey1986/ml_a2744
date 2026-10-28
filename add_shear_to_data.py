@@ -794,13 +794,16 @@ def make_noise_model(ifilter='concat', data_dir='data/100/a2744', cuts=None):
     '''
     Write <data_dir>/ngal_<ifilter>.pkl, read by dataset.apply_intrinsic_ell: the binned
     A2744 catalogue (galaxy-to-pixel assignment, bin_obs_data) and a chi fit to the
-    galaxy ellipticities, so the simulated shape noise sits at the same galaxies as the
-    data map.
+    galaxy shear estimates |gamma|, so the simulated shape noise sits at the same galaxies
+    as the data map and has its amplitude: the data map is built from gamma
+    (galaxy_distortion), and apply_intrinsic_ell turns the drawn values into chi the same
+    way. Fitting the raw ellipticities |e| instead overstates the noise by 1/(0.86 G1)
+    (~10% for the 28/10 catalogues).
     '''
     from scipy.stats import chi
     obs_data = get_obs_data(ifilter, data_dir=data_dir, cuts=SHEAR_CUTS if cuts is None else cuts)
     binned_data = bin_obs_data(obs_data)
-    egal = np.sqrt(obs_data['e1']**2 + obs_data['e2']**2)
+    egal = np.sqrt(obs_data['gamma1']**2 + obs_data['gamma2']**2)
     noise_model = {'ngal': binned_data['ngal'], 'chi_fit_function': chi.fit(egal),
                    'binned_data': binned_data}
     out = f"{data_dir}/ngal_{ifilter}.pkl"
