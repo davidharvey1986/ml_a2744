@@ -18,7 +18,7 @@ from scipy.ndimage import zoom
 # from the stored kappa must use them too.
 MAP_ZL = 0.305
 MAP_ZS = 2.28
-SIGMA_CRIT_MAP = sigma_critical(MAP_ZL, MAP_ZS, cosmology.Planck18).value   # 2334 Msun/pc^2
+SIGMA_CRIT_MAP = sigma_critical(MAP_ZL, MAP_ZS, cosmology.Planck18).value   # 2222 Msun/pc^2
 
 def get_cross_section_from_filename(filename):
     base_name = os.path.basename(filename)
@@ -714,7 +714,8 @@ class cluster_member_contamination( object ):
     
 class rescale_lens_source_configuration( object ):
     '''
-    When creating the data it assumes that zs=MAP_ZS=1.72, zl=MAP_ZL=0.305
+    The maps are made at zs=MAP_ZS (2.28, the default source redshift), zl=MAP_ZL=0.305
+    (add_shear_to_data.main); this rescales them to the requested zl, zs.
     '''
     def __init__(self, args ):
         self.zl = args.zl

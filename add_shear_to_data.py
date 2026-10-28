@@ -30,12 +30,13 @@ from pyRRG.calc_shear import calc_shear
 from RRGtools import run_match
 
 from model import create_model
+from dataset import MAP_ZL, MAP_ZS
 
 # Directory holding the extracted halo components (*.comps), relative to the repo root
 COMPONENTS_DIR = "notebooks/pickles"
 
-# Galaxies where the convergence (at zs=1.72) is at least this are dropped when the
-# simulated shear is sampled at the A2744 galaxy positions
+# Galaxies where the convergence (at zs=MAP_ZS, the default source redshift 2.28) is at
+# least this are dropped when the simulated shear is sampled at the A2744 galaxy positions
 KAPPA_THRESH = 0.9
 # Centre of the 100x100 (2 Mpc) stamp in catalogue pixels (x, y; 0.02 arcsec): the main
 # mass peak of A2744, Lenstool halo O2 in the southern core (RA 3.5882, Dec -30.4027).
@@ -86,12 +87,14 @@ def main(
     sample_data=True,
     data_dir="data/100/a2744",
     reduce_shear=True,
-    zl=0.305, zs=1.72,
+    zl=MAP_ZL, zs=MAP_ZS,
     add_ncomps=True
     ):
     '''
-    Note - zs=1.72 is rescaled during training to the true redshift distribution
-    so this is a place holder.
+    The maps are made at zl=MAP_ZL, zs=MAP_ZS (dataset.py; MAP_ZS is the default source
+    redshift, 2.28): rescale_lens_source_configuration rescales them from there to the
+    observed source redshifts during training, and the kappa cut (thresh_k) is applied
+    at MAP_ZS, the redshift of the strong-lensing model used for the A2744 data.
     '''
     image_size = 100
     shear_kwargs = dict(zs=zs, zl=zl, ngal_per_sq_arcmin=200.)

@@ -50,6 +50,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
 
 import make_summaries as ms  # noqa: E402  (chdirs to notebooks/)
+from dataset import MAP_ZL, MAP_ZS  # noqa: E402
 import sensitivity as sens  # noqa: E402
 from add_shear_to_data import (  # noqa: E402
     KAPPA_THRESH, SHEAR_CUTS, data_to_shear, galaxy_distortion, get_background_sigma, get_boxsize, get_obs_data,
@@ -115,7 +116,7 @@ def offset_test(sel, offset, models, transform, device):
         for lab, off in [("centred", (0, 0)), ("at_a2744_offset", offset)]:
             imgs = np.array([nd_shift(data[i, 0], off, order=1, mode="nearest") for i in idx])
             e1, e2, k = data_to_shear(imgs, norms[idx, 0], meta["redshift"][idx], get_boxsize(conv),
-                                      reduce_shear=False, background=bkg[idx], zs=1.72, zl=0.305)
+                                      reduce_shear=False, background=bkg[idx], zs=MAP_ZS, zl=MAP_ZL)
             maps, _ = sample_maps_on_galaxies(e1, e2, k, ra, dec, thresh_k=KAPPA_THRESH, reduce_shear=True, npix=NPIX)
             torch.manual_seed(1)
             np.random.seed(1)
