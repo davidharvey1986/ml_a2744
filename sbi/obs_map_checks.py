@@ -145,7 +145,7 @@ def main():
     results = {}
 
     # 1. per-galaxy distortions: data (gamma) against the noise model (fit to e)
-    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS)
+    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
     c1, c2 = galaxy_distortion(cat)
     chi_data = np.hypot(c1, c2)
     noise = pkl.load(open("../data/100/a2744/ngal_concat.pkl", "rb"))

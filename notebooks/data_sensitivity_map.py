@@ -165,7 +165,7 @@ def forward_model(shear, transform):
 
 
 def obs_kappa(correct_for_ngal):
-    obs_data = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS)
+    obs_data = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
     obs_cat = bin_obs_data(obs_data)
     obs_data["x"], obs_data["y"] = obs_cat["delta_ra"], obs_cat["delta_dec"]
     ke, _ = get_kappa(obs_data, smooth=1.5, correct_for_ngal=correct_for_ngal, extent=[-50, 50, -50, 50])

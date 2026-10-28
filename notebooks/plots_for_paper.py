@@ -115,7 +115,7 @@ def figure1(sl_kappa=None, kappa_level=0.9):
 
 
     # same catalogue cuts as the CNN input map (add_shear_to_data.make_obs_maps)
-    obs_cat = get_obs_data( 'concat', data_dir='../data/100/a2744/', cuts=SHEAR_CUTS)
+    obs_cat = get_obs_data( 'concat', data_dir='../data/100/a2744/', cuts=SHEAR_CUTS, drop_strong_lensing=True)
     obs_data = bin_obs_data( obs_cat )
     obs_cat['x'] = obs_data['delta_ra']
     obs_cat['y'] = obs_data['delta_dec']

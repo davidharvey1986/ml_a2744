@@ -173,7 +173,7 @@ def normalise(t):
 # ── data and simulations ───────────────────────────────────────────────────────
 def a2744_map():
     '''Raw (chi) and normalised A2744 map, built as add_shear_to_data.make_obs_maps map 0.'''
-    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS)
+    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
     ra, dec = ra_dec_to_simulation_image_pos(cat)
     c1, c2 = galaxy_distortion(cat)
     raw = np.array(bin2d(ra, dec, v=(c1, c2), npix=NPIX, extent=[-50, 50, -50, 50]), dtype=np.float32)

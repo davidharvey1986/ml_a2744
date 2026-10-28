@@ -62,7 +62,7 @@ sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
 
 import make_summaries as ms  # noqa: E402  (chdirs to notebooks/, loads the default args)
 from add_shear_to_data import (  # noqa: E402
-    A2744_STAMP_CENTRE, KAPPA_THRESH, data_to_shear, get_background_sigma, get_boxsize, get_obs_data,
+    A2744_STAMP_CENTRE, KAPPA_THRESH, data_to_shear, strong_lensing_kappa, get_background_sigma, get_boxsize, get_obs_data,
     get_surface_density_norms,
     ra_dec_to_simulation_image_pos, sample_maps_on_galaxies,
 )
@@ -333,7 +333,8 @@ class Runner:
         a = make_args(**over)
         maps = self.sim_maps(d).sample(ra, dec)
         p_sim = simulate(self.models, maps, sim_transforms(a, noise_geometry(ra, dec)), self.opts, self.device)
-        p_obs = observe(self.models, obs_raw_map(data, ra, dec), downsample, self.device)
+        keep = strong_lensing_kappa(data) < KAPPA_THRESH          # data map only; the simulations cut per cluster
+        p_obs = observe(self.models, obs_raw_map(data[keep], ra[keep], dec[keep]), downsample, self.device)
         return p_sim, p_obs, len(data)
 
     def cached(self, name, fn):

@@ -76,7 +76,7 @@ def main():
     models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
                                             nmodels=opts.nmodels), args, device)
 
-    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS)
+    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
     ra, dec = ra_dec_to_simulation_image_pos(cat, **centre)
     c1, c2 = galaxy_distortion(cat)
     _, stored = pkl.load(open(f"../data/100/a2744/obs_data_{tag}.pkl", "rb"))

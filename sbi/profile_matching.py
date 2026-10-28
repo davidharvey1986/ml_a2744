@@ -79,7 +79,7 @@ def main():
     rng = np.random.default_rng(opts.seed)
 
     # A2744 in the centred stamp, checked against the stored CNN input
-    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS)
+    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
     ra, dec = ra_dec_to_simulation_image_pos(cat, ra_0=O2_PX[0], dec_0=O2_PX[1])
     c1, c2 = galaxy_distortion(cat)
     raw_a = np.array(bin2d(ra, dec, v=(c1, c2), npix=NPIX, extent=[-50, 50, -50, 50]))

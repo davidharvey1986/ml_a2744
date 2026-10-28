@@ -42,6 +42,11 @@ KAPPA_THRESH = 0.9
 # It used to be the median galaxy position, which put this peak ~720 kpc from the centre
 # while every simulated cluster is centred (sbi/obs_map_checks.py).
 A2744_STAMP_CENTRE = (12949.2, 8049.1)
+# Strong-lensing convergence of A2744 (zs = 2.28). Galaxies of the A2744 *data* map where it
+# is at least KAPPA_THRESH are dropped (get_obs_data(drop_strong_lensing=True)), the data
+# counterpart of the per-cluster kappa cut in the simulations. The simulations are still
+# sampled at every catalogue galaxy and apply their own kappa cut.
+SL_KAPPA_MAP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "100", "a2744", "sl_kappa_zs2.28.fits")
 
 # Shear-catalogue cuts used for the A2744 data map (prepare_uncovers_data)
 SHEAR_CUTS = {'f115w': {'signal_noise_cut': 0, 'stat_type': 'snr'},
@@ -441,13 +446,16 @@ def get_obs_data(
     data_dir='data/100/a2744',
     photoz=False,
     remove_members=True,
-    redshift_cut=0.305+0.05*3):
+    redshift_cut=0.305+0.05*3,
+    drop_strong_lensing=False):
     '''
     Apply the shear cuts to the f115w and f150w catalogues (rewriting
     a2744_<filter>_filtered.fits), optionally remove cluster members and,
     for ifilter='concat', combine the two. With photoz=True a 'redshift' field
     is added from the UNCOVER photo-z's, defaulting to the lensing-weighted
-    mean for unmatched galaxies.
+    mean for unmatched galaxies. With drop_strong_lensing=True galaxies where the
+    strong-lensing model has kappa >= KAPPA_THRESH are removed: use it for the A2744 data
+    map only, not for the galaxy positions the simulations are sampled at.
     '''
     cuts = {} if cuts is None else dict(cuts)
 
@@ -513,7 +521,24 @@ def get_obs_data(
             asrecarray=True
         )
 
+    if drop_strong_lensing:
+        obs_data = obs_data[strong_lensing_kappa(obs_data) < KAPPA_THRESH]
+
     return obs_data
+
+
+def strong_lensing_kappa(obs_data, path=SL_KAPPA_MAP):
+    '''Strong-lensing convergence at each galaxy (nearest map pixel; 0 outside the map).'''
+    from astropy.wcs import WCS
+    with fits.open(path) as h:
+        kappa = h[0].data
+        wcs = WCS(h[0].header)
+    i, j = wcs.world_to_pixel_values(np.asarray(obs_data['RA']), np.asarray(obs_data['DEC']))
+    i, j = np.round(i).astype(int), np.round(j).astype(int)
+    inside = (i >= 0) & (j >= 0) & (i < kappa.shape[1]) & (j < kappa.shape[0])
+    out = np.zeros(len(i))
+    out[inside] = kappa[j[inside], i[inside]]
+    return out
 
 
 def remove_cluster_members(cat_raw, photoz, redshift_cut=0.):
@@ -592,7 +617,8 @@ def make_obs_maps(ifilter='concat', data_dir='data/100/a2744', cuts=None, nmonte
     distortion amplitude |chi| but gets a random orientation, so they carry exactly the
     shape noise of the data map and no shear signal. Saved as [{}, (1 + nmonte, 2, 100, 100)].
     '''
-    obs_data = get_obs_data(ifilter, data_dir=data_dir, cuts=SHEAR_CUTS if cuts is None else cuts)
+    obs_data = get_obs_data(ifilter, data_dir=data_dir, cuts=SHEAR_CUTS if cuts is None else cuts,
+                            drop_strong_lensing=True)
     binned = bin_obs_data(obs_data)
     c1, c2 = galaxy_distortion(obs_data)
     amplitude = np.hypot(c1, c2)
