@@ -128,6 +128,8 @@ def main():
     ax.set_xlabel("radius kept [kpc]" if opts.outer else
                   "radius of disc removed around the main halo [kpc]" if opts.halo else "radius of central disc removed [kpc]")
     ax.set_ylabel("ensemble P(SIDM)")
+    ax.set_title(f"{opts.model}: {len(models)} models, {opts.n} mass-matched BAHAMAS clusters "
+                 f"per σ/m with n_comp ≥ {min(sens.A2744_NCOMP)}", fontsize=8)
     ax.legend(fontsize=8)
     for ext in ("png", "pdf"):
         fig.savefig(out / f"{tag}.{ext}", dpi=150)
