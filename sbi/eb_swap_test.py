@@ -7,9 +7,9 @@ the E-mode into a pure B-mode, alpha = 90 deg makes the pattern radial (a negati
 A network reading the lensing signal should lose the CDM / SIDM difference at 45 deg;
 if A2744 stays where it was, its score is not coming from the E-mode.
 
-    # median-centred stamp (current pipeline)
+    # the stamp as add_shear_to_data builds it (current pipeline)
     astro-env/bin/python sbi/eb_swap_test.py
-    # stamp centred on A2744's main halo
+    # the earlier O2-centred maps kept as concat_centred
     astro-env/bin/python sbi/eb_swap_test.py --centred --model tweakedalign_k0p9_ctr_ba_best \
         --summaries $PWD/sbi/summaries_k0p9_ctr_best_n5
 '''
@@ -41,6 +41,7 @@ RANDOM = -1                              # independent random angle per galaxy (
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default="tweakedalign_ba_best")
+    p.add_argument("--include-str", default="nob1", help="only checkpoints whose name contains this (e.g. spin2)")
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_ba_best_n5"))
     p.add_argument("--centred", action="store_true", help="stamp centred on A2744's main halo (concat_centred files)")
     p.add_argument("--nmodels", type=int, default=10)
@@ -73,7 +74,7 @@ def main():
     else:
         centre = {}
     transform = get_test_transform(args)
-    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
+    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str=opts.include_str,
                                             nmodels=opts.nmodels), args, device)
 
     cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)

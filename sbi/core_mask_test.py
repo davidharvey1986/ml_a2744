@@ -43,6 +43,7 @@ O2_PX = (12949.2, 8049.1)             # A2744 main halo (Lenstool O2) in catalog
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default="tweakedalign_k0p9_ctr_ba_best")
+    p.add_argument("--include-str", default="nob1", help="only checkpoints whose name contains this (e.g. spin2)")
     p.add_argument("--nmodels", type=int, default=10)
     p.add_argument("--n", type=int, default=100, help="matched clusters per cross-section")
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_k0p9_ctr_best_n5"))
@@ -65,7 +66,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     device = ms.get_device()
     args = ms.setup_args("concat")
-    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
+    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str=opts.include_str,
                                             nmodels=opts.nmodels), args, device)
     raw_a, cat, _, _ = sens.a2744_map()
     if opts.halo:

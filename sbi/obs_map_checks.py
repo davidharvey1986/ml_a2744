@@ -71,6 +71,7 @@ R_BINS = np.array([0, 5, 10, 15, 20, 30, 40, 50, 71])
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default="tweakedalign_ba_best")
+    p.add_argument("--include-str", default="nob1", help="only checkpoints whose name contains this (e.g. spin2)")
     p.add_argument("--nmodels", type=int, default=5)
     p.add_argument("--n", type=int, default=60, help="matched clusters per cross-section (CDM and the largest)")
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_ba_best_n5"))
@@ -197,7 +198,7 @@ def main():
                             "n_pixels_occupied_in_data": int(occupied.sum())}
 
     # 6. CNN on pure noise: A2744 rotated maps vs simulated noise-only maps
-    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
+    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str=opts.include_str,
                                             nmodels=opts.nmodels), args, device)
     transform = ms.get_test_transform(args)
     torch.manual_seed(opts.seed)

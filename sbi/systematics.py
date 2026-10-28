@@ -80,7 +80,7 @@ DATA_DIR = "../data/100/a2744/"
 FILTER_CUTS = SHEAR_CUTS
 NPIX = 100
 NCOMP_MAX = 6
-A2744_NCOMP = (3, 4, 5, 6)            # n_comp >= 3 (core, NW, N have mass ratios < 10)
+A2744_NCOMP = (3, 4, 5, 6)            # n_comp >= 3 (core, NW, N have mass ratios < 10); --min-ncomp
 SUBSET_DEX = 0.45                     # clusters within this of the A2744 mass are simulated
 EPS = 1e-4
 
@@ -94,12 +94,14 @@ SHAPE_BIAS = [(comp, c, m) for c in (0, 0.02) for m in (0, 0.02) for comp in ("e
 ZS_BIAS = [0.75, 0.85, 0.95, 1.05, 1.15, 1.25]
 DOWNSAMPLE = [2, 4, 10]                # 40, 80, 200 kpc pixels
 MASS_SHIFTS = [-2, -1, 1, 2]           # in units of the A2744 mass error
-MERGING = {"3": (3,), "4+": (4, 5, 6)}         # fiducial is 3+
+MERGING = {"3": (3,), "4+": (4, 5, 6)}         # fiducial is 3+ (with --min-ncomp 2: "2", "3", "4+")
 
 
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default="tweakedalign_ba_best")
+    p.add_argument("--include-str", default="nob1", help="only checkpoints whose name contains this (e.g. spin2)")
+    p.add_argument("--min-ncomp", type=int, default=3, help="A2744 merger class: n_comp >= this")
     p.add_argument("--tests", nargs="+", default=list(TESTS), choices=list(TESTS))
     p.add_argument("--n-noise", type=int, default=1,
                    help="shape-noise draws per cluster; the same draws are used in every test, so shifts are precise")
@@ -262,8 +264,9 @@ def logit(p):
     return np.log(p / (1 - p))
 
 
-def weights(sel, mu, sig, ncomp_set=A2744_NCOMP):
+def weights(sel, mu, sig, ncomp_set=None):
     '''A2744 merger class, weighted to the A2744 mass separately for each cross-section.'''
+    ncomp_set = A2744_NCOMP if ncomp_set is None else ncomp_set
     w = np.zeros(len(sel["cross_section"]))
     for c in np.unique(sel["cross_section"]):
         rows = (sel["cross_section"] == c) & np.isin(np.minimum(sel["ncomponents"], NCOMP_MAX), ncomp_set)
@@ -301,7 +304,7 @@ class Runner:
         self.cat = Catalogue(cat)
         a = make_args()
         self.default_zs = a.default_zs
-        self.models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
+        self.models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str=opts.include_str,
                                                      nmodels=None), make_args(), self.device)
         print(f"{len(self.models)} models ({opts.model}), {len(cat)} galaxies, device {self.device}")
         self.sel = {d: select_clusters(opts.summaries, d, self.mu) for d in DOMAINS}
@@ -349,7 +352,7 @@ class Runner:
                  **{f"{d}_obs": v[1] for d, v in res.items()})
         return res, n_gal
 
-    def summarise(self, res, mu=None, ncomp_set=A2744_NCOMP):
+    def summarise(self, res, mu=None, ncomp_set=None):
         mu = self.mu if mu is None else mu
         return {d: metrics(res[d][0], res[d][1], self.sel[d], weights(self.sel[d], mu, self.sig, ncomp_set))
                 for d in DOMAINS}
@@ -508,6 +511,9 @@ def plot_model(out, path):
 
 def main():
     opts = parse()
+    global A2744_NCOMP, MERGING
+    A2744_NCOMP = tuple(range(opts.min_ncomp, 7))
+    MERGING = {**({"2": (2,)} if opts.min_ncomp <= 2 else {}), "3": (3,), "4+": (4, 5, 6)}
     out_dir = LAUNCH_DIR / (opts.out_dir or REPO / "sbi" / "results" / f"systematics_{opts.model}")
     out_dir.mkdir(parents=True, exist_ok=True)
     opts.summaries = str((LAUNCH_DIR / opts.summaries).resolve())

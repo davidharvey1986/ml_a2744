@@ -59,6 +59,8 @@ GROUPS = {
     "k0p9 final": "summaries_k0p9_bonsai_final_n5",
     "k0p9 ctr best": "summaries_k0p9_ctr_best_n5",  # stamp centred on the A2744 main peak
     "k0p9 ctr final": "summaries_k0p9_ctr_final_n5",
+    "spin2 best": "summaries_spin2_best_n5",        # spin-2 augmentation, 28/10 catalogues, NFW centre
+    "spin2 final": "summaries_spin2_final_n5",
 }
 DOMAINS = ["bahamas", "darkskies"]
 COLOUR = {"bahamas": "#56B4E9", "darkskies": "#E69F00"}
