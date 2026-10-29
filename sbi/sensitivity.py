@@ -88,6 +88,10 @@ LENSTOOL_HALOS = {"O1": (-153.655514, -113.582824),   # Lenstool x, y [arcsec] (
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default="tweakedalign_ba_best")
+    p.add_argument("--include-str", default="nob1", help="only models whose filename contains this")
+    p.add_argument("--min-ncomp", type=int, default=3, help="A2744 merger class: n_comp >= this")
+    p.add_argument("--match", choices=["mass", "profile"], default="mass",
+                   help="draw the simulated clusters by A2744's mass or by its main-halo tangential shear profile")
     p.add_argument("--nmodels", type=int, default=None)
     p.add_argument("--window", type=int, default=4, help="occluded window size [pixels]")
     p.add_argument("--stride", type=int, default=4, help="step between windows [pixels]")
@@ -101,6 +105,7 @@ def parse():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--excess-map", default=str(EXCESS_MAP), help="Lenstool excess_kappa.fits ('' to skip)")
+    p.add_argument("--a2744-only", action="store_true", help="only redraw the A2744 map from sensitivity.npz")
     p.add_argument("--replot", action="store_true", help="only redraw the correlation figure from sensitivity.npz")
     p.add_argument("--kappa-plot", action="store_true",
                    help="BAHAMAS-only mean Delta P against reconstructed kappa, with A2744 errors from "
@@ -182,17 +187,41 @@ def a2744_map():
     return raw, cat, ra, dec
 
 
-def pick_clusters(summaries, domain, mu, sig, k, rng, all_clusters=False):
+def profile_bins():
+    from profile_matching import FIT_BINS
+    return FIT_BINS
+
+
+def pick_clusters(summaries, domain, mu, sig, k, rng, all_clusters=False, chi2=None):
     '''
     Clusters in A2744's merger class, per sigma/m: either k drawn with probability proportional
     to the A2744 mass weights (equal weights afterwards), or all within SUBSET_DEX of its mass
-    carrying those weights.
+    carrying those weights. With chi2 (per cluster, from profile_matching.profile_chi2: the
+    main-halo tangential shear profile against A2744's) the k clusters with the lowest chi2 are
+    taken instead, or with all_clusters every cluster weighted by exp(-chi2 / 2) with chi2
+    rescaled so that the best match has chi2 / ndof = 1 (no simulated profile fits A2744 to
+    within its shape noise, so the raw likelihood keeps only a handful).
     '''
     P = dict(np.load(Path(summaries) / f"params_{domain}.npz"))
     cs, m, nc = P["cross_section"], P["log10_mass_750"], np.minimum(P["ncomponents"], 6)
+    if chi2 is not None:
+        ndof = len(profile_bins()) - 1
+        w_prof = np.exp(-0.5 * (chi2 - np.nanmin(chi2)) * ndof / np.nanmin(chi2))
+        w_prof[~np.isfinite(w_prof)] = 0
+        chi2 = np.where(np.isfinite(chi2), chi2, np.inf)
     picks, weights = [], []
     for c in np.unique(cs):
         rows = np.where((cs == c) & np.isin(nc, A2744_NCOMP) & np.isfinite(m))[0]
+        if chi2 is not None:
+            if all_clusters:
+                w = w_prof[rows]
+                keep = w > 1e-3 * w.max()
+                picks.append(rows[keep])
+                weights.append(w[keep])
+            else:
+                picks.append(rows[np.argsort(chi2[rows])[:k]])
+                weights.append(np.ones(len(picks[-1])))
+            continue
         if all_clusters:
             rows = rows[np.abs(m[rows] - mu) < SUBSET_DEX]
             picks.append(rows)
@@ -202,7 +231,7 @@ def pick_clusters(summaries, domain, mu, sig, k, rng, all_clusters=False):
             picks.append(rng.choice(rows, min(k, len(rows)), replace=False, p=w / w.sum()))
             weights.append(np.ones(len(picks[-1])))
     rows = np.concatenate(picks)
-    return {"filename": P["filename"][rows], "image_idx": P["image_idx"][rows], "cross_section": cs[rows],
+    return {"row": rows, "filename": P["filename"][rows], "image_idx": P["image_idx"][rows], "cross_section": cs[rows],
             "log10_mass_750": m[rows], "ncomponents": P["ncomponents"][rows], "weight": np.concatenate(weights)}
 
 
@@ -636,12 +665,31 @@ def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bin
         fig.savefig(path.with_suffix(f".{ext}"), dpi=180)
 
 
+def a2744_only_map(opts, out):
+    '''A2744's sensitivity map alone, redrawn from sensitivity.npz.'''
+    z = np.load(out / "sensitivity.npz")
+    raw_np, cat, ra, dec = a2744_map()
+    delta = z["a2744_delta"].mean(0)
+    panel = {"title": f"A2744  (P = {json.load(open(out / 'sensitivity.json'))['a2744_p_sidm']:.2f}, "
+                      f"{z['a2744_delta'].shape[0]} models)", "delta": delta, "kappa_snr": reconstruct_kappa(raw_np)[1]}
+    if "a2744_excess_snr" in z:
+        _, inverse = stamp_to_lenstool(cat, ra, dec)
+        panel.update(excess_snr=z["a2744_excess_snr"], halos={k: tuple(inverse(*v)) for k, v in LENSTOOL_HALOS.items()})
+    plt = style()
+    c = z["centres"]
+    half = opts.stride / 2.
+    fig, ax = plt.subplots(figsize=(6, 5.4), constrained_layout=True)
+    im = draw_panel(ax, panel, [c[0] - half, c[-1] + half, c[0] - half, c[-1] + half],
+                    np.percentile(np.abs(delta[delta != 0]), 99))
+    finish_maps(fig, ax, im, out / "sensitivity_map_a2744")
+
+
 def kappa_plot(opts, out):
     '''BAHAMAS-only Delta P vs kappa from sensitivity.npz, with rotated-shear errors for A2744.'''
     z = np.load(out / "sensitivity.npz")
     device = ms.get_device()
     args = ms.setup_args("concat")
-    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
+    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str=opts.include_str,
                                             nmodels=opts.nmodels), args, device)
     raw_np, cat, ra, dec = a2744_map()
     a2744 = {"kappa": window_mean(reconstruct_kappa(raw_np)[0], opts.window, opts.stride),
@@ -738,10 +786,15 @@ def example_grid(opts, out):
 
 def main():
     opts = parse()
+    global A2744_NCOMP
+    A2744_NCOMP = tuple(range(opts.min_ncomp, 7))
     out = LAUNCH_DIR / (opts.out_dir or REPO / "sbi" / "results" / f"sensitivity_{opts.model}")
     out.mkdir(parents=True, exist_ok=True)
     if opts.kappa_plot:
         kappa_plot(opts, out)
+        return
+    if opts.a2744_only:
+        a2744_only_map(opts, out)
         return
     if opts.example_grid:
         example_grid(opts, out)
@@ -753,7 +806,7 @@ def main():
     rng = np.random.default_rng(opts.seed)
     device = ms.get_device()
     args = ms.setup_args("concat")
-    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str="nob1",
+    models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str=opts.include_str,
                                             nmodels=opts.nmodels), args, device)
     print(f"{len(models)} models ({opts.model}); window {opts.window} px, stride {opts.stride} px")
     _, centres = windows(opts.window, opts.stride)
@@ -788,9 +841,16 @@ def main():
     panels = [panel]
 
     # matched simulations
+    chi2 = None
+    if opts.match == "profile":
+        from profile_matching import profile_chi2
+        chi2 = profile_chi2(opts.summaries, opts.domains, seed=opts.seed)
     sims = {}
     for d in opts.domains:
-        sel = pick_clusters(opts.summaries, d, mu, sig, opts.clusters_per_sigma, rng, opts.all_clusters)
+        sel = pick_clusters(opts.summaries, d, mu, sig, opts.clusters_per_sigma, rng, opts.all_clusters,
+                            chi2[d] if chi2 else None)
+        print(f"{d}: matched on {opts.match}, mean log M750 {np.average(sel['log10_mass_750'], weights=sel['weight']):.2f}"
+              + (f", median profile chi2 {np.median(chi2[d][sel['row']]):.1f}" if chi2 else ""))
         raws, kappas_true = simulated_maps(sel, args, opts.seed)
         sims[d] = []
         deltas = []
@@ -822,7 +882,7 @@ def main():
                           for s in sorted({m['sigma'] for m in sims[d]})))
 
     json.dump({"model": opts.model, "n_models": len(models), "window": opts.window, "stride": opts.stride,
-               "clusters_per_sigma": opts.clusters_per_sigma, "a2744_p_sidm": float(full.mean()), **stats},
+               "clusters_per_sigma": opts.clusters_per_sigma, "match": opts.match, "a2744_p_sidm": float(full.mean()), **stats},
               open(out / "sensitivity.json", "w"), indent=2)
     plot_maps(panels, centres, opts.stride, out / "sensitivity_maps")
     saved["a2744_snr_windows"] = obs["snr"]

@@ -40,13 +40,15 @@ NPIX = 100
 O2_PX = A2744_STAMP_CENTRE                      # stamp centre (main halo), catalogue pixels
 FIT_BINS = np.array([5, 10, 15, 20, 30, 40, 50, 71])   # pixels (20 kpc); inner 100 kpc left out
 N_ROT = 500
+DEFAULT_MAPS = REPO / "data" / "100" / "obs" / "concat"
+DEFAULT_OBS = REPO / "data" / "100" / "a2744" / "obs_data_concat.pkl"
 
 
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_k0p9_ctr_best_n5"))
-    p.add_argument("--maps", default=str(REPO / "data" / "100" / "obs" / "concat_centred"))
-    p.add_argument("--obs", default=str(REPO / "data" / "100" / "a2744" / "obs_data_concat_centred.pkl"))
+    p.add_argument("--maps", default=str(DEFAULT_MAPS))
+    p.add_argument("--obs", default=str(DEFAULT_OBS))
     p.add_argument("--domains", nargs="+", default=["bahamas", "darkskies"])
     p.add_argument("--rmax", type=int, default=71, help="outer edge of the fitted profile [pixels, 20 kpc]")
     p.add_argument("--seed", type=int, default=0)
@@ -69,6 +71,54 @@ def source_redshift_map():
     return nz
 
 
+def source_redshift_rescale():
+    return SIGMA_CRIT_MAP / sigma_critical(0.305, source_redshift_map(), cosmology.Planck18).value
+
+
+def a2744_profile(obs_path, rng, n_rot=N_ROT):
+    '''A2744's tangential chi profile about the stamp centre (checked against the stored CNN input),
+    its covariance from random rotations of the galaxies, and the occupied-pixel mask.'''
+    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
+    ra, dec = ra_dec_to_simulation_image_pos(cat, ra_0=O2_PX[0], dec_0=O2_PX[1])
+    c1, c2 = galaxy_distortion(cat)
+    raw_a = np.array(bin2d(ra, dec, v=(c1, c2), npix=NPIX, extent=[-50, 50, -50, 50]))
+    _, stored = pkl.load(open(obs_path, "rb"))
+    assert np.allclose(np.array(normalise_map(*raw_a)), stored[0], atol=1e-5), "A2744 map differs from " + str(obs_path)
+    occupied = np.any(raw_a != 0, axis=0)
+    amp = np.hypot(c1, c2)
+    rot = []
+    for _ in range(n_rot):
+        th = rng.uniform(0, np.pi, amp.size)
+        rot.append(profile(np.array(bin2d(ra, dec, v=(amp * np.cos(2 * th), amp * np.sin(2 * th)),
+                                         npix=NPIX, extent=[-50, 50, -50, 50])), occupied))
+    return profile(raw_a, occupied), np.cov(np.array(rot).T), occupied
+
+
+def simulated_profiles(P, maps_dir, occupied, rescale):
+    '''Noise-free tangential chi profiles of the clusters in a params_<domain>.npz.'''
+    prof = np.full((len(P["filename"]), len(FIT_BINS) - 1), np.nan)
+    for f in np.unique(P["filename"]):
+        rows = np.where(P["filename"] == f)[0]
+        _, maps = pkl.load(open(f"{maps_dir}/{f}", "rb"))
+        for r in rows:
+            g = maps[P["image_idx"][r], :2].astype(np.float64) * rescale
+            chi = 2 * g / (1 + np.sum(g ** 2, axis=0))
+            prof[r] = profile(chi, occupied & np.any(g != 0, axis=0))
+    return prof
+
+
+def profile_chi2(summaries, domains, maps=DEFAULT_MAPS, obs=DEFAULT_OBS, seed=0):
+    '''chi^2 of each simulated cluster's profile against A2744's, per domain.'''
+    d, cov, occupied = a2744_profile(obs, np.random.default_rng(seed))
+    icov = np.linalg.inv(cov)
+    rescale = source_redshift_rescale()
+    out = {}
+    for dom in domains:
+        resid = simulated_profiles(dict(np.load(Path(summaries) / f"params_{dom}.npz")), maps, occupied, rescale) - d
+        out[dom] = np.einsum("ij,jk,ik->i", resid, icov, resid)
+    return out
+
+
 def main():
     opts = parse()
     global FIT_BINS
@@ -77,29 +127,13 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(opts.seed)
 
-    # A2744 in the centred stamp, checked against the stored CNN input
-    cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
-    ra, dec = ra_dec_to_simulation_image_pos(cat, ra_0=O2_PX[0], dec_0=O2_PX[1])
-    c1, c2 = galaxy_distortion(cat)
-    raw_a = np.array(bin2d(ra, dec, v=(c1, c2), npix=NPIX, extent=[-50, 50, -50, 50]))
-    _, stored = pkl.load(open(opts.obs, "rb"))
-    assert np.allclose(np.array(normalise_map(*raw_a)), stored[0], atol=1e-5), "A2744 map differs from " + opts.obs
-    occupied = np.any(raw_a != 0, axis=0)
-    d = profile(raw_a, occupied)
-
-    amp = np.hypot(c1, c2)
-    rot = []
-    for _ in range(N_ROT):
-        th = rng.uniform(0, np.pi, amp.size)
-        rot.append(profile(np.array(bin2d(ra, dec, v=(amp * np.cos(2 * th), amp * np.sin(2 * th)),
-                                         npix=NPIX, extent=[-50, 50, -50, 50])), occupied))
-    cov = np.cov(np.array(rot).T)
+    d, cov, occupied = a2744_profile(opts.obs, rng)
     icov = np.linalg.inv(cov)
     err = np.sqrt(np.diag(cov))
     rk = 10 * (FIT_BINS[1:] + FIT_BINS[:-1])
     print("A2744 chi_t  " + "  ".join(f"{r:.0f}kpc {v:.3f}±{e:.3f}" for r, v, e in zip(rk, d, err)))
 
-    rescale = SIGMA_CRIT_MAP / sigma_critical(0.305, source_redshift_map(), cosmology.Planck18).value
+    rescale = source_redshift_rescale()
     mu, sig = a2744_mass_gaussian()
     obs = np.load(Path(opts.summaries) / "obs.npz")
     p_a = float(obs["softmax"][:, 0, 0].mean()) if obs["softmax"].ndim == 3 else float(obs["softmax"][:, 0].mean())
@@ -111,14 +145,7 @@ def main():
     for j, dom in enumerate(opts.domains):
         P = dict(np.load(Path(opts.summaries) / f"params_{dom}.npz"))
         sm = np.load(Path(opts.summaries) / f"softmax_{dom}.npy")[:, 0].mean(0)        # ensemble, noise draw 0
-        prof = np.full((len(sm), len(d)), np.nan)
-        for f in np.unique(P["filename"]):
-            rows = np.where(P["filename"] == f)[0]
-            _, maps = pkl.load(open(f"{opts.maps}/{f}", "rb"))
-            for r in rows:
-                g = maps[P["image_idx"][r], :2].astype(np.float64) * rescale
-                chi = 2 * g / (1 + np.sum(g ** 2, axis=0))
-                prof[r] = profile(chi, occupied & np.any(g != 0, axis=0))
+        prof = simulated_profiles(P, opts.maps, occupied, rescale)
         resid = prof - d
         chi2 = np.einsum("ij,jk,ik->i", resid, icov, resid)
         w_prof = np.exp(-0.5 * (chi2 - np.nanmin(chi2)))
