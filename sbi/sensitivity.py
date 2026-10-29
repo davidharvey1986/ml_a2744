@@ -106,6 +106,9 @@ def parse():
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--excess-map", default=str(EXCESS_MAP), help="Lenstool excess_kappa.fits ('' to skip)")
     p.add_argument("--a2744-only", action="store_true", help="only redraw the A2744 map from sensitivity.npz")
+    p.add_argument("--sigma-range", type=float, nargs=2, default=None, metavar=("VMIN", "VMAX"),
+                   help="with --a2744-only: draw Delta in units of its rms over the occupied windows, "
+                        "SIDM- and CDM-pushing windows in separate panels on this range")
     p.add_argument("--replot", action="store_true", help="only redraw the correlation figure from sensitivity.npz")
     p.add_argument("--kappa-plot", action="store_true",
                    help="BAHAMAS-only mean Delta P against reconstructed kappa, with A2744 errors from "
@@ -678,10 +681,28 @@ def a2744_only_map(opts, out):
     plt = style()
     c = z["centres"]
     half = opts.stride / 2.
-    fig, ax = plt.subplots(figsize=(6, 5.4), constrained_layout=True)
-    im = draw_panel(ax, panel, [c[0] - half, c[-1] + half, c[0] - half, c[-1] + half],
-                    np.percentile(np.abs(delta[delta != 0]), 99))
-    finish_maps(fig, ax, im, out / "sensitivity_map_a2744")
+    extent = [c[0] - half, c[-1] + half, c[0] - half, c[-1] + half]
+    if opts.sigma_range is None:
+        fig, ax = plt.subplots(figsize=(6, 5.4), constrained_layout=True)
+        im = draw_panel(ax, panel, extent, np.percentile(np.abs(delta[delta != 0]), 99))
+        finish_maps(fig, ax, im, out / "sensitivity_map_a2744")
+        return
+    vmin, vmax = opts.sigma_range
+    rms = np.sqrt(np.mean(delta[delta != 0] ** 2))
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5.4), constrained_layout=True)
+    for ax, sign, cmap, name in [(axes[0], 1, "Reds", "pushes to SIDM"), (axes[1], -1, "Blues", "pushes to CDM")]:
+        nsig = sign * delta / rms
+        draw_panel(ax, {**panel, "delta": np.zeros_like(delta), "title": f"{panel['title']}: {name}"}, extent, 1.)
+        im = ax.imshow(np.ma.masked_less(nsig, vmin), origin="lower", extent=extent, cmap=cmap, vmin=vmin, vmax=vmax,
+                       zorder=0.5)
+        print(f"{name}: {np.sum(nsig[delta != 0] >= vmin)} of {np.sum(delta != 0)} windows >= {vmin:g} sigma, "
+              f"max {nsig.max():.1f} sigma")
+        cb = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
+        cb.set_label(rf"{'+' if sign > 0 else '-'}$\Delta P$ / rms ($\sigma$, rms = {rms:.4f})")
+    fig.suptitle("Occlusion sensitivity in units of its rms over occupied windows. Black: reconstructed $\\kappa$ "
+                 "S/N 2,3,4,6,8; green: Lenstool excess $\\kappa$ S/N $\\pm$2,3,4 and halos", color=INK, fontsize=10)
+    for ext in ("pdf", "png"):
+        fig.savefig((out / f"sensitivity_map_a2744_sigma{vmin:g}-{vmax:g}").with_suffix(f".{ext}"), dpi=180)
 
 
 def kappa_plot(opts, out):
