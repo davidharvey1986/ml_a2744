@@ -106,6 +106,8 @@ def parse():
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--excess-map", default=str(EXCESS_MAP), help="Lenstool excess_kappa.fits ('' to skip)")
     p.add_argument("--a2744-only", action="store_true", help="only redraw the A2744 map from sensitivity.npz")
+    p.add_argument("--no-excess-contours", action="store_true",
+                   help="with --a2744-only: leave out the Lenstool excess contours (halos still marked)")
     p.add_argument("--sigma-range", type=float, nargs=2, default=None, metavar=("VMIN", "VMAX"),
                    help="with --a2744-only: draw Delta in units of its rms over the occupied windows, "
                         "SIDM- and CDM-pushing windows in separate panels on this range")
@@ -342,6 +344,7 @@ def draw_panel(ax, p, extent, vmax, scalebar=True):
                    colors="#2ca02c", linewidths=1.5)
         ax.contour(p["excess_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[-4, -3, -2],
                    colors="#2ca02c", linewidths=1, linestyles="--")
+    if p.get("halos") is not None:
         for name, (hx, hy) in p["halos"].items():
             ax.plot(hx, hy, "x", color="#2ca02c", ms=9, mew=2)
             ax.text(hx + 2, hy + 2, name, color="#2ca02c", fontsize=8)
@@ -677,7 +680,9 @@ def a2744_only_map(opts, out):
                       f"{z['a2744_delta'].shape[0]} models)", "delta": delta, "kappa_snr": reconstruct_kappa(raw_np)[1]}
     if "a2744_excess_snr" in z:
         _, inverse = stamp_to_lenstool(cat, ra, dec)
-        panel.update(excess_snr=z["a2744_excess_snr"], halos={k: tuple(inverse(*v)) for k, v in LENSTOOL_HALOS.items()})
+        panel.update(halos={k: tuple(inverse(*v)) for k, v in LENSTOOL_HALOS.items()})
+        if not opts.no_excess_contours:
+            panel.update(excess_snr=z["a2744_excess_snr"])
     plt = style()
     c = z["centres"]
     half = opts.stride / 2.
@@ -700,9 +705,11 @@ def a2744_only_map(opts, out):
         cb = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
         cb.set_label(rf"{'+' if sign > 0 else '-'}$\Delta P$ / rms ($\sigma$, rms = {rms:.4f})")
     fig.suptitle("Occlusion sensitivity in units of its rms over occupied windows. Black: reconstructed $\\kappa$ "
-                 "S/N 2,3,4,6,8; green: Lenstool excess $\\kappa$ S/N $\\pm$2,3,4 and halos", color=INK, fontsize=10)
+                 "S/N 2,3,4,6,8; green: Lenstool " + ("halos" if opts.no_excess_contours else
+                                                       "excess $\\kappa$ S/N $\\pm$2,3,4 and halos"),
+                 color=INK, fontsize=10)
     for ext in ("pdf", "png"):
-        fig.savefig((out / f"sensitivity_map_a2744_sigma{vmin:g}-{vmax:g}").with_suffix(f".{ext}"), dpi=180)
+        fig.savefig((out / f"sensitivity_map_a2744_sigma{vmin:g}-{vmax:g}{'_noexcess' if opts.no_excess_contours else ''}").with_suffix(f".{ext}"), dpi=180)
 
 
 def kappa_plot(opts, out):
