@@ -99,7 +99,7 @@ def parse():
     p.add_argument("--all-clusters", action="store_true",
                    help="use every cluster in A2744's merger class within SUBSET_DEX of its mass, weighted to the "
                         "A2744 mass, instead of drawing --clusters-per-sigma")
-    p.add_argument("--domains", nargs="+", default=DOMAINS, choices=DOMAINS)
+    p.add_argument("--domains", nargs="*", default=DOMAINS, choices=DOMAINS, help="none: A2744 only")
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_ba_best_n5"),
                    help="any summaries dir: only cluster masses / n_comp / file indices are used")
     p.add_argument("--seed", type=int, default=0)
@@ -887,6 +887,9 @@ def main():
     plot_maps(panels, centres, opts.stride, out / "sensitivity_maps")
     saved["a2744_snr_windows"] = obs["snr"]
     np.savez(out / "sensitivity.npz", **saved)
+    if not sims:
+        print(f"wrote {out} (A2744 only)")
+        return
     n_match = sum(abs(m["p_full"] - obs["p_full"]) < P_MATCH for d in sims for m in sims[d])
     print(f"simulated maps with P(SIDM) within {P_MATCH} of A2744: {n_match}")
     plot_vs_kappa(obs, sims, out / "sensitivity_vs_kappa")
