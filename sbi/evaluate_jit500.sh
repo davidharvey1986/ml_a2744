@@ -3,7 +3,8 @@
 # (train_seed.sh JITTER_BASE=1 CENTRE_JITTER_KPC=500, run name *_nob1_spin2_jit500_ft_tweakedalign_k0p9_ctr*)
 # against the plain spin2 models. Waits on bonsai for all 10 _ba_best checkpoints, copies them, then
 # runs every step one after the other (the A2744 catalogue steps must not overlap: get_obs_data
-# rewrites the filtered fits). Logs to sbi/logs_eval_jit500/<step>.txt.
+# rewrites the filtered fits). Logs to sbi/logs_eval_jit500/<step>.txt. The spin2 baselines are the
+# summaries with the corrected noise composition (evaluate_chifix.sh, which runs this script last).
 cd "$(dirname "$0")/.."
 PY=astro-env/bin/python
 SBI_PY=../Dark_Matter_DA/sbi/bin/python
@@ -30,7 +31,7 @@ step summaries_shift500 $PY sbi/make_summaries.py --model $MODEL --include-str $
 step eb_swap $PY sbi/eb_swap_test.py --model $MODEL --include-str $INC \
     --summaries $S --out-dir $PWD/sbi/results/eb_swap_test_jit500
 step jitter_response $PY sbi/jitter_response.py --title "spin2 vs spin2 jit500 models" \
-    --summaries sbi/summaries_spin2_best_n5 sbi/summaries_spin2_best_jit500 $S sbi/summaries_jit500_best_shift500 \
+    --summaries sbi/summaries_spin2_best_n5_chifix sbi/summaries_spin2_best_shift500_chifix $S sbi/summaries_jit500_best_shift500 \
     --labels "spin2, centred" "spin2, shifted 500 kpc" "jit500, centred" "jit500, shifted 500 kpc" \
     --out sbi/results/jitter_response/jitter_response_jit500_models.png
 step centre_uncertainty $PY sbi/centre_uncertainty.py --model $MODEL --include-str $INC

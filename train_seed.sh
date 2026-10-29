@@ -13,6 +13,8 @@
 #               per axis [kpc] in the fine-tuning and _ba stages (35 = the 50 kpc rms A2744
 #               centring error); the run name gets _ftjit<kpc>
 #   JITTER_BASE if 1 (with CENTRE_JITTER_KPC), retrain the base model with the jitter as well
+#   NOISE_TAG   added to the fine-tuned run name (default _cx: shape noise composed as complex
+#               numbers, dataset.py ea47c77; '' for the old names)
 #               instead of starting from the un-jittered base model; the run name gets _jit<kpc>
 set -e
 SEED=${1:?usage: train_seed.sh SEED [FILTER]}
@@ -25,6 +27,7 @@ BASE_DIR=${BASE_DIR:-/Users/davidharvey/Work/Dark_Matter_DA/code/models/base_mod
 EXTRA_ARGS=${EXTRA_ARGS:-}
 CENTRE_JITTER_KPC=${CENTRE_JITTER_KPC:-0}
 JITTER_BASE=${JITTER_BASE:-0}
+NOISE_TAG=${NOISE_TAG-_cx}
 JITTER_ARGS=""
 JITTER_TAG=""
 if [ "${CENTRE_JITTER_KPC}" != "0" ]; then
@@ -99,7 +102,7 @@ COMMON_ARGS="--batch_size 32 --epochs 10 --lr 0.0001 --eval_interval 2 --project
 COMMON_ARGS=$COMMON_ARGS" --model squeezenet1_1 --pretrained --mass_index 0 --in_channels 2 --verbose --weighting_scheme inverse_frequency"
 
 TUNE_DIR=models/${FILTER}/
-OUTPUT=${RUN_NAME}${FT_JITTER_TAG}_ft_tweakedalign_k0p9_ctr   # stamp centred on the A2744 main peak
+OUTPUT=${RUN_NAME}${FT_JITTER_TAG}${NOISE_TAG}_ft_tweakedalign_k0p9_ctr   # stamp centred on the A2744 main peak
 
 if [ -f ${TUNE_DIR}/${OUTPUT}_best.pth ]
 then
