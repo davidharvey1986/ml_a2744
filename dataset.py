@@ -525,18 +525,14 @@ class apply_intrinsic_ell(object):
         #sample_conj = sample.clone()
         #sample_conj[1] *= -1
         
-        source_conj = source_shape.clone()
-        source_conj[1] *= -1 
-
-        g = torch.sqrt(torch.sum(sample**2,axis=0))
-    
-        g_shapeconj = sample*source_conj
-        #return_sample = (sample + source_shape) / \
-        #    ( 1 + source_shape*sample_conj)
-        
-        return_sample = (source_shape + 2.*sample + sample**2*source_conj) / \
-            (1 + g**2 + 2.*g_shapeconj[0])
-                
+        # chi = (chi_s + 2 g + g^2 conj(chi_s)) / (1 + |g|^2 + 2 Re(g conj(chi_s))) with complex
+        # g and chi_s. This used to be done component by component (sample**2 for g^2, and only
+        # g1 chi_s1 in the denominator), which let |chi| exceed 1.
+        g = torch.complex(sample[0].double(), sample[1].double())
+        source = torch.complex(source_shape[0].double(), source_shape[1].double())
+        chi_obs = (source + 2.*g + g**2*source.conj()) / \
+            (1 + g.abs()**2 + 2.*(g*source.conj()).real)
+        return_sample = torch.stack([chi_obs.real, chi_obs.imag]).to(sample.dtype)
 
         return_sample[ (sample == 0) ] = 0
     
