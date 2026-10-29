@@ -94,6 +94,8 @@ def parse():
     p.add_argument("--filter", default="concat")
     p.add_argument("--n-noise", type=int, default=1, help="shape-noise realisations per cluster")
     p.add_argument("--noise-seed", type=int, default=1234)
+    p.add_argument("--centre-jitter-kpc", type=float, default=0.,
+                   help="shift every simulated map off centre (dataset.CentreJitter, sigma per axis); A2744 is not shifted")
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--out-dir", default=str(REPO / "sbi" / "summaries"))
     p.add_argument("--legacy-dir", default=None, help="also write the old Dark_Matter_DA/sbi pickles here")
@@ -314,6 +316,7 @@ def main():
     device = get_device()
 
     args = setup_args(opts.filter)
+    args.test_centre_jitter_kpc = opts.centre_jitter_kpc
     models = load_models(opts, args, device)
     print(f"{len(models)} models, seeds {[m.args.seed for m in models]}, device {device}")
 
