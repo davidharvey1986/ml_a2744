@@ -4,7 +4,8 @@ Is the CNN reading how flat the shear is a few hundred kpc out? One number per m
 
     R = <chi_t>(200-400 kpc) / <chi_t>(50-200 kpc)
 
-the mean tangential distortion about the stamp centre over occupied pixels in each annulus.
+the mean tangential distortion about the stamp centre over occupied pixels in each annulus
+(--num-kpc and --den-kpc choose other annuli).
 For the simulations it is measured on the noise-free maps sampled at the A2744 galaxies
 (data/100/obs/concat, reduced shear converted to chi = 2g / (1 + |g|^2) per pixel) and set against
 each cluster's ensemble P(SIDM) from the summaries (mean over models and noise draws). For A2744
@@ -41,7 +42,7 @@ NPIX = 100
 _c = np.arange(NPIX) - (NPIX / 2 - 0.5)
 XG, YG = np.meshgrid(_c, _c)                       # maps are indexed [dec, ra]
 RG, PHI = np.hypot(XG, YG), np.arctan2(YG, XG)
-INNER, OUTER = (2.5, 10), (10, 20)                 # pixels (20 kpc): 50-200 and 200-400 kpc
+INNER, OUTER = (2.5, 10), (10, 20)                 # pixels (20 kpc): denominator and numerator annuli
 COLOURS = {0: "#000000", 0.1: "#0072B2", 0.3: "#009E73", 1: "#D55E00"}
 
 
@@ -55,6 +56,8 @@ def parse():
     p.add_argument("--mass-window", type=float, default=0.15, help="|log M750 - A2744| for the matched subset [dex]")
     p.add_argument("--nboot", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--num-kpc", type=float, nargs=2, default=[200, 400], help="numerator annulus")
+    p.add_argument("--den-kpc", type=float, nargs=2, default=[50, 200], help="denominator annulus")
     p.add_argument("--out-dir", default=str(REPO / "sbi" / "results" / "shear_ratio"))
     return p.parse_args()
 
@@ -86,8 +89,15 @@ def a2744(models, device, cat, ra, dec, c1, c2, rng, nboot):
     return {"R": float(ratio(raw)), "R_boot_16_50_84": np.percentile(boot, [16, 50, 84]).tolist(), "p_sidm": p}
 
 
+def label():
+    return (rf"R = $\langle\chi_t\rangle$({20 * OUTER[0]:g}-{20 * OUTER[1]:g} kpc) / "
+            rf"$\langle\chi_t\rangle$({20 * INNER[0]:g}-{20 * INNER[1]:g} kpc)")
+
+
 def main():
+    global INNER, OUTER
     opts = parse()
+    OUTER, INNER = tuple(v / 20. for v in opts.num_kpc), tuple(v / 20. for v in opts.den_kpc)
     out = Path(opts.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(opts.seed)
@@ -171,7 +181,7 @@ def plot(sims, obs, out):
         lo, hi = np.nanpercentile(s["R"][s["keep"]], [0.5, 99.5])
         ra = [v["R_boot_16_50_84"][i] for v in obs.values() for i in (0, 2)]
         ax.set_xlim(min(lo, *ra) - 0.05, max(hi, *ra) + 0.05)
-        ax.set_xlabel(r"R = $\langle\chi_t\rangle$(200-400 kpc) / $\langle\chi_t\rangle$(50-200 kpc)")
+        ax.set_xlabel(label())
         ax.set_title(f"{dom.upper()}, n_comp ≥ 2 (faint: all masses)", fontsize=10)
         ax.legend(fontsize=7.5, loc="upper left", markerscale=1.5)
     axes[0].set_ylabel("ensemble P(SIDM)")

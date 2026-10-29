@@ -38,9 +38,11 @@ def parse():
 def main():
     opts = parse()
     S = Path(opts.summaries).resolve()
-    out = Path(opts.out) if opts.out else S.parent / "results" / S.name / "response_ratio.png"
+    out = Path(opts.out) if opts.out else S.parent / "results" / S.name / f"response_{Path(opts.ratio_json).parent.name}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
-    R_a = json.load(open(opts.ratio_json))["a2744"]["adopted"]["R"]
+    rj = json.load(open(opts.ratio_json))
+    R_a = rj["a2744"]["adopted"]["R"]
+    sr.INNER, sr.OUTER = tuple(v / 20. for v in rj["inner_kpc"]), tuple(v / 20. for v in rj["outer_kpc"])
     obs = np.load(S / "obs.npz")["softmax"]
     p_a = float(obs[:, 0].mean()) if obs.ndim == 2 else float(obs[:, 0, 0].mean())
 
@@ -83,8 +85,7 @@ def main():
         ax.set_title(f"{dom.upper()}: no mass matching (16-84% of clusters shaded)", fontsize=10)
         ax.legend(fontsize=7.5, loc="upper left")
     axes[0].set_ylabel("ensemble P(SIDM)")
-    fig.suptitle(f"{opts.label or S.name}: response matched in the shear ratio R = "
-                 r"$\langle\chi_t\rangle$(200-400) / $\langle\chi_t\rangle$(50-200 kpc)", fontsize=10)
+    fig.suptitle(f"{opts.label or S.name}: response matched in the shear ratio " + sr.label(), fontsize=10)
     for e in ("png", "pdf"):
         fig.savefig(out.with_suffix("." + e), dpi=150)
     json.dump(res, open(out.with_suffix(".json"), "w"), indent=1)

@@ -142,8 +142,10 @@ def main(
     ### This is for the final masked models
     for ifilter in filter_list:
 
-        # same catalogue as the A2744 map and the shape-noise model
-        obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True, cuts=SHEAR_CUTS)
+        # the same galaxies as the A2744 map (sensitivity.a2744_map / make_obs_maps) and the
+        # shape-noise model: including the strong-lensing cut on the Lenstool convergence, so the
+        # simulated maps have the same empty core as the data
+        obs_data = get_obs_data(ifilter, data_dir=data_dir, photoz=True, cuts=SHEAR_CUTS, drop_strong_lensing=True)
 
         delta_ra, delta_dec = ra_dec_to_simulation_image_pos(
             obs_data, zl=zl, image_size=image_size
@@ -841,7 +843,8 @@ def make_noise_model(ifilter='concat', data_dir='data/100/a2744', cuts=None):
     (~10% for the 28/10 catalogues).
     '''
     from scipy.stats import chi
-    obs_data = get_obs_data(ifilter, data_dir=data_dir, cuts=SHEAR_CUTS if cuts is None else cuts)
+    obs_data = get_obs_data(ifilter, data_dir=data_dir, cuts=SHEAR_CUTS if cuts is None else cuts,
+                            drop_strong_lensing=True)    # the galaxies of the data map
     binned_data = bin_obs_data(obs_data)
     egal = np.sqrt(obs_data['gamma1']**2 + obs_data['gamma2']**2)
     noise_model = {'ngal': binned_data['ngal'], 'chi_fit_function': chi.fit(egal),

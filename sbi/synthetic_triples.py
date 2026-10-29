@@ -101,7 +101,11 @@ def load_set(filename):
 
 def shear(conv, meta, data, idx):
     '''Non-reduced shear and convergence of maps idx at MAP_ZS, exactly as add_shear_to_data.main.'''
-    norms, bkg = get_surface_density_norms(meta, conv), get_background_sigma(meta, conv, meta["redshift"][idx])
+    norms = get_surface_density_norms(meta, conv)
+    if "background_sigma" in meta:                     # stored per map: index after
+        bkg = get_background_sigma(meta, conv, meta["redshift"])[idx]
+    else:
+        bkg = get_background_sigma(meta, conv, meta["redshift"][idx])
     return data_to_shear(data[idx, 0], norms[idx, 0], meta["redshift"][idx], get_boxsize(conv),
                          reduce_shear=False, background=bkg, zs=MAP_ZS, zl=MAP_ZL)
 
