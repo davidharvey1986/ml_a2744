@@ -15,6 +15,14 @@ and the CNN P(SIDM) is compared between variants with the same main clusters and
     total-mass  clusters matched to A2744's summed mass in the merger class n_comp >= 2
                 (the usual reference; drawn separately)
 
+    smoothed    triple with each secondary's convergence smoothed by a Gaussian of
+                --smooth-kpc (mass kept), for halos more spread out than BAHAMAS clusters
+    data xS     the main cluster plus A2744's own extended mass: the data's KS convergence
+                (sensitivity.reconstruct_kappa) where its S/N > --template-snr and more than
+                --template-core-kpc from O2, i.e. both sub-halos and the bridges between them
+                and the main halo as the data show them, times S (KS smoothing and the mass
+                sheet make it an underestimate). The main cluster supplies the core.
+
 If CDM triples reach A2744's value, the network reads the geometry, not the cross-section.
 
 Secondaries: clusters of the same cross-section with log M750 < --sec-max-logm (preferring
@@ -35,8 +43,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import torch
+from astropy import units
+from astropy.cosmology import Planck18
 from lenspack.image.inversion import ks93inv
-from scipy.ndimage import shift as nd_shift
+from scipy.ndimage import gaussian_filter, shift as nd_shift
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
@@ -45,7 +55,7 @@ import make_summaries as ms  # noqa: E402  (chdirs to notebooks/)
 import sensitivity as sens  # noqa: E402
 from dataset import MAP_ZL, MAP_ZS  # noqa: E402
 from add_shear_to_data import (  # noqa: E402
-    KAPPA_THRESH, SHEAR_CUTS, data_to_shear, get_background_sigma, get_boxsize, get_obs_data,
+    KAPPA_THRESH, SHEAR_CUTS, data_to_shear, sigma_critical, get_background_sigma, get_boxsize, get_obs_data,
     get_surface_density_norms, ra_dec_to_simulation_image_pos, sample_maps_on_galaxies,
 )
 from mass_weighting import A2744_ERRORS, A2744_MASSES, a2744_mass_gaussian  # noqa: E402
@@ -53,11 +63,12 @@ from mass_weighting import A2744_ERRORS, A2744_MASSES, a2744_mass_gaussian  # no
 NPIX = 100
 PAD = 300
 _c = np.arange(NPIX) - (NPIX / 2 - 0.5)
-RG = np.hypot(*np.meshgrid(_c, _c))
+XG, YG = np.meshgrid(_c, _c)                       # maps are indexed [dec, ra]
+RG = np.hypot(XG, YG)
 TAPER = np.clip(np.cos(0.5 * np.pi * (RG - 35) / 15), 0, 1) * (RG < 50)
 TAPER[RG <= 35] = 1.
 HALO_KEYS = {"O1": "nw", "O3": "n"}
-VARIANTS = ["single", "+O1", "+O3", "triple"]
+BASE_VARIANTS = ["single", "+O1", "+O3", "triple", "smoothed"]
 
 
 def parse():
@@ -70,6 +81,10 @@ def parse():
     p.add_argument("--min-sigma", type=float, default=0.1, help="floor on the width of the core-mass Gaussian [dex]")
     p.add_argument("--main-min-ncomp", type=int, default=1, help="merger class of the main clusters: n_comp >= this")
     p.add_argument("--sec-max-logm", type=float, default=14.25)
+    p.add_argument("--smooth-kpc", type=float, default=150., help="Gaussian sigma for the 'smoothed' secondaries")
+    p.add_argument("--template-core-kpc", type=float, default=300.)
+    p.add_argument("--template-snr", type=float, default=2.)
+    p.add_argument("--template-scales", type=float, nargs="+", default=[1., 2.])
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_spin2_best_n5"))
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out-dir", default=str(REPO / "sbi" / "results" / "synthetic_triples"))
@@ -91,9 +106,14 @@ def shear(conv, meta, data, idx):
                          reduce_shear=False, background=bkg, zs=MAP_ZS, zl=MAP_ZL)
 
 
-def place(kappa, scale, dx, dy):
+def place(kappa, scale, dx, dy, smooth_px=0.):
     '''Shear and convergence on the stamp of a tapered, scaled halo moved by (dx, dy) pixels, KS on a padded canvas.'''
     k = scale * TAPER * (kappa - np.median(kappa[(RG > 45) & (RG < 50)]))
+    return place_map(gaussian_filter(k, smooth_px, mode="constant") if smooth_px else k, dx, dy)
+
+
+def place_map(k, dx, dy):
+    '''Shear and convergence of the convergence map k (zero outside the stamp) moved by (dx, dy) pixels.'''
     canvas = np.zeros((PAD, PAD))
     o = (PAD - NPIX) // 2
     canvas[o:o + NPIX, o:o + NPIX] = k
@@ -131,6 +151,17 @@ def main():
     for h, (dx, dy) in offsets.items():
         print(f"{h} from O2: dx {dx:+.1f} px, dy {dy:+.1f} px ({20 * np.hypot(dx, dy):.0f} kpc)")
 
+    # A2744's extended mass beyond the core, moved so that O2 sits at the stamp centre
+    ke, snr = sens.reconstruct_kappa(raw_a)
+    r_o2 = np.hypot(XG - o2[0], YG - o2[1])
+    tmask = gaussian_filter(((snr > opts.template_snr) & (r_o2 > opts.template_core_kpc / 20.)).astype(float), 1.)
+    template = np.clip(ke, 0, None) * tmask
+    t_add = place_map(template, -o2[0], -o2[1])
+    sig_crit = sigma_critical(MAP_ZL, MAP_ZS, Planck18).to(units.Msun / units.pc ** 2).value
+    m_t = template.sum() * sig_crit * (20e3) ** 2
+    print(f"data template: mass {m_t:.2e} Msun (x1), against O1 + O3 = {sum(A2744_MASSES[opts.study][k] for k in ('nw', 'n')):.1f}e13")
+    variants = BASE_VARIANTS + [f"data x{s:g}" for s in opts.template_scales]
+
     # galaxies as the simulated obs maps (add_shear_to_data.main)
     cat = get_obs_data("concat", data_dir="../data/100/a2744", photoz=True, cuts=SHEAR_CUTS)
     ra, dec = ra_dec_to_simulation_image_pos(cat, zl=MAP_ZL, image_size=NPIX)
@@ -150,7 +181,7 @@ def main():
 
     res = {"study": opts.study, "model": opts.model, "include_str": opts.include_str, "n_models": len(models),
            "a2744_p_sidm": p_a, "log_masses": log_m, "core_gaussian": [mu_core, sig_core],
-           "offsets_px": offsets, "o2_px": o2, "rows": {}}
+           "offsets_px": offsets, "o2_px": o2, "template_mass_msun": m_t, "smooth_kpc": opts.smooth_kpc, "rows": {}}
     examples = {}
     for s in np.unique(mains["cross_section"]):
         rows = np.where(mains["cross_section"] == s)[0]
@@ -169,11 +200,16 @@ def main():
             _, _, ks = shear(conv, meta, data, j)
             scale = 10 ** (log_m[key] - P["log10_mass_750"][sec[h]])
             add[h] = np.array([place(kk, sc, *offsets[h]) for kk, sc in zip(ks, scale)])   # (n, 3, npix, npix)
+            add[h + "s"] = np.array([place(kk, sc, *offsets[h], smooth_px=opts.smooth_kpc / 20.)
+                                     for kk, sc in zip(ks, scale)])
+        for sc in opts.template_scales:
+            add[f"t{sc:g}"] = sc * np.array(t_add)[None]
 
         res["rows"][f"{s:g}"] = row = {}
         p_var = {}
-        for v in VARIANTS:
-            hs = {"single": [], "+O1": ["O1"], "+O3": ["O3"], "triple": ["O1", "O3"]}[v]
+        for v in variants:
+            hs = {"single": [], "+O1": ["O1"], "+O3": ["O3"], "triple": ["O1", "O3"], "smoothed": ["O1s", "O3s"],
+                  **{f"data x{sc:g}": [f"t{sc:g}"] for sc in opts.template_scales}}[v]
             g1, g2, kap = e1.copy(), e2.copy(), k.copy()
             for h in hs:
                 g1, g2, kap = g1 + add[h][:, 0], g2 + add[h][:, 1], kap + add[h][:, 2]
@@ -185,9 +221,9 @@ def main():
             p = cnn(models, maps, transform, device, opts.seed)
             p_var[v] = p
             row[v] = [float(p.mean()), float(p.std() / np.sqrt(len(p))), len(p), float(np.median(removed))]
-            if s == 0 and v in ("single", "triple"):
+            if s == 0:
                 examples[v] = (kap[0], maps[0])
-        for v in VARIANTS[1:]:
+        for v in variants[1:]:
             d = p_var[v] - p_var["single"]
             row[f"{v}_minus_single"] = [float(d.mean()), float(d.std() / np.sqrt(len(d)))]
 
@@ -198,30 +234,34 @@ def main():
         maps_t, _ = sample_maps_on_galaxies(e1t, e2t, kt, ra, dec, thresh_k=KAPPA_THRESH, reduce_shear=True, npix=NPIX)
         p = cnn(models, maps_t, transform, device, opts.seed)
         row["total-mass"] = [float(p.mean()), float(p.std() / np.sqrt(len(p))), len(p)]
-        print(f"σ/m {s:g}: " + " | ".join(f"{v} {row[v][0]:.3f}±{row[v][1]:.3f}" for v in VARIANTS + ["total-mass"]))
+        print(f"σ/m {s:g}: " + " | ".join(f"{v} {row[v][0]:.3f}±{row[v][1]:.3f}" for v in variants + ["total-mass"]))
         print("          " + " | ".join(f"{v}−single {row[f'{v}_minus_single'][0]:+.3f}±{row[f'{v}_minus_single'][1]:.3f}"
-                                       for v in VARIANTS[1:]))
+                                       for v in variants[1:]))
         del data, data_t
 
     tag = f"{opts.model}_{opts.include_str}_{opts.study}"
     json.dump(res, open(out / f"{tag}.json", "w"), indent=1, default=lambda o: np.asarray(o).tolist())
-    plot(res, examples, raw_a, offsets, o2, out / tag)
+    plot(res, examples, raw_a, offsets, o2, variants, out / tag)
     print(f"wrote {out / tag}.png")
 
 
-def plot(res, examples, raw_a, offsets, o2, out):
+def plot(res, examples, raw_a, offsets, o2, variants, out):
     plt = sens.style()
-    fig = plt.figure(figsize=(15, 4.8), constrained_layout=True)
-    gs = fig.add_gridspec(1, 4, width_ratios=[1.6, 1, 1, 1])
+    fig = plt.figure(figsize=(19, 4.8), constrained_layout=True)
+    gs = fig.add_gridspec(1, 5, width_ratios=[1.6, 1, 1, 1, 1])
     ax = fig.add_subplot(gs[0])
     sig = np.array([float(s) for s in res["rows"]])
     x = np.where(sig == 0, 0.03, sig)
-    cols = {"single": "#000000", "+O1": "#CC79A7", "+O3": "#009E73", "triple": "#D55E00", "total-mass": "#0072B2"}
+    cols = {"single": "#000000", "+O1": "#CC79A7", "+O3": "#009E73", "triple": "#D55E00", "smoothed": "#E69F00",
+            **{v: c for v, c in zip([v for v in variants if v.startswith("data")], ["#56B4E9", "#882255", "#117733"])},
+            "total-mass": "#0072B2"}
     for v, c in cols.items():
         y = np.array([res["rows"][s][v] for s in res["rows"]])
         ax.errorbar(x, y[:, 0], y[:, 1], fmt="o-" if v != "total-mass" else "s--", color=c, capsize=2, ms=5,
-                    label={"single": "main (core mass) alone", "triple": "main + O1 + O3",
-                           "total-mass": "single, total A2744 mass (n_comp ≥ 2)"}.get(v, f"main + {v[1:]}"))
+                    label={"single": "main (core mass) alone", "triple": "main + O1 + O3 (BAHAMAS halos)",
+                           "smoothed": f"main + O1 + O3 smoothed {res['smooth_kpc']:g} kpc",
+                           "total-mass": "single, total A2744 mass (n_comp ≥ 2)"}.get(
+                        v, f"main + A2744 extended mass {v[5:]}" if v.startswith("data") else f"main + {v[1:]}"))
     ax.axhline(res["a2744_p_sidm"], color="k", lw=2, alpha=0.5, label=f"A2744: {res['a2744_p_sidm']:.3f}")
     ax.set_xscale("log")
     ax.set_xticks([0.03, 0.1, 0.3, 1], ["CDM", "0.1", "0.3", "1"])
@@ -232,13 +272,15 @@ def plot(res, examples, raw_a, offsets, o2, out):
     ax.set_title(f"BAHAMAS synthetic triples ({res['study']} masses, {res['n_models']} models)", fontsize=10)
     ext = [-50, 50, -50, 50]
     kap_a = sens.reconstruct_kappa(raw_a)[0]
-    for i, (title, img) in enumerate([("CDM main alone: κ", examples["single"][0]),
-                                      ("CDM triple: κ", examples["triple"][0]),
-                                      ("A2744: KS κ from the data", kap_a)]):
+    data_v = next(v for v in variants if v.startswith("data"))
+    panels = [("CDM main alone: κ", examples["single"][0]), ("CDM triple, smoothed: κ", examples["smoothed"][0]),
+              (f"CDM main + A2744 extended mass {data_v[5:]}: κ", examples[data_v][0]),
+              ("A2744: KS κ from the data", kap_a)]
+    for i, (title, img) in enumerate(panels):
         a = fig.add_subplot(gs[i + 1])
         a.imshow(img, origin="lower", extent=ext, cmap="magma",
                  vmin=np.percentile(img, 1), vmax=np.percentile(img, 99.7))
-        c = o2 if i == 2 else (0, 0)          # A2744's stamp is not centred on O2
+        c = o2 if i == 3 else (0, 0)          # A2744's stamp is not centred on O2
         for dx, dy in [(0, 0), *offsets.values()]:
             a.plot(c[0] + dx, c[1] + dy, "c+", ms=10, mew=1.5)
         a.set_title(title, fontsize=10)
