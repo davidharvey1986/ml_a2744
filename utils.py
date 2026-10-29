@@ -79,6 +79,8 @@ def parse_args():
                         help="flip/rotate the pixels only, not the shear components (models before the spin-2 fix)")
     parser.add_argument("--aug_centre_jitter_kpc", type=float, default=0.,
                         help="shift training maps by a Gaussian offset with this sigma per axis [kpc] (centring error)")
+    parser.add_argument("--aug_centre_jitter_min_keep", type=float, default=0.5,
+                        help="redraw centre-jitter offsets that leave less than this fraction of the occupied pixels")
     parser.add_argument("--test_centre_jitter_kpc", type=float, default=0.,
                         help="the same for the evaluation sets, to forward-model the centring error")
     parser.add_argument("--aug_crop_prob", type=float, default=0.5)

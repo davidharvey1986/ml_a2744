@@ -613,24 +613,41 @@ class CentreJitter:
     emptied border with 0 (no galaxies). Forward-models the error in the observed stamp's
     centre: the simulations are centred on the true halo, A2744 on a fitted centre known to
     ~50 kpc (sbi/centre_uncertainty.py). A pure translation leaves the shear components alone.
+    Offsets that keep less than min_keep of the occupied pixels in the stamp are redrawn (an
+    empty map cannot be normalised); after max_tries the map is returned unshifted. For
+    sigma_px of a few pixels this never triggers; for jitters comparable to the stamp it
+    truncates the offsets at roughly half the stamp.
     '''
-    def __init__(self, sigma_px):
+    def __init__(self, sigma_px, min_keep=0.5, max_tries=20):
         self.sigma_px = sigma_px
+        self.min_keep = min_keep
+        self.max_tries = max_tries
+
+    @staticmethod
+    def shift(sample, dx, dy):
+        n = sample.shape[-1]
+        out = torch.zeros_like(sample)
+        if abs(dx) < n and abs(dy) < n:
+            out[..., max(dy, 0):n + min(dy, 0), max(dx, 0):n + min(dx, 0)] = \
+                sample[..., max(-dy, 0):n + min(-dy, 0), max(-dx, 0):n + min(-dx, 0)]
+        return out
 
     def __call__(self, sample):
-        dy, dx = (int(round(v)) for v in (torch.randn(2) * self.sigma_px).tolist())
-        n = sample.shape[-1]
-        if abs(dx) >= n or abs(dy) >= n:
-            return torch.zeros_like(sample)
-        out = torch.zeros_like(sample)
-        out[..., max(dy, 0):n + min(dy, 0), max(dx, 0):n + min(dx, 0)] = \
-            sample[..., max(-dy, 0):n + min(-dy, 0), max(-dx, 0):n + min(-dx, 0)]
-        return out
+        n_occ = int((sample[:2] != 0).any(0).sum())
+        if n_occ == 0:
+            return sample
+        for _ in range(self.max_tries):
+            dy, dx = (int(round(v)) for v in (torch.randn(2) * self.sigma_px).tolist())
+            out = self.shift(sample, dx, dy)
+            if (out[:2] != 0).any(0).sum() >= self.min_keep * n_occ:
+                return out
+        return sample
 
 
 def centre_jitter(args, kpc):
     '''[CentreJitter] for a per-axis jitter of kpc (pixels of FOV_KPC / image_size), or [] for none.'''
-    return [CentreJitter(kpc / (FOV_KPC / args.image_size))] if kpc > 0 else []
+    return [CentreJitter(kpc / (FOV_KPC / args.image_size), getattr(args, "aug_centre_jitter_min_keep", 0.5))] \
+        if kpc > 0 else []
 
 
 class Downsample:
