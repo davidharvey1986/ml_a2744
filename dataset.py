@@ -19,6 +19,7 @@ from scipy.ndimage import zoom
 MAP_ZL = 0.305
 MAP_ZS = 2.28
 SIGMA_CRIT_MAP = sigma_critical(MAP_ZL, MAP_ZS, cosmology.Planck18).value   # 2222 Msun/pc^2
+FOV_KPC = 2000.             # side of every map (stamp and simulations), 20 kpc pixels at image_size 100
 
 def get_cross_section_from_filename(filename):
     base_name = os.path.basename(filename)
@@ -234,9 +235,10 @@ def create_balanced_test_set(dataset, test_size=0.2, random_state=42, verbose=Tr
     return test_indices
 
 def get_test_transform(args):
-    '''Forward model applied to the evaluation sets (no augmentation).'''
+    '''Forward model applied to the evaluation sets (no augmentation; optionally the centring error).'''
     return transforms.Compose([
             rescale_lens_source_configuration(args),
+            *centre_jitter(args, getattr(args, "test_centre_jitter_kpc", 0.)),
             cluster_member_contamination( args ),
             apply_shape_measurement_bias(args.shape_measurement_bias),
             apply_intrinsic_ell( args),
@@ -316,6 +318,7 @@ def prepare_dataloaders(args):
         rescale_lens_source_configuration(args),
         apply_intrinsic_ell( args ),
         *geometry,
+        *centre_jitter(args, getattr(args, "aug_centre_jitter_kpc", 0.)),
         crop,
     ])
         
@@ -602,6 +605,32 @@ class SpinRotation:
         sample[0] = c * e1 + s * e2
         sample[1] = -s * e1 + c * e2
         return sample
+
+
+class CentreJitter:
+    '''
+    Shift a map by a random whole-pixel offset, Gaussian with sigma_px per axis, filling the
+    emptied border with 0 (no galaxies). Forward-models the error in the observed stamp's
+    centre: the simulations are centred on the true halo, A2744 on a fitted centre known to
+    ~50 kpc (sbi/centre_uncertainty.py). A pure translation leaves the shear components alone.
+    '''
+    def __init__(self, sigma_px):
+        self.sigma_px = sigma_px
+
+    def __call__(self, sample):
+        dy, dx = (int(round(v)) for v in (torch.randn(2) * self.sigma_px).tolist())
+        n = sample.shape[-1]
+        if abs(dx) >= n or abs(dy) >= n:
+            return torch.zeros_like(sample)
+        out = torch.zeros_like(sample)
+        out[..., max(dy, 0):n + min(dy, 0), max(dx, 0):n + min(dx, 0)] = \
+            sample[..., max(-dy, 0):n + min(-dy, 0), max(-dx, 0):n + min(-dx, 0)]
+        return out
+
+
+def centre_jitter(args, kpc):
+    '''[CentreJitter] for a per-axis jitter of kpc (pixels of FOV_KPC / image_size), or [] for none.'''
+    return [CentreJitter(kpc / (FOV_KPC / args.image_size))] if kpc > 0 else []
 
 
 class Downsample:

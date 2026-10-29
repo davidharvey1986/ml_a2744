@@ -77,6 +77,10 @@ def parse_args():
     parser.add_argument("--aug_rotation_degrees", type=int, default=360)
     parser.add_argument("--legacy_spin_aug", action="store_true",
                         help="flip/rotate the pixels only, not the shear components (models before the spin-2 fix)")
+    parser.add_argument("--aug_centre_jitter_kpc", type=float, default=0.,
+                        help="shift training maps by a Gaussian offset with this sigma per axis [kpc] (centring error)")
+    parser.add_argument("--test_centre_jitter_kpc", type=float, default=0.,
+                        help="the same for the evaluation sets, to forward-model the centring error")
     parser.add_argument("--aug_crop_prob", type=float, default=0.5)
     parser.add_argument("--aug_crop_scale_min", type=float, default=0.9)
     parser.add_argument("--aug_crop_scale_max", type=float, default=1.1)
