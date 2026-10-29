@@ -106,6 +106,8 @@ def parse():
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--excess-map", default=str(EXCESS_MAP), help="Lenstool excess_kappa.fits ('' to skip)")
     p.add_argument("--a2744-only", action="store_true", help="only redraw the A2744 map from sensitivity.npz")
+    p.add_argument("--recentre", choices=sorted(LENSTOOL_HALOS), default=None,
+                   help="centre the A2744 stamp on this Lenstool potential (use with --domains for A2744 only)")
     p.add_argument("--no-excess-contours", action="store_true",
                    help="with --a2744-only: leave out the Lenstool excess contours (halos still marked)")
     p.add_argument("--sigma-range", type=float, nargs=2, default=None, metavar=("VMIN", "VMAX"),
@@ -181,14 +183,24 @@ def normalise(t):
 
 
 # ── data and simulations ───────────────────────────────────────────────────────
-def a2744_map():
-    '''Raw (chi) and normalised A2744 map, built as add_shear_to_data.make_obs_maps map 0.'''
+def a2744_map(recentre=None):
+    '''
+    Raw (chi) and normalised A2744 map, built as add_shear_to_data.make_obs_maps map 0; with
+    recentre (a LENSTOOL_HALOS key) the stamp is instead centred on that Lenstool potential.
+    '''
     cat = get_obs_data("concat", data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
     ra, dec = ra_dec_to_simulation_image_pos(cat)
+    if recentre:
+        _, inverse = stamp_to_lenstool(cat, ra, dec)
+        dx, dy = inverse(*LENSTOOL_HALOS[recentre])
+        ra, dec = ra - dx, dec - dy
+        print(f"stamp centred on Lenstool {recentre}: {20 * np.hypot(dx, dy):.0f} kpc from the adopted centre")
     c1, c2 = galaxy_distortion(cat)
     raw = np.array(bin2d(ra, dec, v=(c1, c2), npix=NPIX, extent=[-50, 50, -50, 50]), dtype=np.float32)
-    _, stored = pkl.load(open("../data/100/a2744/obs_data_concat.pkl", "rb"))
-    assert np.allclose(np.array(normalise_map(raw[0], raw[1])), stored[0], atol=1e-5), "A2744 map differs from obs_data_concat.pkl"
+    if not recentre:
+        _, stored = pkl.load(open("../data/100/a2744/obs_data_concat.pkl", "rb"))
+        assert np.allclose(np.array(normalise_map(raw[0], raw[1])), stored[0], atol=1e-5), \
+            "A2744 map differs from obs_data_concat.pkl"
     return raw, cat, ra, dec
 
 
@@ -674,9 +686,10 @@ def plot_delta_vs_kappa(a2744, rot_deltas, sims, path, n_bins=10, x="kappa", bin
 def a2744_only_map(opts, out):
     '''A2744's sensitivity map alone, redrawn from sensitivity.npz.'''
     z = np.load(out / "sensitivity.npz")
-    raw_np, cat, ra, dec = a2744_map()
+    raw_np, cat, ra, dec = a2744_map(opts.recentre)
     delta = z["a2744_delta"].mean(0)
-    panel = {"title": f"A2744  (P = {json.load(open(out / 'sensitivity.json'))['a2744_p_sidm']:.2f}, "
+    panel = {"title": f"A2744{f' on {opts.recentre}' if opts.recentre else ''}  "
+                      f"(P = {json.load(open(out / 'sensitivity.json'))['a2744_p_sidm']:.2f}, "
                       f"{z['a2744_delta'].shape[0]} models)", "delta": delta, "kappa_snr": reconstruct_kappa(raw_np)[1]}
     if "a2744_excess_snr" in z:
         _, inverse = stamp_to_lenstool(cat, ra, dec)
@@ -719,7 +732,7 @@ def kappa_plot(opts, out):
     args = ms.setup_args("concat")
     models = ms.load_models(SimpleNamespace(filter="concat", model=opts.model, include_str=opts.include_str,
                                             nmodels=opts.nmodels), args, device)
-    raw_np, cat, ra, dec = a2744_map()
+    raw_np, cat, ra, dec = a2744_map(opts.recentre)
     a2744 = {"kappa": window_mean(reconstruct_kappa(raw_np)[0], opts.window, opts.stride),
              "snr": z["a2744_snr_windows"].reshape(z["a2744_delta"].shape[1:]),
              "delta": z["a2744_delta"].mean(0), "p_full": json.load(open(out / "sensitivity.json"))["a2744_p_sidm"]}
@@ -841,7 +854,7 @@ def main():
     mu, sig = a2744_mass_gaussian()
 
     # A2744
-    raw_np, cat, ra_pix, dec_pix = a2744_map()
+    raw_np, cat, ra_pix, dec_pix = a2744_map(opts.recentre)
     raw = torch.tensor(raw_np)
     img, fill = normalise(raw)
     delta, full = occlusion_map(models, img, fill, opts.window, opts.stride, device, opts.batch_size)
