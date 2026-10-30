@@ -1,6 +1,6 @@
 #!/bin/bash
 # Evaluate the spin2 models re-fine-tuned with the shape noise composed correctly (NOISE_TAG=_cx,
-# run name *_nob1_spin2_cx_ft_tweakedalign_k0p9_ctr*). Waits on bonsai for all 10 _ba_best
+# run name *_nob1_spin2_cx_ft_tweakedalign_k0p9_ctr*). Waits on bonsai for NEED (default 30) _ba_best
 # checkpoints, copies them, then runs one step at a time (get_obs_data rewrites the A2744 filtered
 # fits). Logs to sbi/logs_eval_cx/<step>.txt.
 cd "$(dirname "$0")/.."
@@ -12,7 +12,7 @@ REMOTE=/srv/scratch/dharvey/ml_nature/models/concat
 mkdir -p $LOG
 step() { name=$1; shift; echo "== $(date +%H:%M) $name"; "$@" > $LOG/$name.txt 2>&1 || echo "   FAILED (see $LOG/$name.txt)"; }
 
-until [ "$(ssh -o BatchMode=yes bonsai "ls $REMOTE/*${INC}*_ba_best.pth 2>/dev/null | wc -l" 2>/dev/null)" -ge 10 ]; do
+until [ "$(ssh -o BatchMode=yes bonsai "ls $REMOTE/*${INC}*_ba_best.pth 2>/dev/null | wc -l" 2>/dev/null)" -ge ${NEED:-30} ]; do
     sleep 300
 done
 sleep 30

@@ -42,8 +42,10 @@ def main():
     out = Path(opts.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     mu, sig = a2744_mass_gaussian()
-    obs = np.load(Path(opts.summaries[0]).resolve() / "obs.npz")["softmax"]
-    p_a = float(obs[:, 0].mean()) if obs.ndim == 2 else float(obs[:, 0, 0].mean())
+    p_a = []                                   # A2744 per set of models (the data map has no added noise)
+    for S in opts.summaries:
+        obs = np.load(Path(S).resolve() / "obs.npz")["softmax"]
+        p_a.append(float(obs[:, 0].mean()) if obs.ndim == 2 else float(obs[:, 0, 0].mean()))
     fig, axes = plt.subplots(1, 2, figsize=(13, 5), constrained_layout=True, sharey=True)
     res = {"a2744_p_sidm": p_a, "min_ncomp": opts.min_ncomp}
     for ax, dom in zip(axes, ("bahamas", "darkskies")):
@@ -57,7 +59,11 @@ def main():
                         label=f"{lab}: CDM {c['all'][0]:.3f} → {c['all'][-1]:.3f}")
             print(f"{dom:9s} {lab:16s} " + " | ".join(f"σ={s:g}: {a:.3f}±{e:.3f} (held-out {h:.3f})"
                                                     for s, a, e, h in zip(c["sigma"], c["all"], c["all_err"], c["held"])))
-        ax.axhline(p_a, color="k", lw=2, alpha=0.5, label=f"A2744 (not shifted): {p_a:.3f}")
+        drawn = set()
+        for p, lab, (col, _) in zip(p_a, opts.labels, STYLES):
+            if round(p, 3) not in drawn:
+                drawn.add(round(p, 3))
+                ax.axhline(p, color=col, lw=2, alpha=0.6, ls="-", label=f"A2744 (not shifted), {lab}: {p:.3f}")
         ax.set_xscale("log")
         ax.set_xlim(0.003, 1.4)
         ax.set_xticks([X_CDM, 0.01, 0.05, 0.1, 0.2, 0.3, 1], ["CDM", "0.01", "0.05", "0.1", "0.2", "0.3", "1"])
