@@ -84,6 +84,7 @@ sys.path.insert(0, str(REPO))
 from mass_weighting import a2744_mass_gaussian, effective_sample_size, gaussian_mass_weights  # noqa: E402
 
 DOMAINS = ["bahamas", "darkskies"]
+COMBINED = "combined"   # both simulations pooled (load_combined)
 NCOMP_MAX = 6          # n_comp >= 6 grouped together
 EPS = 1e-4             # clip on P(SIDM) before the logit
 TEST_FRAC = 0.2
@@ -93,7 +94,7 @@ N_SBC = 300
 
 INK, MUTED = "#222222", "#6b6b6b"
 NLE_COLOUR, NPE_COLOUR, PRIOR_COLOUR = "#222222", "#D55E00", "#8a8a8a"
-RAMP = {"bahamas": plt.cm.Blues, "darkskies": plt.cm.Oranges}
+RAMP = {"bahamas": plt.cm.Blues, "darkskies": plt.cm.Oranges, COMBINED: plt.cm.Greys}
 trapezoid = getattr(np, "trapezoid", None) or np.trapz
 
 
@@ -194,6 +195,26 @@ def load_domain(summaries, d, noise, latent_pcs=0):
     }
 
 
+def load_combined(summaries, noise, latent_pcs=0):
+    '''
+    BAHAMAS and DARKSKIES pooled into one training set: rows concatenated, cluster indices
+    offset so they stay unique, the cross-section grid the union of the two. "source" marks
+    each row's simulation so the empirical test can weight the two equally at each sigma/m.
+    '''
+    parts = [load_domain(summaries, d, noise, latent_pcs) for d in DOMAINS]
+    D = {k: np.concatenate([p[k] for p in parts]) for k in
+         ("draw", "x_npe", "theta", "sigma", "x_ens", "x_models")}
+    D["cluster"] = np.concatenate([p["cluster"] + sum(q["n_clusters"] for q in parts[:i]) for i, p in enumerate(parts)])
+    D["held_out"] = np.concatenate([p["held_out"] for p in parts], axis=1)
+    D["logit_models"] = np.concatenate([p["logit_models"] for p in parts], axis=1)
+    D["source"] = np.concatenate([np.full(len(p["sigma"]), i) for i, p in enumerate(parts)])
+    D.update({k: parts[0][k] for k in ("x_obs_npe", "x_obs_ens", "x_obs_models", "n_draws", "latent_variance_explained")})
+    D["n_clusters"] = sum(p["n_clusters"] for p in parts)
+    D["n_dropped"] = sum(p["n_dropped"] for p in parts)
+    D["sigma_grid"] = np.unique(D["sigma"])
+    return D
+
+
 def cdm_threshold(sigma_grid):
     '''CDM := sigma/m below half the smallest simulated SIDM cross-section.'''
     return 0.5 * sigma_grid[sigma_grid > 0].min()
@@ -234,15 +255,17 @@ def empirical_test(D, mu, sig, ncomp_set, n_weights):
     merger state differs between the cross-sections being compared.
     '''
     th, x, x_obs = D["theta"], D["x_ens"][:, 0], D["x_obs_ens"][0]
+    source = D.get("source", np.zeros(len(th), dtype=int))      # pooled simulations: equal weight each
     out = {}
     for s in D["sigma_grid"]:
         sel = np.where(np.isclose(D["sigma"], s) & np.isin(th[:, 2], ncomp_set))[0]
         w = np.zeros(len(sel))
-        for k, frac in n_weights.items():
-            rows = th[sel, 2] == k
-            if rows.sum() > 1:
-                wk = gaussian_mass_weights(th[sel[rows], 1], mu, sig)
-                w[rows] = frac * wk / wk.sum()
+        for src in np.unique(source[sel]):
+            for k, frac in n_weights.items():
+                rows = (th[sel, 2] == k) & (source[sel] == src)
+                if rows.sum() > 1:
+                    wk = gaussian_mass_weights(th[sel[rows], 1], mu, sig)
+                    w[rows] = frac * wk / wk.sum()
         sel = np.isin(np.arange(len(th)), sel)                   # back to a mask, same order as w
         p = float(np.sum(w * (x[sel] >= x_obs)) / w.sum())
         n_eff = effective_sample_size(w) / D["n_draws"]          # clusters, not cluster-draw pairs
@@ -802,7 +825,8 @@ def save(fig, stem):
 # ── main ───────────────────────────────────────────────────────────────────────
 def run_domain(d, opts, out, rng, mu, sig):
     print(f"\n=== {d} ===")
-    D = load_domain(opts.summaries, d, opts.noise, opts.latent_pcs)
+    D = (load_combined(opts.summaries, opts.noise, opts.latent_pcs) if d == COMBINED
+         else load_domain(opts.summaries, d, opts.noise, opts.latent_pcs))
     th, n = D["theta"], D["n_clusters"]
     test = (rng.random(n) < TEST_FRAC)[D["cluster"]]           # all draws of a cluster on one side
     check = test & (D["draw"] == 0)                             # one draw per held-out cluster for checks
@@ -928,7 +952,7 @@ def main():
     mu, sig = a2744_mass_gaussian()
 
     results, R = {}, {}
-    for d in DOMAINS:
+    for d in DOMAINS + [COMBINED]:
         results[d], R[d] = run_domain(d, opts, out, rng, mu, sig)
 
     info = json.load(open(summaries / "info.json"))

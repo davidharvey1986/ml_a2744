@@ -722,31 +722,37 @@ class Downsample:
     
 class cluster_member_contamination( object ):
     '''
-    Mock cluster member contamination
+    Mock cluster member contamination: the fraction of unlensed cluster members among the
+    sources grows linearly with the convergence, f = cluster_member_contamination * kappa
+    (at most 1), and dilutes the shear by (1 - f) pixel by pixel; a negative value boosts it.
+
+    The convergence comes in as an optional third channel (e1, e2, kappa), which is always
+    removed so the later transforms see (e1, e2) only; a non-zero contamination needs it.
     '''
-    
+
     def __init__( self, args ):
-        
+
         if args.cluster_member_contamination > 1.0:
             raise ValueError("Contimanation cannot be greater than 1")
-            
+
         if args.cluster_member_contamination == 0:
             self.apply = False
         else:
             self.cluster_member_contamination = args.cluster_member_contamination
             self.apply = True
-            
+
     def __call__( self, sample ):
-        
+
+        kappa = sample[2] if sample.shape[0] == 3 else None
+        sample = sample[:2]
+
         if self.apply:
-            #mag = np.sqrt(sample[0]**2 + sample[1]**2)
-            
-            #dilution = mag/torch.max(mag)*self.cluster_member_contamination
-            
-            dilution = self.cluster_member_contamination
-             
-            sample[0] = sample[0]*(1-dilution)
-            sample[1] = sample[1]*(1-dilution)
+            if kappa is None:
+                raise ValueError("cluster_member_contamination needs the convergence as a third channel")
+
+            dilution = torch.clamp(self.cluster_member_contamination*kappa, max=1)
+
+            sample = sample*(1-dilution)
             
             
         return sample

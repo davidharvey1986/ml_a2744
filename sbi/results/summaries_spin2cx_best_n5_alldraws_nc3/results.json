@@ -1,0 +1,414 @@
+{
+  "bahamas": {
+    "empirical": {
+      "p_value": 0.009340254389024066,
+      "p_value_floor": 0.003927811175947203,
+      "significance_sigma": 2.3518459668554863,
+      "is_lower_limit": false,
+      "n_eff": 254.59472342349736,
+      "p_value_all_cdm_unweighted": 0.0067777777777777775
+    },
+    "nle": {
+      "sigma_quantiles": [
+        0.2660582520908908,
+        0.5967131604726281,
+        0.8751273910873791
+      ],
+      "sigma_probabilities": {
+        "0": 0.01975609352233942,
+        "0.1": 0.08684086891312562,
+        "0.3": 0.45070325698921937,
+        "1": 0.44269978057531567
+      },
+      "posterior_p_cdm": 0.01975609352233942,
+      "prior_p_cdm": 0.075,
+      "bayes_factor_sidm_cdm": 4.023023862003834,
+      "savage_dickey_bf_sidm_cdm": 4.611571243658512,
+      "likelihood_ratio_best_vs_cdm": 8.248919731016512,
+      "lr_significance_sigma": 2.0543038967387512,
+      "best_sigma": 1.0,
+      "mass_quantiles": [
+        14.463207041761246,
+        14.5233578355442,
+        14.586095735182607
+      ],
+      "ncomp_probabilities": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.9999999999999986,
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      }
+    },
+    "npe_conditional": {
+      "fraction_above_simulated_sigma": 0.33845,
+      "fraction_below_zero": 0.0256,
+      "sigma_quantiles": [
+        0.1,
+        1.0,
+        1.0
+      ],
+      "sigma_probabilities": {
+        "0": 0.0495,
+        "0.1": 0.116,
+        "0.3": 0.2055,
+        "1": 0.629
+      },
+      "posterior_p_cdm": 0.0495,
+      "prior_p_cdm": 0.25,
+      "bayes_factor_sidm_cdm": 6.4006734006734005,
+      "bayes_factor_is_lower_limit": false,
+      "held_out_checks": {
+        "sigma_p_true": 0.3198966666666667,
+        "chance": 0.25,
+        "sigma_map_correct": 0.388
+      }
+    },
+    "conditioning_check": {
+      "0": {
+        "mean_log_mass": 14.522053480878839,
+        "std_log_mass": 0.06578059250358459,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.1": {
+        "mean_log_mass": 14.522475525398589,
+        "std_log_mass": 0.06699141252946111,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.3": {
+        "mean_log_mass": 14.521403677540068,
+        "std_log_mass": 0.06570455703160397,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "1": {
+        "mean_log_mass": 14.520244028694675,
+        "std_log_mass": 0.06554206335077359,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      }
+    },
+    "npe": null,
+    "checks": {
+      "obs_summary_percentile_mahalanobis": 0.18765277777777778,
+      "cdm_training_bias_logit": -0.0015032589435577393
+    },
+    "a2744_ncomp_class": [
+      3
+    ],
+    "ncomp_weights": {
+      "3": 1.0
+    },
+    "npe_test_metrics": null,
+    "npe_input_dim": 30,
+    "latent_variance_explained": 0.0,
+    "cdm_definition_sigma_below": 0.05,
+    "n_clusters": 14400,
+    "empirical_p_by_sigma": {
+      "0": 0.009340254389024066,
+      "0.1": 0.03459858680163608,
+      "0.3": 0.07572971491664127,
+      "1": 0.18920622575957508
+    }
+  },
+  "darkskies": {
+    "empirical": {
+      "p_value": 0.013027497065949321,
+      "p_value_floor": 0.010803391746951066,
+      "significance_sigma": 2.225391105334416,
+      "is_lower_limit": false,
+      "n_eff": 92.56352295863196,
+      "p_value_all_cdm_unweighted": 0.015833333333333335
+    },
+    "nle": {
+      "sigma_quantiles": [
+        0.04206593519108312,
+        0.11118161271898601,
+        0.1731995690175866
+      ],
+      "sigma_probabilities": {
+        "0": 0.017413015983603498,
+        "0.01": 0.09094030196332058,
+        "0.05": 0.20116450423193852,
+        "0.1": 0.397120117340685,
+        "0.2": 0.29336206048045244
+      },
+      "posterior_p_cdm": 0.017413015983603498,
+      "prior_p_cdm": 0.03,
+      "bayes_factor_sidm_cdm": 1.7452053219310673,
+      "savage_dickey_bf_sidm_cdm": 1.7715157087257847,
+      "likelihood_ratio_best_vs_cdm": 2.4174648780223835,
+      "lr_significance_sigma": 1.3286981749196403,
+      "best_sigma": 0.20000000298023224,
+      "mass_quantiles": [
+        14.472176902176427,
+        14.53088868351967,
+        14.592283707950548
+      ],
+      "ncomp_probabilities": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 1.0000000000000027,
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      }
+    },
+    "npe_conditional": {
+      "fraction_above_simulated_sigma": 0.2101,
+      "fraction_below_zero": 0.0359,
+      "sigma_quantiles": [
+        0.01,
+        0.05,
+        0.2
+      ],
+      "sigma_probabilities": {
+        "0": 0.1449,
+        "0.01": 0.1669,
+        "0.05": 0.21345,
+        "0.1": 0.216,
+        "0.2": 0.25875
+      },
+      "posterior_p_cdm": 0.1449,
+      "prior_p_cdm": 0.2,
+      "bayes_factor_sidm_cdm": 1.475327812284334,
+      "bayes_factor_is_lower_limit": false,
+      "held_out_checks": {
+        "sigma_p_true": 0.20560533333333333,
+        "chance": 0.2,
+        "sigma_map_correct": 0.2384
+      }
+    },
+    "conditioning_check": {
+      "0": {
+        "mean_log_mass": 14.523207079219388,
+        "std_log_mass": 0.06602654541896921,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.01": {
+        "mean_log_mass": 14.5245195187202,
+        "std_log_mass": 0.06312723118747884,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.05": {
+        "mean_log_mass": 14.526618295709046,
+        "std_log_mass": 0.06541322505972853,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.1": {
+        "mean_log_mass": 14.525227810253405,
+        "std_log_mass": 0.0655772421176825,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.2": {
+        "mean_log_mass": 14.524003634164739,
+        "std_log_mass": 0.06683362927210755,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      }
+    },
+    "npe": null,
+    "checks": {
+      "obs_summary_percentile_mahalanobis": 0.2437,
+      "cdm_training_bias_logit": 0.0036469362676143646
+    },
+    "a2744_ncomp_class": [
+      3
+    ],
+    "ncomp_weights": {
+      "3": 1.0
+    },
+    "npe_test_metrics": null,
+    "npe_input_dim": 30,
+    "latent_variance_explained": 0.0,
+    "cdm_definition_sigma_below": 0.005,
+    "n_clusters": 6000,
+    "empirical_p_by_sigma": {
+      "0": 0.013027497065949321,
+      "0.01": 0.012190566869032807,
+      "0.05": 0.023798716523410143,
+      "0.1": 0.03959589384522886,
+      "0.2": 0.031628330916116026
+    }
+  },
+  "combined": {
+    "empirical": {
+      "p_value": 0.011183875727486694,
+      "p_value_floor": 0.003682800730724567,
+      "significance_sigma": 2.2840643142877384,
+      "is_lower_limit": false,
+      "n_eff": 271.53247572079647,
+      "p_value_all_cdm_unweighted": 0.009041666666666667
+    },
+    "nle": {
+      "sigma_quantiles": [
+        0.2741359313866085,
+        0.605207268893497,
+        0.876992188481715
+      ],
+      "sigma_probabilities": {
+        "0": 0.00219457192237659,
+        "0.01": 0.008535306405078165,
+        "0.05": 0.018141123164114245,
+        "0.1": 0.04186195923120239,
+        "0.2": 0.06980902579121695,
+        "0.3": 0.407931452638082,
+        "1": 0.4515265608479297
+      },
+      "posterior_p_cdm": 0.00219457192237659,
+      "prior_p_cdm": 0.01,
+      "bayes_factor_sidm_cdm": 4.592623556825606,
+      "savage_dickey_bf_sidm_cdm": 4.634319934116367,
+      "likelihood_ratio_best_vs_cdm": 8.363614672019139,
+      "lr_significance_sigma": 2.061014658212977,
+      "best_sigma": 1.0,
+      "mass_quantiles": [
+        14.46366522603124,
+        14.523313292414937,
+        14.585464517188765
+      ],
+      "ncomp_probabilities": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 1.0000000000000009,
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      }
+    },
+    "npe_conditional": {
+      "fraction_above_simulated_sigma": 0.30965,
+      "fraction_below_zero": 0.0468,
+      "sigma_quantiles": [
+        0.05,
+        0.3,
+        1.0
+      ],
+      "sigma_probabilities": {
+        "0": 0.0563,
+        "0.01": 0.06615,
+        "0.05": 0.1258,
+        "0.1": 0.0767,
+        "0.2": 0.12875,
+        "0.3": 0.1813,
+        "1": 0.365
+      },
+      "posterior_p_cdm": 0.0563,
+      "prior_p_cdm": 0.14285714285714285,
+      "bayes_factor_sidm_cdm": 2.793664890467732,
+      "bayes_factor_is_lower_limit": false,
+      "held_out_checks": {
+        "sigma_p_true": 0.174874686716792,
+        "chance": 0.14285714285714285,
+        "sigma_map_correct": 0.20927318295739347
+      }
+    },
+    "conditioning_check": {
+      "0": {
+        "mean_log_mass": 14.522630280049114,
+        "std_log_mass": 0.06590620776774943,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.01": {
+        "mean_log_mass": 14.5245195187202,
+        "std_log_mass": 0.06312723118747884,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.05": {
+        "mean_log_mass": 14.526618295709046,
+        "std_log_mass": 0.06541322505972853,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.1": {
+        "mean_log_mass": 14.523851667825996,
+        "std_log_mass": 0.066302381452006,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.2": {
+        "mean_log_mass": 14.524003634164739,
+        "std_log_mass": 0.06683362927210755,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "0.3": {
+        "mean_log_mass": 14.521403677540068,
+        "std_log_mass": 0.06570455703160397,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      },
+      "1": {
+        "mean_log_mass": 14.520244028694675,
+        "std_log_mass": 0.06554206335077359,
+        "ncomp_mix": {
+          "3": 1.0
+        }
+      }
+    },
+    "npe": null,
+    "checks": {
+      "obs_summary_percentile_mahalanobis": 0.21596078431372548,
+      "cdm_training_bias_logit": -0.0028578415513038635
+    },
+    "a2744_ncomp_class": [
+      3
+    ],
+    "ncomp_weights": {
+      "3": 1.0
+    },
+    "npe_test_metrics": null,
+    "npe_input_dim": 30,
+    "latent_variance_explained": 0.0,
+    "cdm_definition_sigma_below": 0.005,
+    "n_clusters": 20400,
+    "empirical_p_by_sigma": {
+      "0": 0.011183875727486694,
+      "0.01": 0.012190566869032807,
+      "0.05": 0.023798716523410143,
+      "0.1": 0.03709724032343247,
+      "0.2": 0.031628330916116026,
+      "0.3": 0.07572971491664127,
+      "1": 0.18920622575957508
+    }
+  },
+  "settings": {
+    "summaries": "summaries_spin2cx_best_n5",
+    "model": "tweakedalign_k0p9_ctr_ba_best",
+    "n_models": 30,
+    "nle_conditioned_on_a2744": true,
+    "a2744_ncomp": "3",
+    "latent_pcs": 0,
+    "noise": "all",
+    "a2744_log_mass": [
+      14.52244423350632,
+      0.06608456283091435
+    ],
+    "ncomp_max": 6,
+    "seed": 0
+  }
+}

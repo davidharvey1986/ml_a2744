@@ -7,7 +7,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-JUMP=${unige:-dharvey@login22.astro.unige.ch}
+JUMP=${unige_local:-dharvey@login22.astro.unige.ch}
 DEST_HOST=dharvey@bonsai10
 DEST=/srv/scratch/dharvey/ml_nature
 BASE_MODELS=/Users/davidharvey/Work/Dark_Matter_DA/code/models/base_models
@@ -20,11 +20,14 @@ $SSH $DEST_HOST "mkdir -p $DEST/models/base_models $DEST/data/100/obs/concat $DE
 
 echo "== code"
 rsync -av -e "$SSH" --exclude .git --exclude data --exclude models --exclude astro-env --exclude wandb --exclude logs \
-    --exclude 'sbi/summaries*' --exclude sbi/results --exclude notebooks/pickles \
+    --exclude pyRRG --exclude 'sbi/summaries*' --exclude sbi/results --exclude notebooks/pickles \
     --exclude __pycache__ --exclude .ipynb_checkpoints ./ $DEST_HOST:$DEST/
 
 echo "== data: obs/concat without flamingo, and the noise model"
-rsync -avR -e "$SSH" --exclude 'flamingo*' data/100/obs/concat data/100/a2744/ngal_concat.pkl $DEST_HOST:$DEST/
+rsync -avR -e "$SSH" --exclude 'tng.pkl' --exclude 'flamingo*' data/100/obs/concat data/100/a2744/ngal_concat.pkl $DEST_HOST:$DEST/
+
+echo "== data: shear maps for the base-model stage (stamp independent)"
+rsync -avR -e "$SSH" --exclude 'flamingo*' data/100/shear $DEST_HOST:$DEST/
 
 echo "== base models"
 rsync -av -e "$SSH" --include '*_nob1_final.pth' --exclude '*' "$BASE_MODELS"/ $DEST_HOST:$DEST/models/base_models/

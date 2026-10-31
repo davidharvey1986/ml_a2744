@@ -1,0 +1,24 @@
+{
+ "model": "tweakedalign_k0p9_ctr_ba_best",
+ "include_str": "spin2_jit500_ft_",
+ "n_models": 10,
+ "n_draws": 100,
+ "p_sidm_adopted_centre": [
+  0.7376395463943481,
+  0.07408569008111954
+ ],
+ "p_sidm_lenstool_o2": [
+  0.7645994424819946,
+  0.05508799105882645
+ ],
+ "p_sidm_over_centre_draws": {
+  "mean": 0.7376684546470642,
+  "std": 0.02256762608885765,
+  "percentiles_16_50_84": [
+   0.7169,
+   0.7375,
+   0.7612
+  ]
+ },
+ "centre_draw_offsets_kpc_rms": 49.79169557400184
+}

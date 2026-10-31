@@ -45,7 +45,7 @@ FID_CUTS = {"size_cut": [2, 200], "signal_noise_cut": 0, "stat_type": "median", 
             "RS_info": False}   # get_obs_data defaults
 MEMBER_Z = 0.305 + 0.05 * 3
 R_EDGES = np.array([5, 10, 15, 20, 30, 40, 50, 71])     # pixels (20 kpc)
-INNER_RMAX = 15                                          # --objective inner_chi_t: r < 300 kpc
+INNER_RMAX = 15                                          # --objective inner_chi_t: r < 300 kpc (--inner-rmax)
 
 GRID = {
     "signal_noise_cut": [0, 3, 5, 7, 10, 15],
@@ -63,6 +63,7 @@ def parse():
     p.add_argument("--size-lo", type=float, nargs="+", default=GRID["size_lo"])
     p.add_argument("--size-hi", type=float, nargs="+", default=GRID["size_hi"])
     p.add_argument("--mag-hi", type=float, nargs="+", default=GRID["mag_hi"])
+    p.add_argument("--inner-rmax", type=float, default=300., help="outer radius of the inner_chi_t region [kpc]")
     p.add_argument("--objective", choices=["snr_t", "inner_chi_t"], default="snr_t",
                    help="snr_t: tangential S/N 100 kpc-1.4 Mpc; inner_chi_t: mean chi_t of the data-map galaxies "
                         "(strong-lensing kappa < 0.9) within 300 kpc of the main halo")
@@ -146,6 +147,8 @@ def statistics(d, model=None):
 
 def main():
     opts = parse()
+    global INNER_RMAX
+    INNER_RMAX = opts.inner_rmax / 20.
     GRID.update({"signal_noise_cut": opts.snr_cuts, "size_lo": opts.size_lo, "size_hi": opts.size_hi, "mag_hi": opts.mag_hi})
     out = Path(opts.out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -228,7 +231,7 @@ def main():
     json.dump({"grid": GRID, "baseline": {"cuts": base, **{k: b[k] for k in ("n_stamp", "sigma_chi", "snr_t", "snr_x", "snr_model", "inner_chi_t", "inner_chi_t_err", "n_inner")}},
                "model": {"amplitude": float(np.exp(amp)), "slope": float(slope)},
                "rows": [{**r, "f115w": list(r["f115w"]), "f150w": list(r["f150w"])} for r in rows]},
-              open(out / f"optimise_cuts_{opts.objective}.json", "w"), indent=1)
+              open(out / (f"optimise_cuts_{opts.objective}" + (f"_r{opts.inner_rmax:g}kpc" if opts.objective == "inner_chi_t" else "") + ".json"), "w"), indent=1)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 for FILTER in concat
 do
-    for SEED in {1..30}
+    for SEED in {30..1}
     do
         bash train_seed.sh "$SEED" "$FILTER"
     done

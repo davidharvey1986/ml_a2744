@@ -86,6 +86,8 @@ def main():
         "p_sidm_over_centre_draws": {"mean": float(draws.mean()), "std": float(draws.std()),
                                      "percentiles_16_50_84": np.percentile(draws, [16, 50, 84]).round(4).tolist()},
         "centre_draw_offsets_kpc_rms": float(20 * np.sqrt(np.mean(cx ** 2 + cy ** 2))),
+        # each draw: centre offset from the adopted centre [stamp px] and ensemble P(SIDM)
+        "draws": [{"dx_px": float(a), "dy_px": float(b), "p_sidm": float(q)} for a, b, q in zip(cx, cy, draws)],
     }
     print(f"A2744 P(SIDM): adopted centre {ens[0]:.3f} | Lenstool O2 {ens[1]:.3f} | over {opts.ndraws} centre draws "
           f"{draws.mean():.3f} ± {draws.std():.3f} (16-84%: {res['p_sidm_over_centre_draws']['percentiles_16_50_84'][0]:.3f}"

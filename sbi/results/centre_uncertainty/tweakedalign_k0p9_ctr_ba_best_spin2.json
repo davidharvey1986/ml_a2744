@@ -1,0 +1,24 @@
+{
+ "model": "tweakedalign_k0p9_ctr_ba_best",
+ "include_str": "spin2",
+ "n_models": 30,
+ "n_draws": 100,
+ "p_sidm_adopted_centre": [
+  0.6971962451934814,
+  0.07491041719913483
+ ],
+ "p_sidm_lenstool_o2": [
+  0.7336342930793762,
+  0.06923163682222366
+ ],
+ "p_sidm_over_centre_draws": {
+  "mean": 0.6981765627861023,
+  "std": 0.025982143357396126,
+  "percentiles_16_50_84": [
+   0.6701,
+   0.7016,
+   0.7198
+  ]
+ },
+ "centre_draw_offsets_kpc_rms": 49.79169557400184
+}
