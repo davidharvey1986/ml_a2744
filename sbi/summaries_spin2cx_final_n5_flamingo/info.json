@@ -1,5 +1,5 @@
 {
-  "created": "2026-10-31T12:57:19",
+  "created": "2026-10-31T20:22:57",
   "models": [
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_1_nob1_spin2_cx_ft_tweakedalign_k0p9_ctr_ba_final.pth",
     "cdan_baha2dark_pre_squeezenet1_aw_1_pad_shear_avgpool_gauss_seed_2_nob1_spin2_cx_ft_tweakedalign_k0p9_ctr_ba_final.pth",
@@ -76,7 +76,7 @@
     "out_dir": "/Users/davidharvey/Work/ml_check/sbi/summaries_spin2cx_final_n5_flamingo",
     "legacy_dir": null,
     "domains": [
-      "tng"
+      "vd_bahamas"
     ],
     "no_latents": true
   },
@@ -97,6 +97,7 @@
     "../data/100/obs/concat/flamingo_hi.pkl": "2026-10-28T14:24:07",
     "../data/100/obs/concat/flamingo_lo.pkl": "2026-10-28T14:25:12",
     "../data/100/obs/concat/tng.pkl": "2026-10-31T12:51:14",
+    "../data/100/obs/concat/vd_bahamas.pkl": "2026-10-31T20:18:08",
     "../data/100/a2744/obs_data_concat.pkl": "2026-10-28T14:23:50"
   }
 }

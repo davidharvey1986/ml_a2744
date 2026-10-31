@@ -27,7 +27,8 @@ from mass_weighting import a2744_mass_gaussian, effective_sample_size, gaussian_
 SIMS = [("bahamas", "BAHAMAS CDM", "#56B4E9"), ("darkskies", "DARKSKIES CDM", "#E69F00"),
         ("flamingo", "FLAMINGO", "#009E73"), ("flamingo_lo", "FLAMINGO low AGN", "#8FD175"),
         ("flamingo_hi", "FLAMINGO high AGN", "#00593F"), ("tng", "TNG-Cluster", "#CC79A7")]
-SIDM = [("bahamas", "BAHAMAS σ/m=0.3", "#7B68EE", 0.3), ("bahamas", "BAHAMAS σ/m=1", "#0072B2", 1)]   # dashed (DARKSKIES stops at 0.2)
+SIDM = [("bahamas", "BAHAMAS σ/m=0.3", "#7B68EE", 0.3), ("bahamas", "BAHAMAS σ/m=1", "#0072B2", 1),
+        ("vd_bahamas", "BAHAMAS vdSIDM", "#E41A1C", None)]   # dashed (DARKSKIES stops at 0.2); None: every map
 
 
 def parse():
@@ -44,7 +45,7 @@ def parse():
 def load(d, sim, sigma=0):
     P = np.load(d / f"params_{sim}.npz")
     soft = np.load(d / f"softmax_{sim}.npy").mean(0)               # (n_noise, N) ensemble P(SIDM)
-    keep = np.isclose(P["cross_section"], sigma)
+    keep = np.ones(len(P["cross_section"]), bool) if sigma is None else np.isclose(P["cross_section"], sigma)
     return soft[:, keep], P["log10_mass_750"][keep], P["ncomponents"][keep]
 
 
@@ -91,7 +92,7 @@ def main():
                 continue
             r = stats(*load(d, sim, sigma), p_obs, mu, sig, k)
             x, w = r.pop("x"), r.pop("w")
-            kw = dict(lw=2, color=col, ls="--" if sigma else "-")
+            kw = dict(lw=2, color=col, ls="-" if sigma == 0 else "--")
             if opts.hist:
                 ax.hist(x, bins, weights=w, density=True, histtype="step", **kw, label=label(name, r))
             else:
