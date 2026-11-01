@@ -38,8 +38,9 @@ Model systematics (A5)
     cluster-member contamination (shear x (1 - c kappa), c = -0.5 ... 0.5), shape-measurement bias (m, c on e1/e2),
     source-redshift bias (n(z) scaled by 0.75-1.25), mass dependence (A2744 mass
     Gaussian shifted by -2...+2 sigma), merging scenario (n_comp class) and
-    projection depth (FLAMINGO maps at different depths; runs only if
-    data/100/obs/<filter>/flamingo_dz*.pkl exist)
+    projection depth (the same FLAMINGO CDM haloes projected through 25-500 cMpc;
+    the change in their mean P(SIDM) relative to 25 cMpc scales every simulated
+    cluster's P(SIDM); needs the sbi/dz_cx.sh summaries)
 
 Consistency choices: one catalogue (S/N cuts as prepare_uncovers_data) is used for
 the A2744 map, the signal sampling and the shape-noise positions, and the per-pixel
@@ -117,6 +118,8 @@ MERGING = {"3": (3,), "4+": (4, 5, 6)}         # fiducial is 3+ (with --min-ncom
 KAPPA_CUTS = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5]    # strong-lensing cut; KAPPA_THRESH is the fiducial
 CENTRING_KPC = [12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100]   # A2744 stamp centre offsets, each in 8 directions
 CENTRING_DIRS = np.arange(0, 360, 45)          # degrees from +RA (stamp x)
+DZ_DEPTHS = [25, 50, 100, 200, 250, 500]       # FLAMINGO projection depths [cMpc]; the shallowest is the reference
+DZ_MIN_HALOES = 50
 
 
 def parse():
@@ -136,6 +139,8 @@ def parse():
     p.add_argument("--redo", action="store_true", help="ignore cached test results")
     p.add_argument("--from-cache", action="store_true",
                    help="only summarise and plot cached results (no catalogue or models; missing cases skipped)")
+    p.add_argument("--dz-summaries", default=None,
+                   help="FLAMINGO projection-depth summaries (sbi/dz_cx.sh; default <summaries>_dz)")
     p.add_argument("--max-clusters", type=int, default=None, help="random subset per simulation (quick checks)")
     return p.parse_args()
 
@@ -511,17 +516,49 @@ def run_tests(R, tests):
 
 def projection_depth(R, fid):
     '''
-    Stub, as the paper: P(SIDM) of FLAMINGO CDM maps at each projection depth relative to
-    the shallowest, applied as a multiplicative change to each simulation's curve.
-    Needs data/100/obs/concat/flamingo_dz*.pkl.
+    As the paper: the same FLAMINGO CDM haloes projected through DZ_DEPTHS cMpc (flamingo_dz<N>), matched
+    by their centre of mass; the ratio of their mean ensemble P(SIDM) at each depth to the shallowest is
+    applied to every simulated cluster's P(SIDM) (each simulation's curve and its CDM tail), and the
+    metrics recomputed. Haloes in A2744's merger class at the shallowest depth (all, if fewer than
+    DZ_MIN_HALOES). Needs the summaries from sbi/dz_cx.sh (--dz-summaries).
     '''
-    files = sorted(Path("../data/100/obs/concat").glob("flamingo_dz*.pkl"),
-                   key=lambda f: int(f.stem.split("dz")[1]))
-    if not files:
-        print("projection depth: no flamingo_dz*.pkl in data/100/obs/concat, skipped")
+    d = Path(R.opts.dz_summaries) if R.opts.dz_summaries else Path(R.opts.summaries + "_dz")
+    depths = [z for z in DZ_DEPTHS if (d / f"params_flamingo_dz{z}.npz").exists()]
+    if len(depths) < 2:
+        print(f"projection depth: no flamingo_dz summaries in {d}, skipped")
         return []
-    print(f"projection depth: {[f.name for f in files]} (not yet implemented beyond this point)")
-    return []
+    per = {}
+    for z in depths:
+        P = np.load(d / f"params_flamingo_dz{z}.npz")
+        p = np.load(d / f"softmax_flamingo_dz{z}.npy").mean((0, 1))           # ensemble, mean over noise draws
+        meta, _ = ms.pkl.load(open(f"../data/100/convergence/flamingo_dz{z}.pkl", "rb"))
+        key = [tuple(np.round(np.asarray(meta["500_crit"][i]["CentreOfMass"], float), 2).ravel()) for i in P["image_idx"]]
+        halo = {}
+        for k, pi, nc in zip(key, p, P["ncomponents"]):
+            halo.setdefault(k, []).append((pi, nc))
+        per[z] = {k: (np.mean([a for a, _ in v]), v[0][1]) for k, v in halo.items()}   # projections averaged
+    ref = depths[0]
+    common = set.intersection(*[set(per[z]) for z in depths])
+    cls = [k for k in common if per[ref][k][1] >= min(A2744_NCOMP)]
+    use = cls if len(cls) >= DZ_MIN_HALOES else sorted(common)
+    print(f"projection depth: {len(common)} haloes at every depth {depths} cMpc; using "
+          f"{len(use)} ({'n_comp >= %d' % min(A2744_NCOMP) if use is cls else 'all n_comp'})")
+    p_ref = np.array([per[ref][k][0] for k in use])
+    rows = []
+    for z in depths[1:]:
+        pz = np.array([per[z][k][0] for k in use])
+        ratio = float(pz.mean() / p_ref.mean())
+        res = {dom: (np.clip(fid[dom][0] * ratio, EPS, 1 - EPS), fid[dom][1]) for dom in DOMAINS}
+        rows.append({"label": f"{z}cMpc", "value": z, "ratio": ratio, "n_haloes": len(use),
+                     "mean_p": float(pz.mean()), "mean_p_ref": float(p_ref.mean()),
+                     "per_halo_delta_16_50_84": np.percentile(pz - p_ref, [16, 50, 84]).tolist(),
+                     "metrics": R.summarise(res)})
+        print_row(f"projection {z} cMpc (x{ratio:.3f})", rows[-1]["metrics"], fid_metrics(R, fid))
+    return rows
+
+
+def fid_metrics(R, fid):
+    return R.summarise(fid)
 
 
 def print_row(name, m, fid=None):

@@ -72,6 +72,11 @@ def save_pickle(obj, path):
 
 
 def get_boxsize(set_name, return_units=units.pc, h=0.7):
+    '''Projection depth for the old mean-density background. FLAMINGO depth tests
+    (flamingo_dz<N>.pkl, old map format) are projected through N cMpc.'''
+    depth = re.search(r"_dz(\d+)", os.path.basename(str(set_name)))
+    if depth:
+        return (float(depth.group(1))*units.Mpc).to(return_units)
     if ('bahamas' in set_name) or ('tng' in set_name) or ('flamingo' in set_name):
         boxsize = 10./h*units.Mpc
     else:
@@ -367,8 +372,11 @@ def get_surface_density_norms(meta, set_name):
     (meta['map_units'] present) are already Msun / pMpc^2 and must not be divided.
     '''
     norms = np.array(meta['norms'], dtype=np.float64)
-    if (('darkskies' in set_name) or ('flamingo' in set_name)) and not is_physical_surface_density(meta):
-        norms /= 4.
+    if ('darkskies' in set_name) or ('flamingo' in set_name):
+        if not is_physical_surface_density(meta):
+            norms /= 4.
+        else:       # per map: the FLAMINGO depth tests mix old maps (map_units None) with new ones
+            norms[np.array([u is None for u in meta['map_units']])] /= 4.
     return norms
 
 
