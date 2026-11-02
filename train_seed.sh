@@ -16,6 +16,9 @@
 #   NOISE_TAG   added to the fine-tuned run name (default _cx: shape noise composed as complex
 #               numbers, dataset.py ea47c77; '' for the old names)
 #               instead of starting from the un-jittered base model; the run name gets _jit<kpc>
+#   PER_GALAXY_CHI  1 (default): shape noise combined with the shear per galaxy, then averaged per pixel,
+#               as the data map (dataset.apply_intrinsic_ell --per_galaxy_chi); the run name gets _pgc.
+#               0 for the old pixel-mean combination and names
 set -e
 SEED=${1:?usage: train_seed.sh SEED [FILTER]}
 FILTER=${2:-concat}
@@ -28,6 +31,13 @@ EXTRA_ARGS=${EXTRA_ARGS:-}
 CENTRE_JITTER_KPC=${CENTRE_JITTER_KPC:-0}
 JITTER_BASE=${JITTER_BASE:-0}
 NOISE_TAG=${NOISE_TAG-_cx}
+PER_GALAXY_CHI=${PER_GALAXY_CHI:-1}
+PGC_ARGS="--no-per_galaxy_chi"       # utils.py defaults to per-galaxy chi
+PGC_TAG=""
+if [ "${PER_GALAXY_CHI}" == "1" ]; then
+    PGC_ARGS="--per_galaxy_chi"
+    PGC_TAG="_pgc"
+fi
 JITTER_ARGS=""
 JITTER_TAG=""
 if [ "${CENTRE_JITTER_KPC}" != "0" ]; then
@@ -102,7 +112,7 @@ COMMON_ARGS="--batch_size 32 --epochs 10 --lr 0.0001 --eval_interval 2 --project
 COMMON_ARGS=$COMMON_ARGS" --model squeezenet1_1 --pretrained --mass_index 0 --in_channels 2 --verbose --weighting_scheme inverse_frequency"
 
 TUNE_DIR=models/${FILTER}/
-OUTPUT=${RUN_NAME}${FT_JITTER_TAG}${NOISE_TAG}_ft_tweakedalign_k0p9_ctr   # stamp centred on the A2744 main peak
+OUTPUT=${RUN_NAME}${FT_JITTER_TAG}${NOISE_TAG}${PGC_TAG}_ft_tweakedalign_k0p9_ctr   # stamp centred on the A2744 main peak
 
 if [ -f ${TUNE_DIR}/${OUTPUT}_best.pth ]
 then
@@ -113,7 +123,7 @@ for intrinsic_ell in 0.1 0.3 0.5 0.7 0.9
 do
     
 
-    $PYTHON main.py $COMMON_ARGS $EXTRA_ARGS $JITTER_ARGS --source_domain $SRC --target_domain $TGT \
+    $PYTHON main.py $COMMON_ARGS $EXTRA_ARGS $JITTER_ARGS $PGC_ARGS --source_domain $SRC --target_domain $TGT \
         --model squeezenet1_1 --pretrained \
         --weighting_scheme inverse_frequency \
         --run_name ${OUTPUT} --checkpoint ${PREVIOUS_NAME} \
@@ -135,7 +145,7 @@ COMMON_ARGS="--batch_size 32 --epochs 20 --lr 0.0001 --eval_interval 2 --project
 COMMON_ARGS=$COMMON_ARGS" --model squeezenet1_1 --pretrained --mass_index 0 --in_channels 2 --verbose --weighting_scheme inverse_frequency"
 
 # the final iteration is to save the most aligned version
-$PYTHON main.py $COMMON_ARGS $EXTRA_ARGS $JITTER_ARGS --source_domain $SRC --target_domain $TGT \
+$PYTHON main.py $COMMON_ARGS $EXTRA_ARGS $JITTER_ARGS $PGC_ARGS --source_domain $SRC --target_domain $TGT \
     --model squeezenet1_1 --pretrained \
     --weighting_scheme inverse_frequency \
     --run_name ${OUTPUT}_ba --checkpoint ${PREVIOUS_NAME} \

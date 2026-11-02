@@ -5,7 +5,7 @@ against sigma/m (n_comp >= --min-ncomp, noise draw 0, as response_plot.curves), 
 clusters shaded, with A2744 at the adopted centre and its centring spread (--centre-json).
 
     astro-env/bin/python sbi/response_combined.py --summaries sbi/summaries_spin2cx_best_n5 \
-        --centre-json sbi/results/centre_uncertainty/tweakedalign_k0p9_ctr_ba_best_spin2_cx_ft_.json
+        --centre-json sbi/results/centre_uncertainty/tweakedalign_k0p7_ctr_ba_best_spin2_cx_pgc_ft_.json
 '''
 import argparse
 import json
@@ -28,7 +28,7 @@ def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_spin2cx_best_n5"))
     p.add_argument("--centre-json", default=str(REPO / "sbi" / "results" / "centre_uncertainty" /
-                                                "tweakedalign_k0p9_ctr_ba_best_spin2_cx_ft_.json"))
+                                                "tweakedalign_k0p7_ctr_ba_best_spin2_cx_pgc_ft_.json"))
     p.add_argument("--min-ncomp", type=int, default=2)
     p.add_argument("--label", default="spin2 re-fine-tuned, corrected noise (30 models)")
     p.add_argument("--out", default=str(REPO / "sbi" / "results" / "chifix" / "response_combined"))

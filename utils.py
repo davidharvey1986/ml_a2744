@@ -25,6 +25,8 @@ def parse_args():
     parser.add_argument("--device", type=str, default="MPS")
     #This is altered a few times - basically 0=turn off, 1=turn on, anythign in between scale the amount of noise.
     parser.add_argument("--apply_intrinsic_ell", type=float, default=0.)
+    # Combine shear and source shape per galaxy, then average each pixel, as the data map (dataset.apply_intrinsic_ell).
+    parser.add_argument("--per_galaxy_chi", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--meta_names", type=str, default=[], nargs="*")
     parser.add_argument("--mass_index", type=int, default=2) #e1, e2, total, dark, gas, stellar
     parser.add_argument("--apply_mask", action="store_true", default=False)

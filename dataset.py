@@ -469,7 +469,12 @@ class apply_intrinsic_ell(object):
         self.binned_data = data_dict['binned_data']
         self.default_image_size = 100
         self.image_size = args.image_size
-        
+        # per_galaxy_chi: each galaxy's chi from its own source shape and its pixel's g, then the pixel mean, as the
+        # data map (per-galaxy chi = 2 gamma / (1 + |gamma|^2), then binned). Off: the pixel-mean source chi is
+        # combined with the pixel g, which compresses the signal less than the data does (<chi>/2g 0.81 for the
+        # data at the A2744 noise; 0.81-0.96 for 1-5 galaxies per pixel this way).
+        self.per_galaxy = getattr(args, 'per_galaxy_chi', True)
+
     def __call__( self, sample):
         #assume a-b/a+b
         if self.apply != 0.:
@@ -495,7 +500,10 @@ class apply_intrinsic_ell(object):
             )*np.pi
         
             #source_chi[ self.ngal ==0 ] = 0
-    
+
+            if self.per_galaxy:
+                return self._per_galaxy_chi(sample, source_chi, source_the)
+
             e1_sim = source_chi*np.cos(2*source_the)
             e2_sim = source_chi*np.sin(2*source_the)
             
@@ -535,7 +543,26 @@ class apply_intrinsic_ell(object):
         return_sample = torch.stack([chi_obs.real, chi_obs.imag]).to(sample.dtype)
 
         return_sample[ (sample == 0) ] = 0
-    
+
+
+        return return_sample
+
+    def _per_galaxy_chi(self, sample, source_chi, source_the):
+        '''Per-galaxy chi (the formula below) with g of the galaxy's pixel, averaged over each pixel's galaxies.'''
+        npix = self.default_image_size
+        valid, flat_bin = self.binned_data['valid'], self.binned_data['flat_bin']
+        g = torch.complex(sample[0].double(), sample[1].double()).reshape(-1)[torch.as_tensor(flat_bin)]
+        cs = (source_chi.double() * torch.exp(2j * source_the.double()))[torch.as_tensor(np.asarray(valid))]
+        chi_gal = (cs + 2.*g + g**2*cs.conj()) / (1 + g.abs()**2 + 2.*(g*cs.conj()).real)
+        count_map = np.bincount(flat_bin, minlength=npix*npix)
+        g_pix = torch.complex(sample[0].double(), sample[1].double())
+        chi_obs = (2.*g_pix / (1 + g_pix.abs()**2)).reshape(-1).numpy().copy()   # pixels without galaxies: no noise
+        mean = (np.bincount(flat_bin, weights=chi_gal.real.numpy(), minlength=npix*npix)
+                + 1j*np.bincount(flat_bin, weights=chi_gal.imag.numpy(), minlength=npix*npix)) / np.maximum(count_map, 1)
+        chi_obs[count_map > 0] = mean[count_map > 0]
+        chi_obs = chi_obs.reshape(npix, npix)
+        return_sample = torch.tensor(np.stack([chi_obs.real, chi_obs.imag])).to(sample.dtype)
+        return_sample[ (sample == 0) ] = 0
 
         return return_sample
         

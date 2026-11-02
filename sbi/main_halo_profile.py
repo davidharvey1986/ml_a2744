@@ -38,7 +38,7 @@ OUT = REPO / "sbi" / "results" / "main_halo_profile" / "main_halo_profile"
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--centre-json", default=str(REPO / "sbi" / "results" / "centre_uncertainty" /
-                                                "tweakedalign_k0p9_ctr_ba_best_spin2_cx_ft_.json"))
+                                                "tweakedalign_k0p7_ctr_ba_best_spin2_cx_pgc_ft_.json"))
     p.add_argument("--dx-kpc", type=float, default=None)
     p.add_argument("--dy-kpc", type=float, default=None)
     p.add_argument("--kappa-thresh", type=float, default=KAPPA_THRESH,

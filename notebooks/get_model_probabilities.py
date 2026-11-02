@@ -238,6 +238,7 @@ class args:
     zl                   = 0.305
     default_zl           = 0.305
     apply_intrinsic_ell  = 1
+    per_galaxy_chi       = True     # shape noise combined per galaxy, as the data map (dataset.apply_intrinsic_ell)
     jwst_filter          = "concat"
     med_norm             = -1
     shape_measurement_bias = {"e1": {"c": 0, "m": 0}, "e2": {"c": 0, "m": 0}}
