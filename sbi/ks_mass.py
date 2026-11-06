@@ -81,7 +81,7 @@ def main():
     # calibration: BAHAMAS CDM at A2744's mass through the same galaxies, cut and reconstruction
     sy.A2744_NCOMP = (2, 3, 4, 5, 6)
     mu, sig = a2744_mass_gaussian()
-    sel = sy.select_clusters(str(REPO / "sbi" / "summaries_spin2cx_final_n5"), "bahamas", mu)
+    sel = sy.select_clusters(str(REPO / "sbi" / "summaries_wb1_final_n5"), "bahamas", mu)
     cdm = sel["cross_section"] == 0
     sel = {k: v[cdm] for k, v in sel.items()}
     sm = sy.SimMaps(sel)

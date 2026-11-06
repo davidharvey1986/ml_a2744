@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # ml_check modules
 
 from get_model_probabilities import *
-from add_shear_to_data import combine_catalogues, get_source_redshift, return_error_in_mean, get_model_names, SHEAR_CUTS
+from add_shear_to_data import combine_catalogues, get_source_redshift, return_error_in_mean, get_model_names, SHEAR_CUTS, KAPPA_THRESH, SL_KAPPA_MAP
 from sidm_inference_on_data_and_models import infer_sidm
 import scienceplots
 plt.style.use(["science","grid"])
@@ -61,10 +61,10 @@ def kappa_on_stamp(path, cat, downsample=2):
     return X, Y, kappa[::downsample, ::downsample], k_gal
 
 
-def figure1(sl_kappa=None, kappa_level=0.9):
+def figure1(sl_kappa=None, kappa_level=KAPPA_THRESH):
     '''
     Postage stamp examples (plots/data_examples.png). With sl_kappa (a strong-lensing
-    convergence map) the kappa = kappa_level contour is drawn on the A2744 panels and the
+    convergence map) the kappa = kappa_level (default the strong-lensing cut) contour is drawn on the A2744 panels and the
     figure is written to plots/data_examples_kappa<level>.png instead.
     '''
     # ## Postage stamp examples
@@ -1093,6 +1093,29 @@ def figure6( log_max_like, log_error):
 
 # # Appendix plots
 
+def bmode_check(nmonte=200, seed=0, image_size=100):
+    '''
+    For the B-mode panel of Figure A1 (as notebooks/prepare_uncovers_data.ipynb, which saved
+    pickles/bmode_check.pkl): the Kaiser-Squires B-mode of the A2744 catalogue (SHEAR_CUTS, strong-lensing
+    galaxies dropped, as the CNN map) and the E-mode of nmonte copies with every galaxy's orientation
+    randomised (the noise floor). Returns both flattened.
+    '''
+    cat = get_obs_data('concat', data_dir="../data/100/a2744/", cuts=SHEAR_CUTS, drop_strong_lensing=True)
+    binned = bin_obs_data(cat)
+    cat['x'], cat['y'] = binned['delta_ra'], binned['delta_dec']
+    extent = [-image_size//2, image_size//2, -image_size//2, image_size//2]
+    _, kappa_b = get_kappa(cat, smooth=0, correct_for_ngal=False, extent=extent)
+    amp = np.hypot(cat['gamma1'], cat['gamma2'])
+    rng = np.random.default_rng(seed)
+    rotated = []
+    for _ in tqdm(range(nmonte), desc="rotated B-mode noise"):
+        theta = rng.uniform(0, np.pi, len(amp))
+        new = cat.copy()
+        new['gamma1'], new['gamma2'] = amp*np.cos(2*theta), amp*np.sin(2*theta)
+        rotated.append(get_kappa(new, smooth=0, correct_for_ngal=False, extent=extent)[0])
+    return np.array(rotated).ravel(), np.asarray(kappa_b).ravel()
+
+
 def figureA1():
     
     nrow = 2 
@@ -1264,52 +1287,31 @@ def figureA1():
     def std_err( x ):
         return np.std(x)/np.sqrt(x.shape[0])
 
-    cuts= {'f115w':{'signal_noise_cut':4, 'stat_type':'snr'}, 
-           'f150w':{'signal_noise_cut':5, 'stat_type':'snr'}}
-    fid_cut = {
-                'size_cut':[2,200],
-                'signal_noise_cut':5,
-                'stat_type':'snr',
-                'mag_cut':[0,30],
-                'verbose':False
-            }
-
-    xbins = np.linspace(0,20,30)
-
-
-
-    color={'f115w':'b','f150w':'r'}
-    for ifilter in ['f115w','f150w']:
-        obs_data = fits.open(f"../data/100/a2744/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears")[1].data
-        this_cut = fid_cut.copy()
-
-        for icut in cuts[ifilter].keys():
-            this_cut[icut] = cuts[ifilter][icut]
-
-        calc_shear(
-                    obs_data, 
-                    "test.fits", 
-                    **this_cut
-        )
+    from shear_susceptibility import fit_g1
+    from scipy.stats import binned_statistic as _bs
+    fid_cut = {'size_cut': [2, 200], 'signal_noise_cut': 5, 'stat_type': 'snr', 'mag_cut': [0, 30], 'verbose': False,
+               'RS_info': False}
+    color = {'f115w': 'b', 'f150w': 'r'}
+    for ifilter in ['f115w', 'f150w']:
+        cat = fits.open(f"../data/100/a2744/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears")[1].data
+        calc_shear(cat, "test.fits", **{**fid_cut, **SHEAR_CUTS[ifilter]})
         data = fits.open("test.fits")[1].data
-
-        y, x, n = binned_statistic(
-            data['snr'],data['g1_gal'], 
-            bins=xbins
-        )
-        stdy, x, n = binned_statistic(
-            data['snr'],data['g1_gal'], 
-            bins=xbins,
-            statistic=std_err
-        )
-        xc = (x[1:]+x[:-1])/2.
-
-        ax.errorbar(xc, y, stdy, capsize=2,fmt='o',label=ifilter, color=color[ifilter] )
-        ax.plot(np.sort(data['snr']), data['g1_model'][np.argsort(data['snr'])],'--', color=color[ifilter])
-        ax.set_xlim(3,20)
-    ax.set_xlabel('Detection signal-to-noise',fontsize=15)
+        model, _ = fit_g1(data, verbose=False)
+        ok = np.isfinite(data['g1_gal'])
+        size, snr, g1 = data['gal_size'][ok], data['snr'][ok], data['g1_gal'][ok]
+        g1_2d, g1_pyrrg = model(size, snr), data['g1_model'][ok]
+        xb = np.quantile(size, np.linspace(0, 1, 21))
+        xc = _bs(size, size, 'median', bins=xb)[0]
+        ax.errorbar(xc, _bs(size, g1, 'mean', bins=xb)[0], _bs(size, g1, std_err, bins=xb)[0],
+                    capsize=2, fmt='o', color=color[ifilter], label=ifilter)
+        ax.plot(xc, _bs(size, g1_2d, 'mean', bins=xb)[0], '-', color=color[ifilter])
+        ax.plot(xc, _bs(size, g1_pyrrg, 'mean', bins=xb)[0], ':', color=color[ifilter])
+    ax.plot([], [], 'k-', label=r'$G_1$(size, S/N) used')
+    ax.plot([], [], 'k:', label=r'S/N-only fit')
+    ax.set_xscale('log')
+    ax.set_xlabel('Galaxy size (pixels)', fontsize=15)
     ax.set_ylabel('Lensing susceptibility tensor',fontsize=15)
-    ax.legend(fontsize=15)
+    ax.legend(fontsize=12)
 
 
     ####################################
@@ -1319,7 +1321,7 @@ def figureA1():
     ax = plt.subplot(nrow,ncol,5)
 
 
-    stacked_rotated_modes,obs_kappa_b = pkl.load(open("pickles/bmode_check.pkl","rb"))
+    stacked_rotated_modes, obs_kappa_b = bmode_check()
     bins = np.linspace(-1,1,50)
 
     y_noise_floor, x =np.histogram(stacked_rotated_modes,bins=bins, density=True)
@@ -2109,36 +2111,349 @@ def figureA5(log_max_like, log_error):
     plt.savefig("plots/summarised_systematics.png")
 
     
+# # Figures from the current pipeline (sbi/)
+# The functions above read the notebooks/pickles of the original analysis. These make the same
+# figures from the outputs of sbi/ (make_summaries.py, sensitivity.py, systematics.py) for one
+# ensemble, PAPER_TAG; `python plots_for_paper.py` remakes all of them.
+FIDUCIAL = "wb1"                                        # wb1: bahamas_1 kept in the fine-tuning (nob1: "spin2cx")
+PAPER_TAG = "final"                                     # ba_final: the 30 fine-tuned seeds, final checkpoints
+SBI_DIR = "../sbi"
+
+
+def paper_paths(tag=PAPER_TAG):
+    s = f"{SBI_DIR}/summaries_{FIDUCIAL}_{tag}_n5"
+    return {"summaries": s, "flamingo": f"{s}_flamingo",
+            "sensitivity": f"{SBI_DIR}/results/sensitivity_{FIDUCIAL}_{tag}_w4s1/sensitivity.npz",
+            "systematics": f"{SBI_DIR}/results/systematics_{FIDUCIAL}_{tag}/systematics.json"}
+
+
+def combined_curve(summaries, mu, sig, min_ncomp=2):
+    '''
+    Per model, the A2744-mass-weighted mean P(SIDM) against cross-section with BAHAMAS and DARKSKIES
+    pooled as in sbi/systematics.py: each simulation's curve, the mean of the two where both have that
+    cross-section. Returns (cross_sections, (n_models, n_cross)).
+    '''
+    curves = {d: summary_curve(summaries, d, mu, sig, min_ncomp) for d in ["bahamas", "darkskies"]}
+    sigmas = np.unique(np.concatenate([c[0] for c in curves.values()]))
+    out = np.zeros((next(iter(curves.values()))[1].shape[0], len(sigmas)))
+    for j, s in enumerate(sigmas):
+        out[:, j] = np.mean([c[1][:, np.isclose(c[0], s)][:, 0] for c in curves.values() if np.isclose(c[0], s).any()], 0)
+    return sigmas, out
+
+
+def sigma_posterior(sigmas, curve, p_obs, prior=(-3, 1), cdm=1e-3):
+    '''
+    Posterior on log10 sigma/m as sbi/systematics.posterior: the paper's GP through the ensemble curve,
+    likelihood N(A2744's ensemble P(SIDM); GP mean, sqrt(GP var + error in the ensemble mean^2)), flat
+    prior. Returns the fitted GP, the grid, the normalised posterior and (median, 16%, 84%).
+    '''
+    from sidm_inference_on_data_and_models import gp as gp_template
+    from sklearn.base import clone
+    x_fit = np.log10(np.where(sigmas == 0, cdm, sigmas))
+    gp = clone(gp_template).fit(x_fit[:, None], curve.mean(0))
+    x = np.linspace(*prior, 4001)
+    mu, sd = gp.predict(x[:, None], return_std=True)
+    err = float(return_error_in_mean(np.asarray(p_obs, dtype=float)))
+    post = norm.pdf(float(np.mean(p_obs)), mu, np.sqrt(sd ** 2 + err ** 2))
+    post /= np.trapz(post, x)
+    cdf = cumulative_trapezoid(post, x, initial=0)
+    return gp, x, post, tuple(np.interp([0.5, 0.16, 0.84], cdf / cdf[-1], x))
+
+
+def figure5_summaries(tag=PAPER_TAG, min_ncomp=2):
+    '''
+    Figure 5 from the current pipeline: the combined (BAHAMAS + DARKSKIES) response with its GP and
+    A2744's ensemble output (left), and the posterior on log10 sigma/m (right; 68/95/99% shaded).
+    Returns log10 sigma/m (median) and its 16-84% errors, for figure6.
+    '''
+    from mass_weighting import a2744_mass_gaussian
+    paths = paper_paths(tag)
+    mu, sig = a2744_mass_gaussian(study="harvey")
+    sigmas, curve = combined_curve(paths["summaries"], mu, sig, min_ncomp)
+    p_obs = np.load(f"{paths['summaries']}/obs.npz")["softmax"][:, 0]
+    gp, x, post, (med, lo, hi) = sigma_posterior(sigmas, curve, p_obs)
+    cdm = 1e-3
+    xs = np.log10(np.where(sigmas == 0, cdm, sigmas))
+
+    fig, axarr = plt.subplots(1, 2, figsize=(9, 3.4), constrained_layout=True)
+    ax = axarr[0]
+    ax.errorbar(xs, curve.mean(0), return_error_in_mean(curve), fmt="ko", capsize=2, label="Simulations")
+    xplot = np.linspace(-3.2, 0.5, 200)
+    g, s = gp.predict(xplot[:, None], return_std=True)
+    ax.plot(xplot, g, "k--")
+    ax.fill_between(xplot, g - s, g + s, alpha=0.15, color="k", label="Gaussian process")
+    p_mean, p_err = np.mean(p_obs), return_error_in_mean(p_obs)
+    ax.axhspan(p_mean - p_err, p_mean + p_err, color="b", alpha=0.25, lw=0, label="A2744 UNCOVER")
+    ax.axhline(p_mean, color="b", lw=1.5)
+    ax.set_xticks([-3, -2, -1, 0], ["CDM", "-2", "-1", "0"])
+    ax.set_xlabel(r"$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=13)
+    ax.set_ylabel("Mean model output", fontsize=13)
+    ax.legend(loc=2, fontsize=9)
+
+    ax = axarr[1]
+    cdf = cumulative_trapezoid(post, x, initial=0)
+    cdf /= cdf[-1]
+    for q, a in ((0.005, 0.15), (0.025, 0.25), (0.16, 0.4)):
+        a_lo, a_hi = np.interp([q, 1 - q], cdf, x)
+        m = (x >= a_lo) & (x <= a_hi)
+        ax.fill_between(x[m], post[m], color="b", alpha=a, lw=0)
+    best = 10 ** med
+    e_lo, e_hi = best - 10 ** lo, 10 ** hi - best
+    ax.plot(x, post, "k-", label=rf"$\sigma_{{\rm DM}}/m={best:.2f}^{{+{e_hi:.2f}}}_{{-{e_lo:.2f}}}$ cm$^2$g$^{{-1}}$")
+    ax.axvline(med, color="k", lw=1)
+    ax.set_xlabel(r"$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=13)
+    ax.set_ylabel("Posterior", fontsize=13)
+    ax.set_xlim(-3, 1)
+    ax.set_ylim(0, 1.25 * post.max())
+    ax.legend(loc=2, fontsize=9)
+    filename = f"plots/output_to_model_ba_{tag}.pdf"
+    plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    print(f"Saved {filename}: log10 sigma/m = {med:.2f} [{lo:.2f}, {hi:.2f}]; sigma/m = "
+          f"${best:.2f}^{{+{e_hi:.2f}}}_{{-{e_lo:.2f}}}$")
+    return med, np.array([med - lo, hi - med])
+
+
+def sensitivity_panel(ax, delta, centres, kappa, kappa_extent, title, vmin=1, vmax=3):
+    '''One occlusion-sensitivity map (Delta / its rms over windows with galaxies; > 0 pushes to SIDM)
+    with convergence contours, in stamp pixels about the centre.'''
+    d = np.where(delta != 0, delta, np.nan)
+    d = d / np.nanstd(d)
+    half = (centres[1] - centres[0]) / 2
+    extent = [centres[0] - half, centres[-1] + half] * 2
+    im = ax.imshow(d, origin="lower", extent=extent, vmin=vmin, vmax=vmax, cmap="viridis")
+    ax.contour(gaussian_filter(kappa, 1.5), origin="lower", extent=kappa_extent, cmap="YlOrRd",
+               levels=np.linspace(0.05, 0.6, 12), linewidths=1)
+    ax.set_xlim(-50, 50)
+    ax.set_ylim(-50, 50)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.grid(False)
+    ax.set_facecolor("#20203a")
+    ax.errorbar(-35, -45, xerr=10, capsize=2, color="white", lw=2)
+    ax.text(-35, -45, "400 kpc", ha="center", va="bottom", color="white", weight="bold")
+    ax.text(-45, 40, title, color="white", weight="bold", fontsize=16)
+    return im
+
+
+def figure3_sensitivity(tag=PAPER_TAG, sigma_sidm=1.0):
+    '''
+    Figure 3 from sbi/sensitivity.py (4x4-pixel windows, stride 1): the occlusion sensitivity of the
+    BAHAMAS CDM and sigma/m = sigma_sidm clusters most like A2744 (largest A2744 mass weight) and of
+    A2744, each in units of its rms, positive (pushes to SIDM) only, with the convergence contours.
+    '''
+    z = np.load(paper_paths(tag)["sensitivity"])
+    c = z["centres"]
+    n = len(c)
+    fig, axarr = plt.subplots(1, 3, figsize=(15, 5), constrained_layout=True)
+    for ax, s, label in zip(axarr[:2], (0, sigma_sidm), ("Collisionless", f"SIDM {sigma_sidm:g}")):
+        rows = np.where(np.isclose(z["bahamas_sigma"], s))[0]
+        i = rows[np.argmax(z["bahamas_weight"][rows])]
+        sensitivity_panel(ax, z["bahamas_delta"][i], c, z["bahamas_kappa_windows"][i].reshape(n, n),
+                          [c[0], c[-1]] * 2, label)
+        print(f"{label}: cluster {i}, log10 M750 {z['bahamas_log10_mass_750'][i]:.2f}, P(SIDM) {z['bahamas_p_full'][i]:.2f}")
+    im = sensitivity_panel(axarr[2], z["a2744_delta"].mean(0), c, z["a2744_kappa"], [-50, 50, -50, 50], "Observation")
+    fig.colorbar(im, ax=axarr, fraction=0.015, pad=0.01).ax.set_title("$S$")
+    filename = f"plots/sensitivity_map_ba_{tag}.pdf"
+    plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    print(f"Saved {filename}")
+
+
+def figure4_sensitivity(tag=PAPER_TAG, bins=np.linspace(0, 0.5, 11), nshuffle=1000, seed=0):
+    '''
+    Figure 4 from sbi/sensitivity.py: the fraction of windows (with galaxies) whose removal lowers
+    P(SIDM), i.e. that push towards SIDM, against the convergence in the window, for the BAHAMAS
+    clusters at each cross-section (pooled, binomial errors) and A2744 (errors from shuffling kappa).
+    '''
+    z = np.load(paper_paths(tag)["sensitivity"])
+    c = z["centres"]
+    xc = 0.5 * (bins[1:] + bins[:-1])
+
+    def fraction(kappa, delta):
+        keep = (delta != 0) & np.isfinite(kappa)
+        f, _, _ = binned_statistic(kappa[keep], (delta[keep] > 0).astype(float), "mean", bins)
+        n, _, _ = binned_statistic(kappa[keep], delta[keep], "count", bins)
+        return f, n
+
+    fig = plt.figure(figsize=(6, 4))
+    ax = plt.gca()
+    for s in np.unique(z["bahamas_sigma"]):
+        rows = np.isclose(z["bahamas_sigma"], s)
+        f, n = fraction(z["bahamas_kappa_windows"][rows].ravel(), z["bahamas_delta"][rows].reshape(rows.sum(), -1).ravel())
+        ax.errorbar(xc, f, np.sqrt(f * (1 - f) / np.maximum(n, 1)), fmt="o-", capsize=2, lw=2,
+                    label=f"BAHAMAS {'CDM' if s == 0 else f'{s:g}'}")
+    ij = np.clip(np.round(c + 49.5).astype(int), 0, 99)
+    k_obs = z["a2744_kappa"][np.ix_(ij, ij)].ravel()
+    d_obs = z["a2744_delta"].mean(0).ravel()
+    f, _ = fraction(k_obs, d_obs)
+    rng = np.random.default_rng(seed)
+    null = np.array([fraction(rng.permutation(k_obs), d_obs)[0] for _ in range(nshuffle)])
+    ax.errorbar(xc, f, np.nanstd(null, 0), fmt="o", color="k", capsize=2, label="Observation")
+    ax.fill_between([0, 1], [0.5] * 2, [1] * 2, color="c", alpha=0.2)
+    ax.fill_between([0, 1], [0] * 2, [0.5] * 2, color="k", alpha=0.2)
+    ax.text(0.05, 0.9, "Regions sensitive to SIDM", transform=ax.transAxes, fontsize=13)
+    ax.text(0.05, 0.05, "Regions sensitive to CDM", transform=ax.transAxes, fontsize=13)
+    ax.set_xlabel(r"Weak lensing convergence, $\kappa$")
+    ax.set_ylabel("Fraction of windows sensitive to SIDM")
+    ax.set_xlim(bins[0], bins[-1])
+    ax.set_ylim(0, 1)
+    leg = ax.legend(fontsize=8, loc=1)
+    leg.get_frame().set_edgecolor("black")
+    filename = f"plots/Sensitivty_relation_ba_{tag}.pdf"
+    plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    print(f"Saved {filename}")
+
+
+def figureA2_summaries(tag=PAPER_TAG, nrandom=1000, seed=0):
+    '''
+    Figure A2 from the current summaries: how correlated the ensemble members are. The errors are
+    each model's output on every (BAHAMAS CDM cluster, shape-noise draw) about that cluster's mean
+    over all models and draws, in units of their scatter over models; the RMSE of the mean of N
+    random models against N, fitted with sigma sqrt((1 - rho)/N + rho) and a power law.
+    '''
+    paths = paper_paths(tag)
+    P = np.load(f"{paths['summaries']}/params_bahamas.npz")
+    soft = np.load(f"{paths['summaries']}/softmax_bahamas.npy")[:, :, P["cross_section"] == 0]   # (n_models, n_noise, N)
+    y_true = np.broadcast_to(soft.mean((0, 1)), soft.shape[1:]).ravel()
+    pred = soft.reshape(soft.shape[0], -1)
+    scale = np.std(pred - y_true, axis=0)
+    n_models = pred.shape[0]
+    Ns = np.arange(1, n_models + 1)
+    rng = np.random.default_rng(seed)
+    rmse = np.array([np.mean([np.sqrt(np.mean(((pred[rng.choice(n_models, N, replace=False)].mean(0) - y_true) / scale) ** 2))
+                              for _ in range(nrandom)]) for N in Ns])
+
+    def correlated_rmse(N, sigma, rho):
+        return sigma * np.sqrt((1 - rho) / N + rho)
+
+    def power(N, b):
+        return rmse[0] * N ** b
+
+    (alpha,), _ = curve_fit(power, Ns, rmse)
+    (sigma_fit, rho_fit), pcov = curve_fit(correlated_rmse, Ns, rmse, p0=[1, 0.1])
+    print(f"ensemble RMSE ~ N^{alpha:.3f}; rho = {rho_fit:.3f} +/- {np.sqrt(pcov[1, 1]):.3f}")
+    plt.figure(figsize=(5, 4))
+    plt.plot(Ns, rmse, "o", label="Measured")
+    plt.plot(Ns, power(Ns, alpha), "-", lw=2, label=f"Fitted power law ($N^{{{alpha:0.2f}}}$)")
+    plt.plot(Ns, correlated_rmse(Ns, sigma_fit, rho_fit), "-", lw=2, label=f"Fitted correlation law $\\rho={rho_fit:0.2f}$")
+    plt.plot(Ns, sigma_fit / np.sqrt(Ns), "--", label=r"Independent models ($N^{-0.5}$)")
+    plt.xlabel("Number of models N", fontsize=15)
+    plt.ylabel("Ensemble RMSE / standard deviation", fontsize=13)
+    plt.legend()
+    plt.tight_layout()
+    filename = f"plots/correlated_models_ba_{tag}.pdf"
+    plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    print(f"Saved {filename}")
+
+
+def figureA3_summaries(tag=PAPER_TAG, nshow=4, min_ncomp=2, seed=42):
+    '''
+    Figure A3 from summaries with latents (sbi/make_summaries.py without --no-latents, one noise draw,
+    in <summaries>_latents): for the first nshow models, the UMAP of the DARKSKIES latents with the
+    BAHAMAS ones projected on it (density contours) and A2744 (star); then, per cross-section, the
+    distance of A2744's latent from the mean latent of the simulated clusters, in units of the pooled
+    BAHAMAS + DARKSKIES CDM clusters' mean distance from their mean (1 = a typical CDM cluster; one scale
+    for both domains), median and 16-84% over models / sqrt(n_models).
+    Clusters with >= min_ncomp components within systematics.SUBSET_DEX = 0.45 dex of the A2744 mass.
+    '''
+    from mass_weighting import a2744_mass_gaussian
+    d = paper_paths(tag)["summaries"] + "_latents"
+    mu, _ = a2744_mass_gaussian(study="harvey")
+    obs = np.load(f"{d}/obs.npz")["latents"][:, 0]                          # (n_models, 512)
+    lat, par = {}, {}
+    for dom in ("bahamas", "darkskies"):
+        P = np.load(f"{d}/params_{dom}.npz")
+        keep = (P["ncomponents"] >= min_ncomp) & (np.abs(P["log10_mass_750"] - mu) < 0.45)
+        lat[dom] = np.load(f"{d}/latents_{dom}.npy", mmap_mode="r")[:, 0][:, keep]   # (n_models, N, 512)
+        par[dom] = P["cross_section"][keep]
+
+    fig = plt.figure(figsize=(7, 5))
+    fig.subplots_adjust(hspace=0.01, wspace=0.01)
+    for m in range(nshow):
+        ax = plt.subplot(2, 2, m + 1)
+        fit = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, random_state=seed).fit(lat["darkskies"][m])
+        e = {dom: fit.transform(lat[dom][m]) for dom in lat}
+        centre = e["darkskies"].mean(0)
+        for dom, cmap in (("darkskies", "Oranges"), ("bahamas", "Blues")):
+            ax.contour(*get_density(*(e[dom] - centre).T), cmap=cmap)
+        star = fit.transform(obs[m][None]) - centre
+        ax.plot(star[:, 0], star[:, 1], "y*", markersize=12, mec="k")
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        if m % 2 == 0:
+            ax.set_ylabel("UMAP-2")
+        ax.set_xlabel("UMAP-1")
+        ax.text(0.1, 0.9, f"Model {m + 1}", transform=ax.transAxes, fontsize=15)
+    filename = f"plots/latent_overlap_ba_{tag}.pdf"
+    plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    print(f"Saved {filename}")
+
+    plt.figure(figsize=(5, 4))
+    ax = plt.gca()
+    n_models = obs.shape[0]
+    cdm = np.concatenate([lat[dom][:, par[dom] == 0] for dom in lat], axis=1)   # pooled CDM, (n_models, n, 512)
+    spread = np.linalg.norm(cdm - cdm.mean(1, keepdims=True), axis=-1).mean(1)  # (n_models,)
+    for dom in lat:
+        sig = np.unique(par[dom])
+        ratio = np.zeros((n_models, len(sig)))
+        for j, s in enumerate(sig):
+            z = lat[dom][:, par[dom] == s]                                  # (n_models, n, 512)
+            ratio[:, j] = np.linalg.norm(obs - z.mean(1), axis=-1) / spread
+        med = np.median(ratio, 0)
+        q = np.quantile(ratio, [0.16, 0.84], 0)
+        x = np.where(sig == 0, 1e-3, sig)
+        ax.errorbar(x, med, np.abs(q - med) / np.sqrt(n_models), color=COLOUR_SCHEME[dom], fmt="-o", capsize=2,
+                    label=dom.upper())
+        print(f"{dom}: " + ", ".join(f"{s:g}: {r:.3f}" for s, r in zip(sig, med)))
+    ax.plot([5e-4, 2], [1, 1], "k--")
+    ax.text(0.001, 1.0, "Typical CDM cluster", ha="left", va="bottom", fontsize=13)
+    ax.set_xlim(5e-4, 2)
+    ax.set_xscale("log")
+    ax.set_ylabel("Normalised latent space distance", fontsize=15)
+    ax.set_xlabel(r"Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
+    ax.legend()
+    filename = f"plots/goodness_of_fit_ba_{tag}.pdf"
+    plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    print(f"Saved {filename}")
+
+
+def figureA4A5_systematics(tag=PAPER_TAG):
+    '''Figures A4 (data) and A5 (model systematics) as drawn by sbi/systematics.py, copied to plots/.'''
+    import shutil
+    d = os.path.dirname(paper_paths(tag)["systematics"])
+    for name, out in (("systematics_data", "data_systematics"), ("systematics_model", "summarised_systematics")):
+        for ext in ("pdf", "png"):
+            shutil.copy(f"{d}/{name}.{ext}", f"plots/{out}_ba_{tag}.{ext}")
+    print(f"Copied the systematics figures from {d}")
+
+
+def all_figures(tag=PAPER_TAG):
+    print("Figure 1");  figure1()
+    figure1(SL_KAPPA_MAP)
+    print("Figure 2");  figure2_summaries(paper_paths(tag)["summaries"], {d: paper_paths(tag)["flamingo"] for d in ("flamingo", "tng")},
+                                          tag=f"ba_{tag}")
+    print("Figure 3");  figure3_sensitivity(tag)
+    print("Figure 4");  figure4_sensitivity(tag)
+    print("Figure 5");  log_sigma, log_error = figure5_summaries(tag)
+    print("Figure 6");  figure6(log_sigma, log_error)
+    print("Figure A1"); figureA1()
+    print("Figure A2"); figureA2_summaries(tag)
+    print("Figure A3"); figureA3_summaries(tag)
+    print("Figure A4, A5"); figureA4A5_systematics(tag)
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["figure1"]:
         # python plots_for_paper.py figure1 [strong-lensing kappa.fits]
         figure1(*sys.argv[2:3])
         sys.exit()
-    if sys.argv[1:] == ["figure2"]:
-        # python plots_for_paper.py figure2: only Figure 2 from the current summaries
-        figure2_summaries()
+    if sys.argv[1:2] and sys.argv[1] != "all":
+        # python plots_for_paper.py figure2_summaries | figure5_summaries | ... : one figure from the current pipeline
+        globals()[sys.argv[1]]()
         sys.exit()
-    print("Making Figure 1")
-    figure1()
-    print("Making Figure 2")
-    figure2()
-    print("Making Figure 3 and 4")
-    figure3and4()
-    print("Making Figure 5")
-    log_max_like, log_error = figure5()
-    print("Making Figure 6")
-    figure6(log_max_like, log_error)
-    print("Making Appendices")
-    print("Making A1")
-    figureA1()
-    print("Making A2")
-    figureA2()
-    print("Making A3")
-    figureA3()
-    print("Making A4")
-    figureA4(log_max_like, log_error)
-    print("Making A5")
-    figureA5(log_max_like, log_error)
-
-
-
+    all_figures()

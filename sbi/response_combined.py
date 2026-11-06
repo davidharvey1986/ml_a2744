@@ -4,8 +4,8 @@ BAHAMAS and DARKSKIES response curves on one plot: the mass-weighted mean ensemb
 against sigma/m (n_comp >= --min-ncomp, noise draw 0, as response_plot.curves), 16-84% of
 clusters shaded, with A2744 at the adopted centre and its centring spread (--centre-json).
 
-    astro-env/bin/python sbi/response_combined.py --summaries sbi/summaries_spin2cx_best_n5 \
-        --centre-json sbi/results/centre_uncertainty/tweakedalign_k0p7_ctr_ba_best_spin2_cx_pgc_ft_.json
+    astro-env/bin/python sbi/response_combined.py --summaries sbi/summaries_wb1_best_n5 \
+        --centre-json sbi/results/centre_uncertainty/tweakedalign_k0p7_ctr_wb1_ba_best_spin2_cx_pgc_ft_.json
 '''
 import argparse
 import json
@@ -19,6 +19,7 @@ sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
 
 import sensitivity as sens  # noqa: E402
 from mass_weighting import a2744_mass_gaussian  # noqa: E402
+from add_shear_to_data import return_error_in_mean  # noqa: E402
 from response_plot import X_CDM, curves  # noqa: E402
 
 STYLES = {"bahamas": ("#0072B2", "o-"), "darkskies": ("#D55E00", "s--")}
@@ -26,12 +27,12 @@ STYLES = {"bahamas": ("#0072B2", "o-"), "darkskies": ("#D55E00", "s--")}
 
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_spin2cx_best_n5"))
+    p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_wb1_best_n5"))
     p.add_argument("--centre-json", default=str(REPO / "sbi" / "results" / "centre_uncertainty" /
-                                                "tweakedalign_k0p7_ctr_ba_best_spin2_cx_pgc_ft_.json"))
+                                                "tweakedalign_k0p7_ctr_wb1_ba_best_spin2_cx_pgc_ft_.json"))
     p.add_argument("--min-ncomp", type=int, default=2)
     p.add_argument("--label", default="spin2 re-fine-tuned, corrected noise (30 models)")
-    p.add_argument("--out", default=str(REPO / "sbi" / "results" / "chifix" / "response_combined"))
+    p.add_argument("--out", default=str(REPO / "sbi" / "results" / "wb1" / "response_combined"))
     return p.parse_args()
 
 
@@ -46,6 +47,9 @@ def main():
     plt = sens.style()
     fig, ax = plt.subplots(figsize=(8, 5.2), constrained_layout=True)
     ax.axhspan(lo, hi, color="0.6", alpha=0.25, lw=0, label=f"A2744 centring, 16-84%: {lo:.3f}-{hi:.3f}")
+    p_err = float(return_error_in_mean(np.load(S / "obs.npz")["softmax"][:, 0]))   # correlated models
+    ax.axhspan(p_a - p_err, p_a + p_err, facecolor="none", edgecolor="k", hatch="///", lw=0, alpha=0.35,
+               label=f"A2744 error in mean (correlated models): ±{p_err:.3f}")
     ax.axhline(p_a, color="k", lw=2, alpha=0.7, label=f"A2744 (adopted centre): {p_a:.3f}")
     for dom, (col, fmt) in STYLES.items():
         c = curves(S, dom, opts.min_ncomp, mu, sig)[0]
@@ -63,7 +67,7 @@ def main():
     ax.set_ylabel("ensemble P(SIDM)")
     ax.set_title(f"{opts.label}: mass-matched, n_comp ≥ {opts.min_ncomp} (16-84% of clusters shaded)", fontsize=9)
     ax.legend(fontsize=8, loc="lower right")
-    out = f"{opts.out}_nc{opts.min_ncomp}"
+    out = f"{REPO / opts.out}_nc{opts.min_ncomp}"                 # REPO / an absolute path is that path
     for e in ("png", "pdf"):
         fig.savefig(f"{out}.{e}", dpi=150)
     print(f"wrote {out}.png")

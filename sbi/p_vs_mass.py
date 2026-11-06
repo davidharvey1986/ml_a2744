@@ -32,14 +32,15 @@ OTHER = ("vd_bahamas", "flamingo", "flamingo_lo", "flamingo_hi", "tng")   # in t
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--tags", nargs="+", default=["best", "final"])
+    p.add_argument("--fiducial", default="wb1", help="summaries_<fiducial>_<tag>_n5 (nob1: spin2cx)")
     p.add_argument("--bins", type=float, nargs="+", default=list(np.arange(13.7, 15.46, 0.15)))
     p.add_argument("--min-count", type=int, default=10, help="clusters per bin to draw it")
     p.add_argument("--out", default=str(REPO / "sbi" / "results" / "p_vs_mass"))
     return p.parse_args()
 
 
-def load(tag, sim, sigma):
-    d = REPO / "sbi" / (f"summaries_spin2cx_{tag}_n5" + ("_flamingo" if sim in OTHER else ""))
+def load(tag, sim, sigma, fid="wb1"):
+    d = REPO / "sbi" / (f"summaries_{fid}_{tag}_n5" + ("_flamingo" if sim in OTHER else ""))
     P = np.load(d / f"params_{sim}.npz")
     p = np.load(d / f"softmax_{sim}.npy").mean(0)                    # (n_noise, N) ensemble P(SIDM)
     keep = np.ones(p.shape[1], bool) if sigma is None else np.isclose(P["cross_section"], sigma)
@@ -58,7 +59,7 @@ def main():
     fig, axes = plt.subplots(len(opts.tags), len(cuts), figsize=(6.2 * len(cuts), 4.4 * len(opts.tags)),
                              sharex=True, sharey=True, constrained_layout=True, squeeze=False)
     for i, tag in enumerate(opts.tags):
-        p_obs = float(np.load(REPO / "sbi" / f"summaries_spin2cx_{tag}_n5" / "obs.npz")["softmax"][:, 0].mean())
+        p_obs = float(np.load(REPO / "sbi" / f"summaries_{opts.fiducial}_{tag}_n5" / "obs.npz")["softmax"][:, 0].mean())
         for j, (nc, title) in enumerate(cuts):
             ax = axes[i, j]
             for st, mu, sig, c in studies:
@@ -78,7 +79,7 @@ def main():
                 ax.errorbar(lm, p_obs, xerr=xerr, fmt="*", color="#7570B3", ms=14, zorder=6, capsize=3,
                             label=f"A2744, KS M(<500 kpc) {lm:.2f} (calibrated on BAHAMAS)")
             for sim, sigma, name, col in SIMS:
-                p, m, ncomp = load(tag, sim, sigma)
+                p, m, ncomp = load(tag, sim, sigma, opts.fiducial)
                 sel = (ncomp >= nc) & np.isfinite(m)
                 pc, mc = p[:, sel].mean(0), m[sel]                     # per cluster, mean over noise draws
                 idx = np.digitize(mc, edges) - 1

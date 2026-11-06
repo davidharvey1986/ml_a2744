@@ -27,6 +27,7 @@ from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
 from pyRRG.calc_shear import calc_shear
+from shear_susceptibility import correct_shears
 from RRGtools import run_match
 
 from model import create_model
@@ -37,7 +38,7 @@ COMPONENTS_DIR = "notebooks/pickles"
 
 # Galaxies where the convergence (at zs=MAP_ZS, the default source redshift 2.28) is at
 # least this are dropped when the simulated shear is sampled at the A2744 galaxy positions
-KAPPA_THRESH = 0.9
+KAPPA_THRESH = 0.7                     # was 0.9 (the k0p9 models were trained with it); 0.7 from 2026-11-02
 # Centre of the 100x100 (2 Mpc) stamp in catalogue pixels (x, y; 0.02 arcsec): the centre of
 # the projected NFW that best fits the main peak's tangential shear (30 kpc - 1 Mpc, 28/10
 # catalogues; RA 3.58958, Dec -30.40511), 45 kpc from the Lenstool halo O2 (RA 3.5882,
@@ -56,6 +57,7 @@ SL_KAPPA_MAP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", 
 # and the source-redshift map: the highest mean tangential shear within 300 kpc of the main
 # halo with S/N cut <= 5, 2 <= lower size cut <= 3 and magnitude limit >= 27.5
 # (sbi/optimise_cuts.py --objective inner_chi_t, 28/10 catalogues and pyRRG G1 fit to all S/N).
+G1_2D = True       # shear susceptibility G1(size, S/N) (shear_susceptibility.py) instead of pyRRG's S/N arctan; from 2026-11-02
 SHEAR_CUTS = {'f115w': {'signal_noise_cut': 4, 'size_cut': [2.75, 200], 'mag_cut': [0, 27.5], 'stat_type': 'snr'},
               'f150w': {'signal_noise_cut': 0, 'size_cut': [2.75, 200], 'mag_cut': [0, 27.5], 'stat_type': 'snr'}}
 
@@ -498,6 +500,8 @@ def get_obs_data(
         shear_cat = f"{data_dir}/abell2744clu-grizli-v5.4-{this_filter}-clear_drc_sci_clean.shears"
 
         calc_shear(fits.open(shear_cat)[1].data, filtered_name, **filter_cuts)
+        if G1_2D:
+            correct_shears(filtered_name, verbose=False)
 
         if remove_members:
             obs_data = remove_cluster_members(

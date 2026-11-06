@@ -23,6 +23,7 @@ from scipy.stats import gaussian_kde, norm
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 from mass_weighting import a2744_mass_gaussian, effective_sample_size, gaussian_mass_weights  # noqa: E402
+from add_shear_to_data import return_error_in_mean  # noqa: E402
 
 SIMS = [("bahamas", "BAHAMAS CDM", "#56B4E9"), ("darkskies", "DARKSKIES CDM", "#E69F00"),
         ("flamingo", "FLAMINGO", "#009E73"), ("flamingo_lo", "FLAMINGO low AGN", "#8FD175"),
@@ -39,6 +40,7 @@ def parse():
     p.add_argument("--label", default="")
     p.add_argument("--hist", action="store_true", help="step histograms instead of weighted KDEs")
     p.add_argument("--out", default=None, help="default <flamingo dir>/flamingo_test")
+    p.add_argument("--centre-json", default=None, help="centre_uncertainty json: shade A2744's 16-84%% over centring draws")
     return p.parse_args()
 
 
@@ -74,7 +76,10 @@ def main():
     S, F = REPO / opts.summaries, REPO / opts.flamingo
     out = Path(opts.out) if opts.out else F / "flamingo_test"
     mu, sig = a2744_mass_gaussian()
-    p_obs = float(np.load(S / "obs.npz")["softmax"][:, 0].mean())
+    p_models = np.load(S / "obs.npz")["softmax"][:, 0]                 # A2744 P(SIDM) per model
+    p_obs = float(p_models.mean())
+    p_se = float(return_error_in_mean(p_models))                      # correlated models, as in the paper
+    cen = json.load(open(REPO / opts.centre_json))["p_sidm_over_centre_draws"]["percentiles_16_50_84"] if opts.centre_json else None
     print(f"A2744 ensemble P(SIDM) = {p_obs:.3f}; A2744 log M750 = {mu:.3f} +/- {sig:.3f}")
 
     import matplotlib
@@ -82,7 +87,8 @@ def main():
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(1, len(opts.min_ncomp), figsize=(6.5 * len(opts.min_ncomp), 4.6),
                              constrained_layout=True, squeeze=False)
-    res = {"a2744_p_sidm": p_obs}
+    res = {"a2744_p_sidm": p_obs, "a2744_model_scatter": float(p_models.std()), "a2744_model_se": p_se,
+           "a2744_centre_16_84": [cen[0], cen[2]] if cen else None}
     bins, grid = np.linspace(0, 1, 41), np.linspace(0, 1, 400)
     for ax, k in zip(axes[0], opts.min_ncomp):
         res[f"ncomp>={k}"] = {}
@@ -97,10 +103,18 @@ def main():
                 ax.hist(x, bins, weights=w, density=True, histtype="step", **kw, label=label(name, r))
             else:
                 ax.plot(grid, gaussian_kde(x, weights=w)(grid), **kw, label=label(name, r))
+            r["frac_ge_a2744_pm_se"] = [float(np.sum(w * (x >= p_obs + d)) / w.sum()) for d in (p_se, -p_se)]
+            if cen:
+                r["frac_ge_a2744_centre_16_84"] = [float(np.sum(w * (x >= c)) / w.sum()) for c in (cen[2], cen[0])]
             res[f"ncomp>={k}"][sim + (f"_sigma{sigma:g}" if sigma else "")] = r
             print(f"n_comp>={k}  {name:18s} N={r['n']:5d} (N_eff {r['n_eff']:6.0f})  mean {r['mean']:.3f} "
                   f"[16-84% {r['q16_50_84'][0]:.3f}-{r['q16_50_84'][2]:.3f}]  >=A2744 {100 * r['frac_ge_a2744']:.2f}% "
                   f"({'>' if r['lower_limit'] else ''}{r['z']:.2f} sigma)")
+        if cen:
+            ax.axvspan(cen[0], cen[2], color="0.5", alpha=0.18, lw=0, label=f"A2744 centring 16-84%: {cen[0]:.3f}-{cen[2]:.3f}")
+        ax.axvspan(p_obs - p_se, p_obs + p_se, color="k", alpha=0.3, lw=0, label=f"A2744 error in mean (correlated models): ±{p_se:.3f}")
+        ax.plot(grid, 0.25 * gaussian_kde(p_models)(grid), color="k", lw=1.2, ls=":",
+                label=f"A2744 per model (×0.25): scatter {p_models.std():.3f}")
         ax.axvline(p_obs, color="k", lw=2, label=f"A2744 {p_obs:.3f}")
         ax.set_xlabel("ensemble P(SIDM)")
         ax.set_xlim(0.15, 0.9)

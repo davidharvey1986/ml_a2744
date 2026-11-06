@@ -7,7 +7,7 @@ The stamp is centred on the projected NFW that best fits the main peak's tangent
 (sbi/results/catalogue_comparison/nfw_centre_chi2.npz: a grid of offsets from Lenstool O2
 in stamp pixels, mass and concentration refitted at each) gives a likelihood
 exp(-delta chi^2 / 2) for the centre. Centres are drawn from it, A2744's data map is rebuilt
-about each (current SHEAR_CUTS, strong-lensing kappa < 0.9 dropped, as make_obs_maps) and
+about each (current SHEAR_CUTS, strong-lensing kappa < KAPPA_THRESH dropped, as make_obs_maps) and
 the ensemble P(SIDM) is evaluated. The spread over draws is the centring systematic.
 
     astro-env/bin/python sbi/centre_uncertainty.py --model tweakedalign_k0p9_ctr_ba_best --include-str spin2

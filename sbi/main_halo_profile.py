@@ -38,12 +38,12 @@ OUT = REPO / "sbi" / "results" / "main_halo_profile" / "main_halo_profile"
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--centre-json", default=str(REPO / "sbi" / "results" / "centre_uncertainty" /
-                                                "tweakedalign_k0p7_ctr_ba_best_spin2_cx_pgc_ft_.json"))
+                                                "tweakedalign_k0p7_ctr_wb1_ba_best_spin2_cx_pgc_ft_.json"))
     p.add_argument("--dx-kpc", type=float, default=None)
     p.add_argument("--dy-kpc", type=float, default=None)
     p.add_argument("--kappa-thresh", type=float, default=KAPPA_THRESH,
                    help="drop galaxies with Lenstool kappa >= this (the maps use KAPPA_THRESH)")
-    p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_spin2cx_best_n5"))
+    p.add_argument("--summaries", default=str(REPO / "sbi" / "summaries_wb1_best_n5"))
     p.add_argument("--sims", default="bahamas")
     p.add_argument("--cross-sections", type=float, nargs="+", default=[0, 1])
     p.add_argument("--min-ncomp", type=int, default=2)

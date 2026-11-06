@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 '''
 Response of one model group: mass-matched ensemble P(SIDM) against sigma/m for BAHAMAS and
-DARKSKIES on one axis (all clusters, and held-out only: each model on the clusters it did not
+DARKSKIES on one axis (error bars: return_error_in_mean over models combined with the finite-cluster error) (all clusters, and held-out only: each model on the clusters it did not
 train on, then averaged over models), with A2744 at the adopted centre, at Lenstool O2 and its
 centring 16-84% range from sbi/centre_uncertainty.py.
 
@@ -21,6 +21,7 @@ import numpy as np  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO), str(REPO / "sbi")]
 from mass_weighting import a2744_mass_gaussian, gaussian_mass_weights  # noqa: E402
+from add_shear_to_data import return_error_in_mean  # noqa: E402
 
 COLOUR = {"bahamas": "#0072B2", "darkskies": "#E69F00"}
 X_CDM = 0.004
@@ -46,7 +47,8 @@ def curves(S_dir, domain, min_ncomp, mu, sig):
     sm, ho = S.mean(0), P["held_out"]
     cs = np.unique(P["cross_section"])
     sel = (P["ncomponents"] >= min_ncomp) & np.isfinite(P["log10_mass_750"])
-    out = {k: [] for k in ("sigma", "all", "all_err", "held", "held_err", "q16", "q84", "n", "n_eff")}
+    out = {k: [] for k in ("sigma", "all", "all_err", "all_err_clusters", "all_err_models", "held", "held_err",
+                           "q16", "q84", "n", "n_eff")}
     for s in cs:
         k = sel & (P["cross_section"] == s)
         w = gaussian_mass_weights(P["log10_mass_750"][k], mu, sig)
@@ -55,9 +57,11 @@ def curves(S_dir, domain, min_ncomp, mu, sig):
         n_eff = w.sum() ** 2 / np.sum(w ** 2)
         o = np.argsort(v)
         cw = np.cumsum(w[o]) / w.sum()
+        err_c = np.sqrt(wmean((v - m) ** 2, w) / n_eff)                  # finite number of clusters
+        err_m = return_error_in_mean(np.array([wmean(S[i][k], w) for i in range(S.shape[0])]))   # correlated models
         per = np.array([wmean(S[i][k & ho[i]], gaussian_mass_weights(P["log10_mass_750"][k & ho[i]], mu, sig))
                         for i in range(S.shape[0]) if (k & ho[i]).sum() >= 5])
-        for key, val in [("sigma", float(s)), ("all", m), ("all_err", np.sqrt(wmean((v - m) ** 2, w) / n_eff)),
+        for key, val in [("sigma", float(s)), ("all", m), ("all_err", np.hypot(err_c, err_m)), ("all_err_clusters", err_c), ("all_err_models", err_m),
                          ("held", per.mean()), ("held_err", per.std() / np.sqrt(len(per))),
                          ("q16", v[o][np.searchsorted(cw, 0.16)]), ("q84", v[o][np.searchsorted(cw, 0.84)]),
                          ("n", int(k.sum())), ("n_eff", n_eff)]:
@@ -72,7 +76,8 @@ def main():
     out = Path(opts.out) if opts.out else S_dir.parent / "results" / S_dir.name / "response.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     obs = np.load(S_dir / "obs.npz")["softmax"]
-    p_a = float(obs[:, 0].mean()) if obs.ndim == 2 else float(obs[:, 0, 0].mean())
+    p_models = obs[:, 0] if obs.ndim == 2 else obs[:, 0, 0]
+    p_a, p_err = float(p_models.mean()), float(return_error_in_mean(p_models))
     cu = json.load(open(opts.centre_json)) if opts.centre_json else None
 
     fig, ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
@@ -81,8 +86,10 @@ def main():
         ax.axhspan(lo, hi, color="k", alpha=0.10, lw=0, label=f"A2744 centring 16-84%: {lo:.3f}-{hi:.3f}")
         ax.axhline(cu["p_sidm_lenstool_o2"][0], color="#D55E00", lw=1.5, ls="--",
                    label=f"A2744, Lenstool O2: {cu['p_sidm_lenstool_o2'][0]:.3f}")
+    ax.axhspan(p_a - p_err, p_a + p_err, facecolor="none", edgecolor="k", hatch="///", lw=0, alpha=0.35,
+               label=f"A2744 error in mean (correlated models): ±{p_err:.3f}")
     ax.axhline(p_a, color="k", lw=2, label=f"A2744, adopted centre: {p_a:.3f}")
-    res = {"a2744_p_sidm": p_a, "min_ncomp": opts.min_ncomp}
+    res = {"a2744_p_sidm": p_a, "a2744_err": p_err, "min_ncomp": opts.min_ncomp}
     for domain in ("bahamas", "darkskies"):
         c, sm, P, sel = curves(S_dir, domain, opts.min_ncomp, mu, sig)
         x = np.where(np.array(c["sigma"]) == 0, X_CDM, c["sigma"])
