@@ -36,6 +36,7 @@ def parse():
     p.add_argument("--bins", type=float, nargs="+", default=list(np.arange(13.7, 15.46, 0.15)))
     p.add_argument("--min-count", type=int, default=10, help="clusters per bin to draw it")
     p.add_argument("--out", default=str(REPO / "sbi" / "results" / "p_vs_mass"))
+    p.add_argument("--jauzac-2sigma", action="store_true", help="also mark the Jauzac mass +-2 sigma (hatched, dashed edges)")
     return p.parse_args()
 
 
@@ -64,6 +65,10 @@ def main():
             ax = axes[i, j]
             for st, mu, sig, c in studies:
                 ax.axvspan(mu - sig, mu + sig, color=c, alpha=0.18, lw=0)
+                if st == "jauzac" and opts.jauzac_2sigma:
+                    ax.axvspan(mu - 2 * sig, mu + 2 * sig, facecolor="none", edgecolor=c, hatch="//", alpha=0.35, lw=0)
+                    for x in (mu - 2 * sig, mu + 2 * sig):
+                        ax.axvline(x, color=c, ls="--", lw=1.2)
                 ax.errorbar(mu, p_obs, xerr=sig, fmt="*", color=c, ms=14, zorder=5,
                             label=f"A2744 ({p_obs:.3f}), {st.capitalize()} mass {mu:.2f}")
             lm, lo = LENSTOOL_750
@@ -106,7 +111,7 @@ def main():
             ax.legend([h[i] for i in star], [l[i] for i in star], fontsize=7.5, loc="upper left", frameon=False)
             sims = [(h[i], t.split(" (N=")[0]) for i, t in enumerate(l) if i not in star]
     fig.legend(*zip(*sims), loc="outside lower center", ncol=5, fontsize=9, frameon=False)
-    fig.suptitle("P(SIDM) against halo mass: BAHAMAS solid, vdSIDM dashed, FLAMINGO/TNG CDM dotted\n(binned mean ± error; shaded: 16-84% of clusters; bands: A2744 mass ±1σ, Harvey grey, Jauzac orange; green: Lenstool; purple: KS)",
+    fig.suptitle("P(SIDM) against halo mass: BAHAMAS solid, vdSIDM dashed, FLAMINGO/TNG CDM dotted\n(binned mean ± error; shaded: 16-84% of clusters; bands: A2744 mass ±1σ, Harvey grey, Jauzac orange" + (", hatched/dashed ±2σ" if opts.jauzac_2sigma else "") + "; green: Lenstool; purple: KS)",
                  fontsize=11)
     for e in ("png", "pdf"):
         fig.savefig(f"{opts.out}.{e}", dpi=150)
