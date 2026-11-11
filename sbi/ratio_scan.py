@@ -169,12 +169,12 @@ def plot_grid(res, sims, R_a, p_a, out):
         ax.plot(R_a[j], p_a, "*", color="#E69F00", mec="k", ms=14, zorder=5, label="A2744")
         lo, hi = np.nanpercentile(R[s["matched"]], [1, 99])
         ax.set_xlim(min(lo, R_a[j]) - 0.1 * abs(hi - lo), max(hi, R_a[j]) + 0.1 * abs(hi - lo))
-        ax.set_title(f"/ {DEN[j][0]}-{DEN[j][1]} kpc", fontsize=10)
+        pass  # no panel titles (the x-label names the annulus)
         ax.set_xlabel(f"R = ⟨χt⟩({NUM[0]}-{NUM[1]}) / ⟨χt⟩({DEN[j][0]}-{DEN[j][1]} kpc)", fontsize=8)
     axes[0, 0].legend(fontsize=7, markerscale=2)
     for a in axes[:, 0]:
         a.set_ylabel("ensemble P(SIDM)")
-    fig.suptitle("BAHAMAS, mass-matched, n_comp ≥ 2", fontsize=11)
+    pass  # no suptitle
     for e in ("png", "pdf"):
         fig.savefig(f"{out}.{e}", dpi=130)
 

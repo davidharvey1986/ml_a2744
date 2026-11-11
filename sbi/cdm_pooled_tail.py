@@ -37,6 +37,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--tag", default="final")
     ap.add_argument("--min-ncomp", type=int, default=2)
+    ap.add_argument("--studies", nargs="+", default=["harvey", "jauzac"], help="mass_weighting studies, one panel each")
     ap.add_argument("--out", default=None)
     opts = ap.parse_args()
     import matplotlib
@@ -46,7 +47,7 @@ def main():
     p_obs = float(np.load(REPO / "sbi" / f"summaries_wb1_{opts.tag}_n5" / "obs.npz")["softmax"][:, 0].mean())
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.4), sharey=True, constrained_layout=True)
     x = np.linspace(0.1, 0.95, 800)
-    for ax, study in zip(axes, ("harvey", "jauzac")):
+    for ax, study in zip(axes, opts.studies):
         mu, sig = a2744_mass_gaussian(study)
         print(f"== ba_{opts.tag}, {study} mass {mu:.2f} ± {sig:.2f}, n_comp >= {opts.min_ncomp}, A2744 {p_obs:.3f}")
         pooled, P, W = np.zeros_like(x), [], []
@@ -73,7 +74,8 @@ def main():
         ax.axvline(p_obs, color="k", ls="--", lw=1.2)
         ax.annotate(f"A2744 {p_obs:.3f}", (p_obs, 0.97), xycoords=("data", "axes fraction"), xytext=(4, 0),
                     textcoords="offset points", ha="left", va="top", fontsize=9)
-        ax.set_title(f"{study.capitalize()} mass: log M750 = {mu:.2f} ± {sig:.2f}", fontsize=11)
+        name = "Harvey (core rescaled to the new Lenstool O2)" if study == "harvey_g1v2" else study.capitalize()
+        ax.set_title(f"{name} mass: log M750 = {mu:.2f} ± {sig:.2f}", fontsize=11)
         ax.set_xlabel("ensemble P(SIDM) of each CDM cluster")
         ax.legend(fontsize=8, loc="upper left")
         ax.set_xlim(0.15, 0.9)

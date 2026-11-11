@@ -325,9 +325,9 @@ def style():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams.update({"axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED, "axes.labelcolor": INK,
-                         "legend.frameon": False, "font.size": 10, "axes.spines.top": False,
-                         "axes.spines.right": False})
+    plt.rcParams.update({"axes.edgecolor": "k", "xtick.color": MUTED, "ytick.color": MUTED, "axes.labelcolor": INK,
+                         "legend.frameon": False, "font.size": 10, "axes.spines.top": True,
+                         "axes.spines.right": True})
     return plt
 
 

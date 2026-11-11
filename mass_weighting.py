@@ -19,10 +19,13 @@ from scipy.stats import gaussian_kde, norm
 A2744_MASSES = {
     "harvey": {"core": 16.0, "nw": 10.8, "n": 6.5},
     "jauzac": {"core": 27.7, "nw": 18.0, "n": 8.6},
+    # Harvey with the core scaled by the 250 kpc aperture-mass ratio of O2, Lenstool concat_g1v2 / concat (1.214)
+    "harvey_g1v2": {"core": 19.42, "nw": 10.8, "n": 6.5},
 }
 A2744_ERRORS = {
     "harvey": {"core": (0.9, 0.6), "nw": (1.0, 0.3), "n": (0.9, 0.7)},
     "jauzac": {"core": (0.1, 0.1), "nw": (1.0, 1.0), "n": (2.2, 2.2)},
+    "harvey_g1v2": {"core": (1.09, 0.73), "nw": (1.0, 0.3), "n": (0.9, 0.7)},
 }
 
 

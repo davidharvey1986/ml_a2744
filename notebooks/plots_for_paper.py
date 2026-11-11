@@ -478,7 +478,7 @@ def summary_curve(summaries, domain, mu, sig, min_ncomp=2):
 
 def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
                       extra={"flamingo": "../sbi/summaries_ba_best_n5_flamingo"},
-                      min_ncomp=2, tag="ba_best"):
+                      min_ncomp=2, tag="ba_best", show_obs=True):
     '''
     Figure 2 from the current pipeline (sbi/make_summaries.py): the same CNNs, five
     shape-noise draws per cluster, clusters with >= min_ncomp components weighted to
@@ -513,7 +513,7 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
               + ", ".join(f"{s:g}: {m:.4f}" for s, m in zip(sigmas[1:], means[1:])))
 
     lo = min(cdm_vals) - 0.06
-    hi = max(max(cdm_vals) + 0.06, obs_mean + 3.5 * obs_err)
+    hi = max(max(cdm_vals) + 0.06, obs_mean + 3.5 * obs_err) if show_obs else max(cdm_vals) + 0.06
     npts = 10000
     xpdf = np.linspace(lo, hi, npts)
     marginalised_pdf = np.zeros(npts)
@@ -528,29 +528,34 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
     axarr[1].fill_between(xpdf, marginalised_pdf, np.zeros(npts), color="k", alpha=0.2)
 
     # A2744: band in the left panel, pdf in the right
+    obs_pdf = norm.pdf(xpdf, obs_mean, obs_err) if show_obs else np.zeros(npts)
     xr = np.logspace(-3, 1, 100)
-    axarr[0].plot(xr, np.full(100, obs_mean), lw=2, color="k")
-    for ns, level in [(1, 68), (2, 95)]:
-        axarr[0].fill_between(xr, obs_mean - ns * obs_err, obs_mean + ns * obs_err, alpha=0.2, color="k", lw=0)
-        axarr[0].plot(xr, np.full(100, obs_mean - ns * obs_err), "--", color="k")
-        axarr[0].plot(xr, np.full(100, obs_mean + ns * obs_err), "--", color="k")
-    axarr[0].text(0.0012, obs_mean + 2.2 * obs_err, "A2744 UNCOVER DATA (68, 95\\%)", ha="left", va="bottom", fontsize=11)
-    obs_pdf = norm.pdf(xpdf, obs_mean, obs_err)
-    axarr[1].plot(xpdf, obs_pdf, lw=2, color="k")
-    axarr[1].fill_between(xpdf, obs_pdf, np.zeros(npts), alpha=0.1, color="k")
+    if show_obs:
+        axarr[0].plot(xr, np.full(100, obs_mean), lw=2, color="k")
+        for ns, level in [(1, 68), (2, 95)]:
+            axarr[0].fill_between(xr, obs_mean - ns * obs_err, obs_mean + ns * obs_err, alpha=0.2, color="k", lw=0)
+            axarr[0].plot(xr, np.full(100, obs_mean - ns * obs_err), "--", color="k")
+            axarr[0].plot(xr, np.full(100, obs_mean + ns * obs_err), "--", color="k")
+        axarr[0].text(0.0012, obs_mean + 2.2 * obs_err, "A2744 UNCOVER DATA (68, 95\\%)", ha="left", va="bottom", fontsize=11)
+        axarr[1].plot(xpdf, obs_pdf, lw=2, color="k")
+        axarr[1].fill_between(xpdf, obs_pdf, np.zeros(npts), alpha=0.1, color="k")
 
     axarr[0].set_xscale("log")
     axarr[0].set_xlabel(r"Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
     axarr[0].set_ylabel("Model output", fontsize=15)
     axarr[0].set_xlim(1e-3, 1.5)
-    axarr[0].set_ylim(min(cdm_vals) - 0.04, obs_mean + 2 * obs_err + 0.045)
+    ytop = obs_mean + 2 * obs_err + 0.045 if show_obs else max(c[1].mean(0).max() for c in curves.values()) + 0.03
+    axarr[0].set_ylim(min(cdm_vals) - 0.04, ytop)
     axarr[0].legend(loc=4, ncols=2)
 
-    top = 1.35 * max(np.max(marginalised_pdf), np.max(obs_pdf), max(norm.pdf(0, 0, e) for e in cdm_val_err))
+    peak = max(np.max(marginalised_pdf), np.max(obs_pdf), max(norm.pdf(0, 0, e) for e in cdm_val_err))
+    top = 1.35 * peak if show_obs else 1.8 * peak       # without A2744: room for the legend above the brace
     edges = [np.min(cdm_vals) - 0.02, np.max(cdm_vals) + 0.02]
-    curly_brace(axarr[1], edges[0], edges[1], 0.78 * top, 0.06 * top, upward=True)
-    axarr[1].text(np.mean(edges), 0.87 * top, "Collisionless\nDark Matter", ha="center", fontsize=12)
-    axarr[1].text(obs_mean, 1.05 * norm.pdf(0, 0, obs_err), "Observation\n(A2744 UNCOVER)", ha="center", fontsize=12)
+    yb, yt = (0.78 * top, 0.87 * top) if show_obs else (1.08 * peak, 1.17 * peak)
+    curly_brace(axarr[1], edges[0], edges[1], yb, 0.06 * top, upward=True)
+    axarr[1].text(np.mean(edges), yt, "Collisionless\nDark Matter", ha="center", fontsize=12)
+    if show_obs:
+        axarr[1].text(obs_mean, 1.05 * norm.pdf(0, 0, obs_err), "Observation\n(A2744 UNCOVER)", ha="center", fontsize=12)
     axarr[1].set_xlabel("Model output", fontsize=15)
     axarr[1].set_ylabel("Probability distribution", fontsize=15)
     axarr[1].set_xlim(lo, hi)
@@ -1016,7 +1021,7 @@ def figure5():
     
     return log_max_like, log_like_one_sigma
 
-def figure6( log_max_like, log_error):
+def figure6( log_max_like, log_error, merger=True):
     
     max_like = 10**log_max_like
 
@@ -1077,19 +1082,22 @@ def figure6( log_max_like, log_error):
     ax.plot( np.mean(velocity_disp), max_like, '*',
                 markersize=20, color='red', lw=2, label='This Work (Velocity Disp)')
 
-    ax.plot( np.mean(velocity_merg), max_like, '*',
+    if merger:
+        ax.plot( np.mean(velocity_merg), max_like, '*',
                 markersize=20, color='orange', lw=2, label='This Work (Merger Velocity)')
 
     ax.errorbar( np.mean(velocity_disp), max_like, yerr=error[:,None], 
                 markersize=20, color='red', fmt='*', capsize=4, lw=2)
 
-    ax.errorbar( np.mean(velocity_merg), max_like, yerr=error[:,None], 
+    if merger:
+        ax.errorbar( np.mean(velocity_merg), max_like, yerr=error[:,None], 
                 markersize=20, color='orange', fmt='*', capsize=4, lw=2)
     print(f"$\sigma_{{\\rm DM}}/m={max_like.real:0.2f}_{{-{error[0].real:0.2f}}}^{{+{error[1].real:0.2f}}}$cm$^2$g^{{-1}}")
     # get handles
     ax.legend(loc=1)
     fname = "plots/particle_physics.pdf"
     plt.savefig(fname)
+    plt.savefig(fname.replace(".pdf", ".png"), dpi=200)
 
 # # Appendix plots
 
@@ -1182,81 +1190,22 @@ def figureA1():
     ax.legend(fontsize=15)
 
     ####################################
-    ##### PLOT 2 Ngalaxies per bin #####
-    ####################################
-
-    ax = plt.subplot(nrow,ncol,2)
-
-    nmonte = 10000
-    intrinsic_ell = []
-    ngal_range = np.arange(20)+1
-    for ngal in ngal_range:
-        rdn_ells = []
-        for imonte in range(nmonte):
-            rdn_idx = np.random.choice(
-                np.arange(obs_data['e1'].shape[0]),
-                size=ngal
-            )
-
-            e1rdn = np.mean(obs_data['e1'][rdn_idx])
-            e2rdn = np.mean(obs_data['e2'][rdn_idx])
-
-
-
-            rdn_ells.append(np.sqrt(e1rdn**2+e2rdn**2))
-
-        fit = chi.fit(rdn_ells)[2]
-
-        intrinsic_ell.append(fit)
-    intrinsic_ell = np.array(intrinsic_ell)
-    ax.plot(
-        ngal_range, intrinsic_ell, '-o', label='Measured'
-    )
-    ax.plot(
-        ngal_range, intrinsic_ell[0]/np.sqrt(ngal_range), '-',label='1/sqrt(N)', lw=2
-    )
-
-
-    ax.set_xlabel("Number of galaxies in a bin",fontsize=15)
-    ax.set_ylabel("Fitted intrinsic ell of chi fit",fontsize=15)
-    ratio =  (intrinsic_ell[0]/np.sqrt(ngal_range)) / intrinsic_ell
-
-
-
-    def g1_func( snr, a, b, c, d):
-
-        return a + b*np.arctan( ( snr - c)/d)
-
-
-
-    popt, pcov = curve_fit(
-                    g1_func,
-                    ngal_range,
-                    ratio)
-
-
-    ax.plot(
-        ngal_range, intrinsic_ell[0]/(g1_func( ngal_range, *popt)*np.sqrt(ngal_range)), label='Fit', lw=2
-    )
-    ax.legend(fontsize=15)
-    ax.set_ylabel("Probability distribution",fontsize=15)
-
-    ####################################
     ##### PLOT 3 Source redshift #####
     ####################################
 
 
-    ax = plt.subplot(nrow,ncol,3)
+    ax = plt.subplot(nrow,ncol,2)
     ax.set_ylabel("Probability distribution",fontsize=15)
 
     obs_data = get_obs_data(
                 ifilter, data_dir="../data/100/a2744/", photoz=True, remove_members=True)
 
     UNCOVER_ERROR=0.06
-    kde = gaussian_kde(
-        obs_data['redshift'][ np.abs(obs_data['redshift']-args.default_zs) > 1e-2],
-        UNCOVER_ERROR
-    )
+    zall = np.asarray(obs_data['redshift'])
+    vals, counts = np.unique(zall, return_counts=True)
+    zpad = vals[np.argmax(counts)]                            # the value given to every galaxy without a photo-z
+    print(f"n(z): {np.sum(zall == zpad)} of {len(zall)} galaxies padded at z = {zpad:.4f}, left out")
+    kde = gaussian_kde(zall[zall != zpad], UNCOVER_ERROR)
     xpdf = np.linspace(0,10,1000)
     ypdf =  kde.pdf(xpdf)
 
@@ -1270,55 +1219,58 @@ def figureA1():
     )
     ax.plot(
         [args.default_zs]*2,
-        [0,1.0],
+        [0, 1.05 * ypdf.max()],
         'k--', label=f"$\langle z\\rangle={args.default_zs:0.2f}$")
     ax.legend(fontsize=15)
     ax.set_xlabel("Galaxy source redshift", fontsize=15)
-    ax.set_ylim(0,0.7)
+    ax.set_ylim(0, 1.05 * ypdf.max())
     ax.set_xlim(0,10)
 
     ####################################
     ##### PLOT 4 Susceptibility tensor #####
     ####################################
 
-    ax = plt.subplot(nrow,ncol,4)
+    ax = plt.subplot(nrow,ncol,3)
 
 
     def std_err( x ):
         return np.std(x)/np.sqrt(x.shape[0])
 
     from shear_susceptibility import fit_g1
-    from scipy.stats import binned_statistic as _bs
+    from scipy.stats import binned_statistic_2d as _bs2
     fid_cut = {'size_cut': [2, 200], 'signal_noise_cut': 5, 'stat_type': 'snr', 'mag_cut': [0, 30], 'verbose': False,
                'RS_info': False}
-    color = {'f115w': 'b', 'f150w': 'r'}
-    for ifilter in ['f115w', 'f150w']:
+    S, R, G, M = [], [], [], []
+    for ifilter in ['f115w', 'f150w']:            # both filters, each with its own G1(size, S/N) fit
         cat = fits.open(f"../data/100/a2744/abell2744clu-grizli-v5.4-{ifilter}-clear_drc_sci_clean.shears")[1].data
         calc_shear(cat, "test.fits", **{**fid_cut, **SHEAR_CUTS[ifilter]})
         data = fits.open("test.fits")[1].data
         model, _ = fit_g1(data, verbose=False)
         ok = np.isfinite(data['g1_gal'])
-        size, snr, g1 = data['gal_size'][ok], data['snr'][ok], data['g1_gal'][ok]
-        g1_2d, g1_pyrrg = model(size, snr), data['g1_model'][ok]
-        xb = np.quantile(size, np.linspace(0, 1, 21))
-        xc = _bs(size, size, 'median', bins=xb)[0]
-        ax.errorbar(xc, _bs(size, g1, 'mean', bins=xb)[0], _bs(size, g1, std_err, bins=xb)[0],
-                    capsize=2, fmt='o', color=color[ifilter], label=ifilter)
-        ax.plot(xc, _bs(size, g1_2d, 'mean', bins=xb)[0], '-', color=color[ifilter])
-        ax.plot(xc, _bs(size, g1_pyrrg, 'mean', bins=xb)[0], ':', color=color[ifilter])
-    ax.plot([], [], 'k-', label=r'$G_1$(size, S/N) used')
-    ax.plot([], [], 'k:', label=r'S/N-only fit')
-    ax.set_xscale('log')
-    ax.set_xlabel('Galaxy size (pixels)', fontsize=15)
-    ax.set_ylabel('Lensing susceptibility tensor',fontsize=15)
-    ax.legend(fontsize=12)
+        S.append(data['snr'][ok]); R.append(data['gal_size'][ok]); G.append(data['g1_gal'][ok])
+        M.append(model(data['gal_size'][ok], data['snr'][ok]))
+    S, R, G, M = (np.concatenate(v) for v in (S, R, G, M))
+    xb = np.logspace(np.log10(np.percentile(S, 0.5)), np.log10(np.percentile(S, 99.5)), 16)
+    yb = np.logspace(np.log10(np.percentile(R, 0.5)), np.log10(np.percentile(R, 99.5)), 13)
+    g_data = _bs2(S, R, G, 'mean', bins=[xb, yb])[0]
+    n_data = _bs2(S, R, G, 'count', bins=[xb, yb])[0]
+    g_mod = _bs2(S, R, M, 'mean', bins=[xb, yb])[0]
+    g_data[n_data < 20] = np.nan
+    im = ax.pcolormesh(xb, yb, g_data.T, cmap='viridis', vmin=1.1, vmax=1.5, shading='flat')
+    xc, yc = np.sqrt(xb[1:] * xb[:-1]), np.sqrt(yb[1:] * yb[:-1])
+    cs = ax.contour(xc, yc, np.where(n_data >= 20, g_mod, np.nan).T, levels=np.arange(1.15, 1.5, 0.05), colors='w', linewidths=1.2)
+    ax.clabel(cs, fmt='%.2f', fontsize=9)
+    ax.set_xscale('log'); ax.set_yscale('log')
+    ax.set_xlabel('Galaxy signal-to-noise', fontsize=15)
+    ax.set_ylabel('Galaxy size (pixels)', fontsize=15)
+    plt.colorbar(im, ax=ax, label=r'Lensing susceptibility, $G_1$')
 
 
     ####################################
     ##### PLOT 5 B MODES #####
     ####################################
 
-    ax = plt.subplot(nrow,ncol,5)
+    ax = plt.subplot(nrow,ncol,4)
 
 
     stacked_rotated_modes, obs_kappa_b = bmode_check()
@@ -1367,7 +1319,7 @@ def figureA1():
     ##### PLOT 6 GALAXY DENSITY #####
     ####################################
 
-    ax = plt.subplot(nrow,ncol,6)
+    ax = plt.subplot(nrow,ncol,5)
 
 
     obs_cat = get_obs_data( 'concat', data_dir="../data/100/a2744/")
@@ -1415,8 +1367,34 @@ def figureA1():
 
 
 
+    ####################################
+    ##### PLOT 6 MAIN-HALO PROFILE #####
+    ####################################
+    # from sbi/main_halo_lenstool.py --no-lenstool --sims (mass-matched BAHAMAS, n_comp >= 2)
+    ax = plt.subplot(nrow,ncol,6)
+    prof = np.load("../sbi/results/main_halo_profile/main_halo_sims.npz")
+    ax.axhline(0, color="0.5", lw=0.8)
+    for key, col, lab in (("sim_0", "k", "BAHAMAS CDM"), ("sim_1", "#D55E00", r"BAHAMAS $\sigma/m=1$ cm$^2$g$^{-1}$")):
+        if key in prof:
+            q16, q50, q84 = prof[key]
+            ax.fill_between(prof["mid"], q16, q84, color=col, alpha=0.12, lw=0)
+            ax.plot(prof["mid"], q50, "-", color=col, lw=2, label=lab)
+    ax.errorbar(prof["rc"], prof["t"], prof["te"], fmt="o", color="#0072B2", capsize=2, label=r"$\langle\chi_t\rangle$")
+    ax.errorbar(prof["rc"] * 1.03, prof["xx"], prof["xe"], fmt="s", color="#CC79A7", capsize=2, ms=4, mfc="none",
+                label=r"$\langle\chi_\times\rangle$")
+    ax.set_xscale("log")
+    rmax = float(prof["rmax"])
+    ax.set_xlim(60, rmax)
+    ticks = [t for t in (60, 100, 200, 400, 800) if t <= rmax]
+    ax.set_xticks(ticks, [str(t) for t in ticks])
+    ax.minorticks_off()
+    ax.set_xlabel("Radius [kpc]", fontsize=15)
+    ax.set_ylabel(r"Mean galaxy distortion, $\chi$", fontsize=15)
+    ax.legend(fontsize=11)
+
     filename = "plots/intrinsic_ell.pdf"
     plt.savefig(filename)
+    plt.savefig(filename.replace(".pdf", ".png"), dpi=150)
 
 def figureA2():
     estimates = pkl.load(open("pickles/how_correlated.pkl","rb"))
@@ -2160,7 +2138,7 @@ def sigma_posterior(sigmas, curve, p_obs, prior=(-3, 1), cdm=1e-3):
     return gp, x, post, tuple(np.interp([0.5, 0.16, 0.84], cdf / cdf[-1], x))
 
 
-def figure5_summaries(tag=PAPER_TAG, min_ncomp=2):
+def figure5_summaries(tag=PAPER_TAG, min_ncomp=2, ml_only=False):
     '''
     Figure 5 from the current pipeline: the combined (BAHAMAS + DARKSKIES) response with its GP and
     A2744's ensemble output (left), and the posterior on log10 sigma/m (right; 68/95/99% shaded).
@@ -2199,8 +2177,15 @@ def figure5_summaries(tag=PAPER_TAG, min_ncomp=2):
         ax.fill_between(x[m], post[m], color="b", alpha=a, lw=0)
     best = 10 ** med
     e_lo, e_hi = best - 10 ** lo, 10 ** hi - best
-    ax.plot(x, post, "k-", label=rf"$\sigma_{{\rm DM}}/m={best:.2f}^{{+{e_hi:.2f}}}_{{-{e_lo:.2f}}}$ cm$^2$g$^{{-1}}$")
-    ax.axvline(med, color="k", lw=1)
+    ml = x[np.argmax(post)]
+    if ml_only:      # the peak, with the same 16-84% interval
+        b = 10 ** ml
+        ax.plot(x, post, "k-", label=rf"$\sigma_{{\rm DM}}/m={b:.2f}^{{+{10 ** hi - b:.2f}}}_{{-{b - 10 ** lo:.2f}}}$ cm$^2$g$^{{-1}}$")
+        ax.axvline(ml, color="k", lw=1)
+    else:
+        ax.plot(x, post, "k-", label=rf"$\sigma_{{\rm DM}}/m={best:.2f}^{{+{e_hi:.2f}}}_{{-{e_lo:.2f}}}$ cm$^2$g$^{{-1}}$")
+        ax.axvline(med, color="k", lw=1)
+        ax.axvline(ml, color="k", lw=1.2, ls="--", label=rf"maximum likelihood $\sigma_{{\rm DM}}/m={10 ** ml:.2f}$ cm$^2$g$^{{-1}}$")
     ax.set_xlabel(r"$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=13)
     ax.set_ylabel("Posterior", fontsize=13)
     ax.set_xlim(-3, 1)
@@ -2209,7 +2194,7 @@ def figure5_summaries(tag=PAPER_TAG, min_ncomp=2):
     filename = f"plots/output_to_model_ba_{tag}.pdf"
     plt.savefig(filename)
     plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
-    print(f"Saved {filename}: log10 sigma/m = {med:.2f} [{lo:.2f}, {hi:.2f}]; sigma/m = "
+    print(f"Saved {filename}: ML log10 sigma/m = {ml:.3f} ({10 ** ml:.2f}); median log10 sigma/m = {med:.2f} [{lo:.2f}, {hi:.2f}]; sigma/m = "
           f"${best:.2f}^{{+{e_hi:.2f}}}_{{-{e_lo:.2f}}}$")
     return med, np.array([med - lo, hi - med])
 
@@ -2336,7 +2321,6 @@ def figureA2_summaries(tag=PAPER_TAG, nrandom=1000, seed=0):
     print(f"ensemble RMSE ~ N^{alpha:.3f}; rho = {rho_fit:.3f} +/- {np.sqrt(pcov[1, 1]):.3f}")
     plt.figure(figsize=(5, 4))
     plt.plot(Ns, rmse, "o", label="Measured")
-    plt.plot(Ns, power(Ns, alpha), "-", lw=2, label=f"Fitted power law ($N^{{{alpha:0.2f}}}$)")
     plt.plot(Ns, correlated_rmse(Ns, sigma_fit, rho_fit), "-", lw=2, label=f"Fitted correlation law $\\rho={rho_fit:0.2f}$")
     plt.plot(Ns, sigma_fit / np.sqrt(Ns), "--", label=r"Independent models ($N^{-0.5}$)")
     plt.xlabel("Number of models N", fontsize=15)

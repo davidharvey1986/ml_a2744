@@ -114,7 +114,7 @@ SHAPE_BIAS = [round(b, 2) for b in np.arange(-0.05, 0.051, 0.01) if abs(b) > 1e-
 ZS_BIAS = [0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25]
 DOWNSAMPLE = [2, 4, 5, 10]             # 40, 80, 100, 200 kpc pixels (must divide the 100-pixel map)
 MASS_SHIFTS = [-2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2]   # in units of the A2744 mass error
-MERGING = [0, 1, 2, 3, 4]                       # merger class n_comp > this; the fiducial is n_comp > --min-ncomp - 1
+MERGING = [0, 1, 2, 3]                          # merger class n_comp > this; the fiducial is n_comp > --min-ncomp - 1
 KAPPA_CUTS = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5]    # strong-lensing cut; KAPPA_THRESH is the fiducial
 CENTRING_KPC = [12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100]   # A2744 stamp centre offsets, each in 8 directions
 CENTRING_DIRS = np.arange(0, 360, 45)          # degrees from +RA (stamp x)
@@ -142,7 +142,7 @@ def parse():
     p.add_argument("--dz-summaries", default=None,
                    help="FLAMINGO projection-depth summaries (sbi/dz_cx.sh; default <summaries>_dz)")
     p.add_argument("--max-clusters", type=int, default=None, help="random subset per simulation (quick checks)")
-    p.add_argument("--mass-study", default="harvey", choices=["harvey", "jauzac"],
+    p.add_argument("--mass-study", default="harvey", choices=["harvey", "jauzac", "harvey_g1v2"],
                    help="A2744 mass (mass_weighting.a2744_mass_gaussian): weights, the mass sweep and the clusters simulated")
     return p.parse_args()
 
@@ -391,6 +391,23 @@ class Runner:
             self.zcats[z] = get_obs_data("concat", data_dir=DATA_DIR, photoz=True, cuts=FILTER_CUTS, redshift_cut=z)
         return self.zcats[z]
 
+    def cut_catalogue(self, kind, value):
+        '''The catalogue rebuilt from the raw f115w/f150w shear catalogues with one cut changed from FILTER_CUTS
+        (both filters): G1 recalibrated on the new selection and the filters recombined, as the real pipeline.
+        Rewrites the filtered fits; restore_catalogue puts the fiducial back.'''
+        key = (kind, value)
+        if key not in self.zcats:
+            cuts = {f: {k: (list(v) if isinstance(v, (list, tuple)) else v) for k, v in c.items()} for f, c in FILTER_CUTS.items()}
+            for c in cuts.values():
+                if kind == "low_mag":
+                    c["mag_cut"][0] = value
+                elif kind == "high_mag":
+                    c["mag_cut"][1] = value
+                elif kind == "size":
+                    c["size_cut"][0] = value
+            self.zcats[key] = get_obs_data("concat", data_dir=DATA_DIR, photoz=True, cuts=cuts)
+        return self.zcats[key]
+
     def restore_catalogue(self):
         if self.zcats:
             get_obs_data("concat", data_dir=DATA_DIR, photoz=True, cuts=FILTER_CUTS)
@@ -401,7 +418,7 @@ class Runner:
         catalogue galaxies, or with kappa_thresh given those kept by the strong-lensing cut.'''
         sweep_kappa = kappa_thresh is not None
         kappa_thresh = KAPPA_THRESH if kappa_thresh is None else kappa_thresh
-        data = self.zcut_catalogue(zcut) if zcut is not None else self.cat.select(*cut) if cut else self.cat.full
+        data = self.zcut_catalogue(zcut) if zcut is not None else self.cut_catalogue(*cut) if cut else self.cat.full
         ra, dec = self.cat.positions(data)
         zs_map = redshift_map(data, ra, dec, self.default_zs)
         over = {"zs": zs_map, "downsample": downsample}
@@ -602,9 +619,9 @@ def style():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams.update({"axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED, "axes.labelcolor": INK,
-                         "axes.grid": True, "grid.color": "#e6e6e6", "axes.spines.top": False,
-                         "axes.spines.right": False, "legend.frameon": False, "font.size": 10})
+    plt.rcParams.update({"axes.edgecolor": "k", "xtick.color": MUTED, "ytick.color": MUTED, "axes.labelcolor": INK,
+                         "axes.grid": True, "grid.color": "#e6e6e6", "axes.spines.top": True,
+                         "axes.spines.right": True, "legend.frameon": False, "font.size": 10})
     return plt
 
 
@@ -614,18 +631,26 @@ FID_COLOUR = "#D55E00"
 GAL_LIMITS = (0.95, 0.8, 0.7)    # galaxy-number fractions shaded in the data sweeps
 
 
-def plot_data(out, path, domains=("combined",)):
-    '''Each data sweep against its setting, the fiducial setting a star joined into the line (dotted line).'''
+def plot_data(out, path, domains=("combined",), paper=False, skip=()):
+    '''Each data sweep against its setting, the fiducial setting a star joined into the line (dotted line).
+    paper: only the top row (no z_CDM shifts) and no title.'''
     plt = style()
     sweeps = [("galaxy_low_mag", "Lower magnitude cut (MAG >)"), ("galaxy_high_mag", "Upper magnitude cut (MAG <)"),
               ("galaxy_size", "Size cut (SIZE >)"), ("galaxy_redshift", "Member cut (remove photo-z <)"), ("resolution", "Map resolution [kpc]"),
               ("kappa_cut", "Strong-lensing cut (κ <)"), ("centring", "A2744 centre offset [kpc]")]
-    sweeps = [s for s in sweeps if s[0] in out]
+    sweeps = [s for s in sweeps if s[0] in out and s[0] not in skip]
     if not sweeps:
         return
     fid = out["fiducial"]
-    fig, axes = plt.subplots(2, len(sweeps), figsize=(4.2 * len(sweeps), 6.5), sharey="row",
-                             constrained_layout=True, squeeze=False)
+    if paper:                                 # the z_CDM row is drawn on a figure that is never saved
+        fig, top = plt.subplots(1, len(sweeps), figsize=(4.2 * len(sweeps), 3.6), sharey="row",
+                                constrained_layout=True, squeeze=False)
+        _, hidden = plt.subplots(1, len(sweeps), squeeze=False)
+        axes = np.vstack([top, hidden])
+    else:
+        fig, axes = plt.subplots(2, len(sweeps), figsize=(4.2 * len(sweeps), 6.5), sharey="row",
+                                 constrained_layout=True, squeeze=False)
+    lab = axes[0] if paper else axes[1]       # the row that carries the x labels and band annotations
     def fid_lines(j):
         for d in domains:                     # fiducial estimate per simulation
             axes[0, j].axhline(fid["metrics"][d]["log_sigma"], color=COLOUR[d], lw=1, ls="--", alpha=0.7)
@@ -655,7 +680,7 @@ def plot_data(out, path, domains=("combined",)):
                             label=d.upper() if ax is axes[0, j] else None)
                     ax.plot(xf, y0, "*", color=FID_COLOUR, ms=13, mec="white", zorder=6)
             fid_lines(j)
-            axes[1, j].set_xlabel(xlabel + " (8 directions: mean, range shaded)")
+            lab[j].set_xlabel(xlabel + ("" if paper else " (8 directions: mean, range shaded)"))
             continue
         for d in domains:
             f = fid["metrics"][d]
@@ -683,22 +708,21 @@ def plot_data(out, path, domains=("combined",)):
                 if low.any():                 # label the band at its edge nearest the fiducial
                     left = x[low].min() > xf
                     edge = x[low].min() - dx if left else x[low].max() + dx
-                    axes[1, j].annotate(f"<{100 * limit:.0f}%", (edge, 0), xycoords=("data", "axes fraction"),
+                    lab[j].annotate(f"<{100 * limit:.0f}%", (edge, 0), xycoords=("data", "axes fraction"),
                                         xytext=(2 if left else -2, 3), textcoords="offset points", rotation=90,
                                         ha="left" if left else "right", va="bottom", fontsize=7, color=MUTED)
         if key == "galaxy_low_mag" and FIDUCIAL_SETTING[key] is None:
             ticks = np.arange(np.ceil(x.min()), x.max() + 1e-6, 1.0)
             for ax in axes[:, j]:
                 ax.set_xticks(np.r_[xf, ticks], ["none"] + [f"{t:g}" for t in ticks])
-        axes[1, j].set_xlabel(xlabel)
+        lab[j].set_xlabel(xlabel)
     axes[0, 0].set_ylabel(r"$\log_{10}\,\sigma/m$ (A2744 estimate)")
     axes[1, 0].set_ylabel(r"$\Delta z_{\rm CDM}$ [$\sigma$]")
     axes[0, 0].legend(loc="lower right")
-    fig.suptitle("Data systematics: A2744 estimate with posterior 16-84% (star, dotted: fiducial setting; dashed: fiducial "
-                 "estimate; open: unconstrained) and "
-                 "z_CDM shift from the fiducial ("
-                 "grey bands: fewer than 95 / 80 / 70% of the fiducial galaxies kept)",
-                 color=INK, fontsize=12)
+    if not paper:
+        fig.suptitle("Data systematics: A2744 estimate with posterior 16-84% (star, dotted: fiducial setting; dashed: "
+                     "fiducial estimate; open: unconstrained) and z_CDM shift from the fiducial (grey bands: fewer than "
+                     "95 / 80 / 70% of the fiducial galaxies kept)", color=INK, fontsize=12)
     for ext in ("pdf", "png"):
         fig.savefig(path.with_suffix(f".{ext}"), dpi=180)
 
@@ -726,7 +750,7 @@ MODEL_GROUPS = [   # key, name, setting label for the annotated end points
 NOT_IN_TOTAL = {"resolution"}     # a choice of map, not an uncertainty in the data: shown, left out of the total
 
 
-def plot_ranges(out, path, groups, title, d="combined"):
+def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_shifts=True):
     '''
     The combined (BAHAMAS + DARKSKIES) log10 sigma/m for each systematic in groups: one row per systematic,
     ordered by its spread, each setting a dot on a bar spanning its range, the two extremes labelled and
@@ -750,17 +774,20 @@ def plot_ranges(out, path, groups, title, d="combined"):
     xlo, xhi = span[0] - pad, span[1] + pad
     blue, bar, grey = "#1f5fa8", "#c7d3e0", "#9aa3ad"
     n = len(groups)
-    fig, ax = plt.subplots(figsize=(8.4, 0.5 * (n + 2) + 1.4), constrained_layout=True)
-    ax.plot([f0, f0], [-0.6, n + 1.6], color=INK, lw=1, zorder=1)
+    base = 2 if show_total else 1                       # rows below the systematics: statistical (+ total)
+    fig, ax = plt.subplots(figsize=(8.4, 0.5 * (n + base) + 1.4), constrained_layout=True)
+    ax.plot([f0, f0], [-0.6, n + base - 0.4], color=INK, lw=1, zorder=1)
 
     def shift(x):
         return f"{x + 0:+.2f}".replace("-0.00", "+0.00")
 
     def right(y, text, **kw):
+        if not show_shifts:
+            return
         ax.annotate(text, (1.01, y), xycoords=("axes fraction", "data"), ha="left", va="center", fontsize=8.5, **kw)
 
     for k, (key, name, lab) in enumerate(groups):
-        y = k + 2
+        y = k + base
         rows, v = out[key], vals[key]
         vc = np.clip(v, xlo + 0.01, xhi - 0.01)
         out_ax = vc != v
@@ -784,25 +811,27 @@ def plot_ranges(out, path, groups, title, d="combined"):
             ax.annotate(lab(rows[i]), (vc[i], y), xytext=(-7 if ha == "left" else 7, 0), textcoords="offset points",
                         ha="right" if ha == "left" else "left", va="center", fontsize=7.5, color=MUTED)
         right(y, f"{shift(v.min() - f0)} / {shift(v.max() - f0)}" + (" *" if key in NOT_IN_TOTAL else ""), color=INK)
-    ax.axhline(1.5, color="#d5d9de", lw=0.8)
-    ax.plot([f0 - sys_lo, f0 + sys_hi], [1, 1], color=blue, lw=6, solid_capstyle="round", zorder=2)
-    right(1, f"{-sys_lo:+.2f} / {sys_hi:+.2f}", color=INK, fontweight="bold")
+    ax.axhline(base - 0.5, color="#d5d9de", lw=0.8)
+    if show_total:
+        ax.plot([f0 - sys_lo, f0 + sys_hi], [1, 1], color=blue, lw=6, solid_capstyle="round", zorder=2)
+        right(1, f"{-sys_lo:+.2f} / {sys_hi:+.2f}", color=INK, fontweight="bold")
     ax.plot([f0 - lo, f0 + hi], [0, 0], color=grey, lw=6, solid_capstyle="round", zorder=2)
     right(0, f"{-lo:+.2f} / {hi:+.2f}", color=INK, fontweight="bold")
-    ax.annotate(f"fiducial {f0:+.2f}", (f0, n + 1.7), ha="center", va="bottom", fontsize=8.5, color=INK)
-    right(n + 1.9, "shift from fiducial", color=MUTED)
+    ax.annotate(f"fiducial {f0:+.2f}", (f0, n + base - 0.3), ha="center", va="bottom", fontsize=8.5, color=INK)
+    right(n + base - 0.1, "shift from fiducial", color=MUTED)
     names = [g[1] for g in groups]
     total_name = "All systematics (quadrature)" + ("*" if any(g[0] in NOT_IN_TOTAL for g in groups) else "")
-    ax.set_yticks(range(n + 2), ["Statistical (posterior 16–84%)", total_name] + names)
-    for t in ax.get_yticklabels()[:2]:
+    ax.set_yticks(range(n + base), ["Statistical (posterior 16–84%)"] + [total_name] * show_total + names)
+    for t in ax.get_yticklabels()[:base]:
         t.set_fontweight("bold")
     ax.tick_params(axis="y", length=0, labelsize=9.5, labelcolor=INK)
-    ax.set_ylim(-0.6, n + 2.2)
+    ax.set_ylim(-0.6, n + base + 0.2)
     ax.grid(axis="y", visible=False)
-    ax.spines["left"].set_visible(False)
+    pass                                                # full frame on every plot
     ax.set_xlim(xlo, xhi)
     ax.set_xlabel(r"$\log_{10}\,(\sigma/m\ /\ {\rm cm^2\,g^{-1}})$ inferred for A2744")
-    ax.set_title(title, color=INK, fontsize=11, loc="left", pad=14)
+    if title:
+        ax.set_title(title, color=INK, fontsize=11, loc="left", pad=14)
     if any(g[0] in NOT_IN_TOTAL for g in groups):
         ax.annotate("* map resolution is not included in the total; open markers: posterior unconstrained",
                     (0, -0.13), xycoords="axes fraction", fontsize=7.5, color=MUTED, va="top")
@@ -810,9 +839,9 @@ def plot_ranges(out, path, groups, title, d="combined"):
         fig.savefig(path.with_suffix(f".{ext}"), dpi=200)
 
 
-def plot_model(out, path):
+def plot_model(out, path, **kw):
     out = {**out, "contamination": [r for r in out.get("contamination", []) if abs(r["value"]) <= CONTAMINATION_MAX + 1e-9]}
-    plot_ranges(out, path, list(MODEL_GROUPS), "Model systematics, BAHAMAS + DARKSKIES")
+    plot_ranges(out, path, list(MODEL_GROUPS), "Model systematics, BAHAMAS + DARKSKIES", **kw)
 
 
 

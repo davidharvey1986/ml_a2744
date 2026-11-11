@@ -36,6 +36,12 @@ def parse():
     p.add_argument("--bins", type=float, nargs="+", default=list(np.arange(13.7, 15.46, 0.15)))
     p.add_argument("--min-count", type=int, default=10, help="clusters per bin to draw it")
     p.add_argument("--out", default=str(REPO / "sbi" / "results" / "p_vs_mass"))
+    p.add_argument("--harvey", default="harvey", help="mass_weighting study for the grey band (harvey_g1v2: new O2)")
+    p.add_argument("--ncomp", type=int, nargs="+", default=[1, 3], help="n_comp cuts, one column each")
+    p.add_argument("--no-jauzac", action="store_true", help="leave out the Jauzac band")
+    p.add_argument("--xlim", type=float, nargs=2, default=[13.65, 15.45])
+    p.add_argument("--no-title", action="store_true", help="drop the figure suptitle")
+    p.add_argument("--no-lenstool-ks", action="store_true", help="drop the Lenstool and KS A2744 points")
     p.add_argument("--jauzac-2sigma", action="store_true", help="also mark the Jauzac mass +-2 sigma (hatched, dashed edges)")
     return p.parse_args()
 
@@ -53,11 +59,12 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    studies = [(st, *a2744_mass_gaussian(st), c) for st, c in (("harvey", "0.55"), ("jauzac", "#D95F02"))]
+    studies = [(st, *a2744_mass_gaussian(st), c) for st, c in ((opts.harvey, "0.55"), ("jauzac", "#D95F02"))
+               if st != "none" and not (st == "jauzac" and opts.no_jauzac)]                                   # --harvey none: the Jauzac mass only
     edges = np.array(opts.bins)
     mids = 0.5 * (edges[1:] + edges[:-1])
-    cuts = [(1, "all clusters"), (3, "n_comp ≥ 3")]
-    fig, axes = plt.subplots(len(opts.tags), len(cuts), figsize=(6.2 * len(cuts), 4.4 * len(opts.tags)),
+    cuts = [(n, "all clusters" if n <= 1 else f"n_comp ≥ {n}") for n in opts.ncomp]
+    fig, axes = plt.subplots(len(opts.tags), len(cuts), figsize=(max(6.2 * len(cuts), 8.5), 4.4 * len(opts.tags) + (0.8 if len(cuts) == 1 and not opts.no_title else 0)),
                              sharex=True, sharey=True, constrained_layout=True, squeeze=False)
     for i, tag in enumerate(opts.tags):
         p_obs = float(np.load(REPO / "sbi" / f"summaries_{opts.fiducial}_{tag}_n5" / "obs.npz")["softmax"][:, 0].mean())
@@ -70,12 +77,13 @@ def main():
                     for x in (mu - 2 * sig, mu + 2 * sig):
                         ax.axvline(x, color=c, ls="--", lw=1.2)
                 ax.errorbar(mu, p_obs, xerr=sig, fmt="*", color=c, ms=14, zorder=5,
-                            label=f"A2744 ({p_obs:.3f}), {st.capitalize()} mass {mu:.2f}")
+                            label=f"A2744 ({p_obs:.3f}), {st.capitalize().replace('_g1v2', ' (core rescaled to new Lenstool O2)')} mass {mu:.2f}")
             lm, lo = LENSTOOL_750
-            ax.axvline(lo, color="#1B9E77", ls=":", lw=1.2)
-            ax.errorbar(lm, p_obs, xerr=[[lm - lo], [0]], fmt="*", color="#1B9E77", ms=14, zorder=5,
-                        label=f"A2744, Lenstool M(<750 kpc) {lm:.2f} (dotted: covered part only, {lo:.2f})")
-            if KS_JSON.exists():                # note: a 500 kpc aperture, not M750
+            if not opts.no_lenstool_ks:
+                ax.axvline(lo, color="#1B9E77", ls=":", lw=1.2)
+                ax.errorbar(lm, p_obs, xerr=[[lm - lo], [0]], fmt="*", color="#1B9E77", ms=14, zorder=5,
+                            label=f"A2744, Lenstool M(<750 kpc) {lm:.2f} (dotted: covered part only, {lo:.2f})")
+            if KS_JSON.exists() and not opts.no_lenstool_ks:                # note: a 500 kpc aperture, not M750
                 ks = json.load(open(KS_JSON))["a2744"]["500"]
                 lm = np.log10(ks["M_calibrated"])
                 lo, hi = np.log10(ks["M_calibrated_16_84"])
@@ -100,9 +108,10 @@ def main():
                 ax.fill_between(r[0], r[3], r[4], color=col, alpha=0.08, lw=0)
                 ax.errorbar(r[0], r[1], r[2], fmt="o" + ls, color=col, ms=4, lw=1.8, capsize=2,
                             label=f"{name} (N={sel.sum()})")
-            ax.set_title(f"ba_{tag}: {title}", fontsize=10)
+            if not opts.no_title:
+                ax.set_title(f"ba_{tag}: {title}", fontsize=10)
             ax.set_xlabel(r"$\log_{10} M_{750}$ [M$_\odot$]")
-            ax.set_xlim(13.65, 15.45)
+            ax.set_xlim(*opts.xlim)
             ax.set_ylim(0.3, 0.85)
             if j == 0:
                 ax.set_ylabel("ensemble P(SIDM)")
@@ -110,9 +119,10 @@ def main():
             star = [i for i, t in enumerate(l) if t.startswith("A2744")]
             ax.legend([h[i] for i in star], [l[i] for i in star], fontsize=7.5, loc="upper left", frameon=False)
             sims = [(h[i], t.split(" (N=")[0]) for i, t in enumerate(l) if i not in star]
-    fig.legend(*zip(*sims), loc="outside lower center", ncol=5, fontsize=9, frameon=False)
-    fig.suptitle("P(SIDM) against halo mass: BAHAMAS solid, vdSIDM dashed, FLAMINGO/TNG CDM dotted\n(binned mean ± error; shaded: 16-84% of clusters; bands: A2744 mass ±1σ, Harvey grey, Jauzac orange" + (", hatched/dashed ±2σ" if opts.jauzac_2sigma else "") + "; green: Lenstool; purple: KS)",
-                 fontsize=11)
+    fig.legend(*zip(*sims), loc="outside lower center", ncol=5 if len(cuts) > 1 else 3, fontsize=9, frameon=False)
+    if not opts.no_title:
+        fig.suptitle("P(SIDM) against halo mass: BAHAMAS solid, vdSIDM dashed, FLAMINGO/TNG CDM dotted\n(binned mean ± error; shaded: 16-84% of clusters;" + ("\n" if len(cuts) == 1 else " ") + "bands: A2744 mass ±1σ, Harvey grey, Jauzac orange" + (", hatched/dashed ±2σ" if opts.jauzac_2sigma else "") + ("" if opts.no_lenstool_ks else "; green: Lenstool; purple: KS") + ")",
+                     fontsize=11 if len(cuts) > 1 else 9.5)
     for e in ("png", "pdf"):
         fig.savefig(f"{opts.out}.{e}", dpi=150)
     print(f"wrote {opts.out}.png")
