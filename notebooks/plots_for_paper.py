@@ -476,7 +476,7 @@ def summary_curve(summaries, domain, mu, sig, min_ncomp=2):
     return sigmas, out
 
 
-def _pooled_tail_panel(ax, curves, mu, sig, min_ncomp, p_obs, pooled_tag):
+def _pooled_tail_panel(ax, curves, mu, sig, min_ncomp, p_obs, pooled_tag, means=None):
     '''Figure 2 right panel: mass-weighted P(SIDM) of each CDM cluster (n_comp >= min_ncomp, every noise draw),
     per simulation and pooled with equal weight per simulation; shaded: the pooled fraction above A2744.'''
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sbi"))
@@ -492,6 +492,9 @@ def _pooled_tail_panel(ax, curves, mu, sig, min_ncomp, p_obs, pooled_tag):
         P.append(p); W.append(w / len(sims))
         ax.plot(x, k, color=COLOUR_SCHEME[sim], lw=1.2)
         ax.fill_between(x, k, color=COLOUR_SCHEME[sim], alpha=0.15, lw=0, label=sim.upper())
+        if means is not None:                         # ensemble mean and its (model-correlated) error, above the curve
+            m_sim, e_sim = means[sim]
+            ax.errorbar(m_sim, 1.06 * k.max(), xerr=e_sim, fmt="o", color=COLOUR_SCHEME[sim], ms=5, capsize=3, lw=1.5)
     P, W = np.concatenate(P), np.concatenate(W)
     f = W[P >= p_obs].sum()
     ax.plot(x, pooled, color="k", lw=2, ls="--", label="Marginalised CDM")
@@ -599,7 +602,8 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
     ax_r.legend(ncols=2, loc=1, fontsize=8)
     if discrepancy:
         plt.close(ax_r.figure)
-        _pooled_tail_panel(axarr[1], curves, mu, sig, min_ncomp, obsprob.mean(), pooled_tag)
+        _pooled_tail_panel(axarr[1], curves, mu, sig, min_ncomp, obsprob.mean(), pooled_tag,
+                           means={d: (m, e) for d, m, e in zip(curves, cdm_vals, cdm_val_err)})
     fig.align_xlabels()
 
     filename = f"plots/final_model_weighting_with_data_{tag}.pdf"
@@ -1354,56 +1358,16 @@ def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac
     ax.set_ylabel("Probability distribution",fontsize=15)
 
     ####################################
-    ##### PLOT 6 GALAXY DENSITY #####
+    ##### PLOT 5 CLUSTER-MEMBER LEAK #####
     ####################################
-
+    # photo-z member leak against the weak-lensing (KS) convergence (sbi/leakage_vs_kappa.py)
     ax = plt.subplot(nrow,ncol,5)
-
-
-    obs_cat = get_obs_data( 'concat', data_dir="../data/100/a2744/")
-    binned_data = bin_obs_data(obs_cat)
-    ngal = binned_data['ngal']
-    if np.max(obs_cat['x']) > 1000:
-        ra,dec = ra_dec_to_simulation_image_pos( obs_cat)
-        obs_cat['x'] = ra
-        obs_cat['y'] = dec
-    image_size  = 100
-    obs_kappa_e, obs_kappa_b = get_kappa(
-        obs_cat, smooth=1.5, extent=[
-                        -image_size//2,image_size//2,-image_size//2,image_size//2
-                    ]
-    )
-
-    kappa_filtered = obs_kappa_e[ ngal > 0 ].flatten()
-    ngal_filtered = ngal[ ngal > 0 ].flatten()
-
-
-    bins = 20
-    y,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic=np.mean )
-    stdy,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic=np.std )
-    cy,x,n = binned_statistic( kappa_filtered, ngal_filtered, bins=bins, statistic='count')
-
-    xc = (x[1:]+x[:-1])/2.
-    fractional_change = y/np.mean(ngal_filtered)
-    fraction_err = stdy/np.sqrt(cy)/np.mean(ngal_filtered)
-
-    ax.errorbar(xc,fractional_change,fraction_err, capsize=2, fmt='o-',color='k')
-
-
-    def lin_func( x, a, b):
-        return x*0+a 
-
-    popt, pope = curve_fit(
-        lin_func, xc[ xc>0], fractional_change[xc>0],sigma=fraction_err[xc>0]
-    )
-
-    ax.plot( np.array([-1,1]), lin_func(np.array([-1,1]), *popt),'r--',label=f'N$_{{cont}}={popt[0]:0.2f}$')
-    ax.set_xlim(-0.4,0.8)
-    ax.set_xlabel("Weak lensing convergence, $\kappa$", fontsize=15)
-    ax.set_ylabel("$N_{\\rm gal}$ / $\langle N_{\\rm gal}\\rangle$", fontsize=15)
-    ax.legend()
-
-
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sbi"))
+    from leakage_vs_kappa import leakage, draw_leakage
+    leak_cat = get_obs_data('concat', data_dir="../data/100/a2744/", photoz=True, cuts=SHEAR_CUTS)
+    L = leakage(leak_cat, "ks", nbins=12)
+    print(f"member leak: f_cl = ({L['c']:.3f} +- {L['c_err']:.3f}) kappa")
+    draw_leakage(ax, L, fontsize=15, legend_size=9)
 
     ####################################
     ##### PLOT 6 MAIN-HALO PROFILE #####
@@ -1411,7 +1375,7 @@ def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac
     # from sbi/main_halo_lenstool.py --no-lenstool --sims (mass-matched BAHAMAS, n_comp >= 2)
     ax = plt.subplot(nrow,ncol,6)
     prof = np.load(profile_npz)
-    ax.axhline(0, color="0.5", lw=0.8)
+    ax.axhline(0, color="k", lw=1.6)
     for key, col, lab in (("sim_0", "k", "BAHAMAS CDM"), ("sim_1", "#D55E00", r"BAHAMAS $\sigma/m=1$ cm$^2$g$^{-1}$")):
         if key in prof:
             q16, q50, q84 = prof[key]

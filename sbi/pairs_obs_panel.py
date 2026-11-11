@@ -8,6 +8,7 @@ kappa (sims). A2744: KS kappa S/N (top), Lenstool model kappa and halos (bottom)
 '''
 import argparse
 import json
+import re
 import pickle as pkl
 import sys
 from pathlib import Path
@@ -93,15 +94,23 @@ def main():
         s = centres[1] - centres[0]
         ext = [centres[0] - s / 2, centres[-1] + s / 2] * 2
         for r, p in enumerate(col):
-            im = sens.draw_panel(axes[r, c], p, ext, vmax, scalebar=(r == 1 and c == 0))
+            im = sens.draw_panel(axes[r, c], p, ext, vmax, scalebar=False)
+            if r == 1 and c == 0:                         # scale bar top right (the label sits bottom left)
+                ax_ = axes[r, c]
+                (x0, x1), (y0, y1) = ax_.get_xlim(), ax_.get_ylim()
+                xc, yc = x1 - 0.06 * (x1 - x0) - 10, y1 - 0.08 * (y1 - y0)
+                ax_.errorbar(xc, yc, xerr=10, capsize=3, color="k", lw=2)       # 20 stamp pixels = 400 kpc
+                ax_.text(xc, yc - 0.02 * (y1 - y0), "400 kpc", ha="center", va="top", fontsize=12, color="k")
             if p.get("lenstool_kappa") is not None:
                 axes[r, c].contour(p["lenstool_kappa"], origin="lower", extent=[-50, 50, -50, 50],
                                    levels=np.linspace(0.1, 0.8, 8), colors="k", linewidths=1)
             t = axes[r, c].get_title()                    # no titles: the label goes inside the panel
             axes[r, c].set_title("")
-            axes[r, c].text(0.03, 0.97, t, transform=axes[r, c].transAxes, ha="left", va="top", fontsize=8,
-                            bbox=dict(facecolor="white", edgecolor="none", alpha=0.8, pad=1.5))
-    axes[0, 0].set_ylabel("CDM twin", fontsize=11)
+            t = re.sub(r" \((\d+)\)\n", r"\n(\1)\n", t)        # the cluster id on its own line
+            lab = axes[r, c].text(0.03, 0.03, t, transform=axes[r, c].transAxes, ha="left", va="bottom", fontsize=14,
+                                  linespacing=1.15, bbox=dict(facecolor="white", edgecolor="none", alpha=0.8, pad=2))
+            lab.set_in_layout(False)                      # the label must not shrink the maps
+    axes[0, 0].set_ylabel("CDM", fontsize=11)
     axes[1, 0].set_ylabel(r"SIDM $\sigma/m = 1\,\mathrm{cm^2\,g^{-1}}$ twin", fontsize=11)
     cb = fig.colorbar(im, ax=axes, fraction=0.02, pad=0.01)
     cb.set_label(r"$\Delta P$(SIDM) when removed (red: pushes to SIDM)")

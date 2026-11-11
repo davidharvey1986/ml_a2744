@@ -573,10 +573,13 @@ class apply_shape_measurement_bias( object ):
         self.bias = bias
         
     def __call__( self, sample ):
-        
-        sample[0] += self.bias['e1']['c'] + self.bias['e1']['m']*sample[0]        
-        sample[1] += self.bias['e2']['c'] + self.bias['e2']['m']*sample[1]
-        
+        # the additive bias only where there are galaxies: empty pixels (no A2744 source) stay zero, as in the
+        # data and the training maps; adding c everywhere filled them with a pattern the networks never saw
+        occupied = ((sample[0] != 0) | (sample[1] != 0)).to(sample.dtype) if hasattr(sample, "to") else \
+            ((sample[0] != 0) | (sample[1] != 0)).astype(sample.dtype)
+        sample[0] += self.bias['e1']['c']*occupied + self.bias['e1']['m']*sample[0]
+        sample[1] += self.bias['e2']['c']*occupied + self.bias['e2']['m']*sample[1]
+
         return sample
 
     

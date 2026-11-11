@@ -633,7 +633,9 @@ GAL_LIMITS = (0.95, 0.8, 0.7)    # galaxy-number fractions shaded in the data sw
 
 def plot_data(out, path, domains=("combined",), paper=False, skip=()):
     '''Each data sweep against its setting, the fiducial setting a star joined into the line (dotted line).
-    paper: only the top row (no z_CDM shifts) and no title.'''
+    paper: the paper figure (plot_data_paper).'''
+    if paper:
+        return plot_data_paper(out, path, skip=skip)
     plt = style()
     sweeps = [("galaxy_low_mag", "Lower magnitude cut (MAG >)"), ("galaxy_high_mag", "Upper magnitude cut (MAG <)"),
               ("galaxy_size", "Size cut (SIZE >)"), ("galaxy_redshift", "Member cut (remove photo-z <)"), ("resolution", "Map resolution [kpc]"),
@@ -729,28 +731,91 @@ def plot_data(out, path, domains=("combined",), paper=False, skip=()):
 
 
 
+def plot_data_paper(out, path, skip=(), d="combined", cdm_limit=-3.0):
+    '''Data systematics for the paper, in the style of the original galaxy-selection figure (SciencePlots, black
+    points with the 16-84% errors joined by a line, the CDM limit dashed, grey bands where fewer than 95 / 90 / 80 /
+    70% of the fiducial galaxies are kept), with the fiducial setting as a star joined into the line.'''
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import scienceplots  # noqa: F401
+    plt.style.use(["science", "grid"])
+    sweeps = [("galaxy_low_mag", "Lower magnitude cut"), ("galaxy_high_mag", "Upper magnitude cut"), ("galaxy_size", "Size cut"),
+              ("galaxy_redshift", "Member cut (photo-$z<$)"), ("resolution", "Map resolution [kpc]"),
+              ("kappa_cut", r"Strong-lensing cut ($\kappa<$)"), ("centring", "A2744 centre offset [kpc]")]
+    sweeps = [s for s in sweeps if s[0] in out and s[0] not in skip]
+    fid = out["fiducial"]
+    f0, e0 = fid["metrics"][d]["log_sigma"], np.array(fid["metrics"][d]["log_sigma_err"])[:, None]
+    fig, axes = plt.subplots(1, len(sweeps), figsize=(3.3 * len(sweeps), 2.6), sharey=True, constrained_layout=True)
+    axes = np.atleast_1d(axes)
+    for ax, (key, xlabel) in zip(axes, sweeps):
+        rows = out[key]
+        x = np.array([r["value"] for r in rows])
+        xf = FIDUCIAL_SETTING.get(key)
+        if key == "galaxy_low_mag" and xf is None:
+            xf = x.min() - 2 * np.diff(np.sort(x)).min()
+        if key == "centring":                              # mean over the 8 directions, range shaded
+            xs = np.unique(x)
+            y = np.array([[r["metrics"][d]["log_sigma"] for r in rows if r["value"] == v] for v in xs])
+            ax.fill_between(np.r_[xf, xs], np.r_[f0, y.min(1)], np.r_[f0, y.max(1)], color="k", alpha=0.12, lw=0)
+            ax.plot(np.r_[xf, xs], np.r_[f0, y.mean(1)], "o-", color="k", ms=4)
+        else:
+            y = np.array([r["metrics"][d]["log_sigma"] for r in rows])
+            err = np.array([r["metrics"][d]["log_sigma_err"] for r in rows]).T
+            o = np.argsort(np.r_[x, xf])
+            ax.plot(np.r_[x, xf][o], np.r_[y, f0][o], "-", color="k", lw=1)
+            ax.errorbar(x, y, err, fmt="o", color="k", ms=4, capsize=2)
+            if key != "resolution":                        # grey bands: fraction of the fiducial galaxies kept
+                frac = np.array([r["n_gal"] for r in rows]) / fid["n_gal"]
+                dx = np.diff(np.sort(x)).min() / 2
+                for limit in (0.95, 0.9, 0.8, 0.7):
+                    low = frac < limit
+                    for k in np.flatnonzero(low):
+                        ax.axvspan(x[k] - dx, x[k] + dx, color="k", alpha=0.07, lw=0, zorder=0)
+                    if low.any():
+                        left = x[low].min() > xf
+                        edge = x[low].min() - dx if left else x[low].max() + dx
+                        ax.annotate(f"{100 * limit:.1f}\\%", (edge, 0.97), xycoords=("data", "axes fraction"),
+                                    xytext=(2 if left else -2, 0), textcoords="offset points", rotation=90,
+                                    ha="left" if left else "right", va="top", fontsize=7)
+        ax.errorbar([xf], [f0], e0, fmt="*", color=FID_COLOUR, mec="k", mew=0.6, ms=11, capsize=2, zorder=6)
+        ax.axhline(cdm_limit, color="k", ls="--", lw=1)
+        ax.text(0.05, (cdm_limit + 4) / 6 + 0.03, "CDM Limit", transform=ax.transAxes, fontsize=10)
+        ax.set_ylim(-4, 2)
+        ax.set_xlabel(xlabel, fontsize=10)
+        if key == "galaxy_low_mag" and FIDUCIAL_SETTING[key] is None:
+            ticks = np.arange(np.ceil(x.min()), x.max() + 1e-6, 1.0)
+            ax.set_xticks(np.r_[xf, ticks], ["none"] + [f"{t:g}" for t in ticks])
+        if key == "galaxy_high_mag":
+            ax.invert_xaxis()
+    axes[0].set_ylabel(r"$\log_{10}\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=10)
+    for ext in ("pdf", "png"):
+        fig.savefig(Path(path).with_suffix(f".{ext}"), dpi=200)
+
+
+
 LEAK_C = 0.094    # c giving the photo-z member leak f_cl = 0.049 within 150 kpc (A2744 <kappa> = 0.52 there; photoz_leak_check.json)
 CONTAMINATION_MAX = 0.2   # |c| shown and counted in the total: about 2x the photo-z leak (the sweep runs to 0.5)
 
 
 def contamination_label(r):
     c = r["value"]
-    return f"c = {c:+g} " + (f"({c / LEAK_C:.1f}× leak)" if c > 0 else "(boost)")
+    return rf"$f_{{\rm cl}} = {c:+g}\,\kappa$"
 
 
 MODEL_GROUPS = [   # key, name, setting label for the annotated end points
     ("contamination", "Cluster-member contamination", contamination_label),
-    ("shape_m", "Multiplicative shear bias, m", lambda r: f"m = {r['value']:+g}"),
-    ("shape_c", "Additive shear bias, c", lambda r: f"c = {r['value']:+g}"),
-    ("redshift", "Source-redshift bias", lambda r: f"$z_s$ × {r['value']:g}"),
-    ("mass", "A2744 mass", lambda r: f"{r['value']:+g}σ"),
-    ("merging", "Merging scenario", lambda r: f"$n_{{\\rm comp}}$ > {r['value']}"),
+    ("shape_m", "Multiplicative shear bias, $m$", lambda r: rf"$m = {r['value']:+g}$"),
+    ("shape_c", "Additive shear bias, $c$", lambda r: rf"$c = {r['value']:+g}$"),
+    ("redshift", "Source-redshift bias", lambda r: rf"$z_s \times {r['value']:g}$"),
+    ("mass", "A2744 mass", lambda r: rf"${r['value']:+g}\sigma$"),
+    ("merging", "Merging scenario", lambda r: rf"$n_{{\rm comp}} > {r['value']}$"),
     ("projection", "Projection depth", lambda r: f"{r['value']:g} cMpc"),
 ]
 NOT_IN_TOTAL = {"resolution"}     # a choice of map, not an uncertainty in the data: shown, left out of the total
 
 
-def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_shifts=True):
+def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_shifts=True, row_height=0.3, stat=None, centre=None, fid_label=False):
     '''
     The combined (BAHAMAS + DARKSKIES) log10 sigma/m for each systematic in groups: one row per systematic,
     ordered by its spread, each setting a dot on a bar spanning its range, the two extremes labelled and
@@ -762,21 +827,31 @@ def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_sh
     groups = [g for g in groups if out.get(g[0])]
     if not groups:
         return
+    if centre is not None:                    # move the fiducial to centre (e.g. figure 7's GP maximum likelihood),
+        import copy                           # every setting by the same amount: the shifts are unchanged
+        out = copy.deepcopy(out)
+        delta = centre - out["fiducial"]["metrics"][d]["log_sigma"]
+        for rows in [[out["fiducial"]]] + [out[g[0]] for g in groups]:
+            for r in rows:
+                r["metrics"][d]["log_sigma"] += delta
     f = out["fiducial"]["metrics"][d]
     f0, (lo, hi) = f["log_sigma"], f["log_sigma_err"]
+    import scienceplots  # noqa: F401                  # the paper style: SciencePlots, LaTeX text
+    plt.style.use(["science", "grid"])
+    stat_lo, stat_hi = (f0 - lo, f0 + hi) if stat is None else stat    # stat: (16%, 84%) of another posterior (e.g. figure 7's GP)
     vals = {g[0]: np.array([r["metrics"][d]["log_sigma"] for r in out[g[0]]]) for g in groups}
     groups.sort(key=lambda g: (g[0] not in NOT_IN_TOTAL, np.ptp(vals[g[0]])))   # largest spread at the top
     total = [v for k, v in vals.items() if k not in NOT_IN_TOTAL]
     sys_lo = np.sqrt(sum(min(v.min() - f0, 0) ** 2 for v in total))
     sys_hi = np.sqrt(sum(max(v.max() - f0, 0) ** 2 for v in total))
-    span = (min([f0 - lo, f0 - sys_lo] + [v.min() for v in total]), max([f0 + hi, f0 + sys_hi] + [v.max() for v in total]))
+    span = (min([stat_lo, f0 - sys_lo] + [v.min() for v in total]), max([stat_hi, f0 + sys_hi] + [v.max() for v in total]))
     pad = 0.2 * (span[1] - span[0])                     # room for the end labels
     xlo, xhi = span[0] - pad, span[1] + pad
     blue, bar, grey = "#1f5fa8", "#c7d3e0", "#9aa3ad"
     n = len(groups)
     base = 2 if show_total else 1                       # rows below the systematics: statistical (+ total)
-    fig, ax = plt.subplots(figsize=(8.4, 0.5 * (n + base) + 1.4), constrained_layout=True)
-    ax.plot([f0, f0], [-0.6, n + base - 0.4], color=INK, lw=1, zorder=1)
+    fig, ax = plt.subplots(figsize=(8.4, row_height * (n + base) + 1.4), constrained_layout=True)
+    ax.plot([f0, f0], [-0.6, n + base + 0.2], color=INK, lw=1, zorder=1)
 
     def shift(x):
         return f"{x + 0:+.2f}".replace("-0.00", "+0.00")
@@ -802,34 +877,35 @@ def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_sh
         ends = [(i_lo, "left"), (i_hi, "right")]
         if out_ax[i_lo]:                        # settings beyond the axis: one label at the arrow
             beyond = [lab(rows[i]) for i in np.where(v < xlo)[0]]
-            ax.annotate(f"{beyond[0]} … {beyond[-1]}: {v[v < xlo].max():+.2f} to {v.min():+.2f}"
+            ax.annotate(f"{beyond[0]} -- {beyond[-1]}: {v[v < xlo].max():+.2f} to {v.min():+.2f}"
                         + (" (unconstrained)" if unc[v < xlo].all() else ""),
                         (vc[i_lo], y), xytext=(0, -7), textcoords="offset points", ha="left", va="top",
                         fontsize=7.5, color=MUTED)
             ends = [(i_hi, "right")]
         for i, ha in ends:                      # beside the bar ends
-            ax.annotate(lab(rows[i]), (vc[i], y), xytext=(-7 if ha == "left" else 7, 0), textcoords="offset points",
-                        ha="right" if ha == "left" else "left", va="center", fontsize=7.5, color=MUTED)
+            ax.annotate(lab(rows[i]), (vc[i], y), xytext=(-10 if ha == "left" else 10, 0), textcoords="offset points",
+                        ha="right" if ha == "left" else "left", va="center", fontsize=10, color=MUTED)
         right(y, f"{shift(v.min() - f0)} / {shift(v.max() - f0)}" + (" *" if key in NOT_IN_TOTAL else ""), color=INK)
     ax.axhline(base - 0.5, color="#d5d9de", lw=0.8)
     if show_total:
         ax.plot([f0 - sys_lo, f0 + sys_hi], [1, 1], color=blue, lw=6, solid_capstyle="round", zorder=2)
-        right(1, f"{-sys_lo:+.2f} / {sys_hi:+.2f}", color=INK, fontweight="bold")
-    ax.plot([f0 - lo, f0 + hi], [0, 0], color=grey, lw=6, solid_capstyle="round", zorder=2)
-    right(0, f"{-lo:+.2f} / {hi:+.2f}", color=INK, fontweight="bold")
-    ax.annotate(f"fiducial {f0:+.2f}", (f0, n + base - 0.3), ha="center", va="bottom", fontsize=8.5, color=INK)
+        right(1, f"{-sys_lo:+.2f} / {sys_hi:+.2f}", color=INK)
+    ax.plot([stat_lo, stat_hi], [0, 0], color=grey, lw=6, solid_capstyle="round", zorder=2)
+    right(0, f"{-lo:+.2f} / {hi:+.2f}", color=INK)
+    if fid_label:
+        ax.annotate(f"fiducial {f0:+.2f}", (f0, n + base - 0.3), ha="center", va="bottom", fontsize=8.5, color=INK)
     right(n + base - 0.1, "shift from fiducial", color=MUTED)
     names = [g[1] for g in groups]
-    total_name = "All systematics (quadrature)" + ("*" if any(g[0] in NOT_IN_TOTAL for g in groups) else "")
-    ax.set_yticks(range(n + base), ["Statistical (posterior 16–84%)"] + [total_name] * show_total + names)
-    for t in ax.get_yticklabels()[:base]:
-        t.set_fontweight("bold")
-    ax.tick_params(axis="y", length=0, labelsize=9.5, labelcolor=INK)
-    ax.set_ylim(-0.6, n + base + 0.2)
+    total_name = r"\textbf{All systematics (quadrature)}" + ("*" if any(g[0] in NOT_IN_TOTAL for g in groups) else "")
+    ax.set_yticks(range(n + base), [r"\textbf{Statistical (posterior 16--84\%)}"] + [total_name] * show_total + names)
+    ax.tick_params(axis="y", length=0, labelsize=13, labelcolor=INK, which="both")
+    ax.tick_params(axis="y", which="minor", left=False, right=False)
+    ax.tick_params(axis="x", labelsize=12)
+    ax.set_ylim(-0.6, n + base + 0.2 if (fid_label or show_shifts) else n + base - 0.4)
     ax.grid(axis="y", visible=False)
     pass                                                # full frame on every plot
     ax.set_xlim(xlo, xhi)
-    ax.set_xlabel(r"$\log_{10}\,(\sigma/m\ /\ {\rm cm^2\,g^{-1}})$ inferred for A2744")
+    ax.set_xlabel(r"$\log_{10}\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=15)
     if title:
         ax.set_title(title, color=INK, fontsize=11, loc="left", pad=14)
     if any(g[0] in NOT_IN_TOTAL for g in groups):
@@ -852,6 +928,8 @@ def main():
     out_dir = LAUNCH_DIR / (opts.out_dir or REPO / "sbi" / "results" / f"systematics_{opts.model}")
     out_dir.mkdir(parents=True, exist_ok=True)
     opts.summaries = str((LAUNCH_DIR / opts.summaries).resolve())
+    if opts.dz_summaries:                                # relative to the launch directory, as --summaries
+        opts.dz_summaries = str((LAUNCH_DIR / opts.dz_summaries).resolve())
     R = Runner(opts, out_dir)
     print(f"  clusters simulated: " + ", ".join(f"{d} {len(R.sel[d]['filename'])}" for d in DOMAINS))
     out = run_tests(R, opts.tests)
