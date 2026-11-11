@@ -38,7 +38,7 @@ def main():
     p.add_argument("--no-lenstool", action="store_true", help="leave out the Lenstool model")
     p.add_argument("--sims", action="store_true", help="add the median (16-84%% shaded) of mass-matched CDM and "
                    "sigma/m = 1 BAHAMAS clusters (n_comp >= 2, within 0.15 dex of the Jauzac mass, final summaries)")
-    p.add_argument("--mass-study", default="harvey_g1v2", help="mass_weighting study the clusters are matched to "
+    p.add_argument("--mass-study", default="jauzac", help="mass_weighting study the clusters are matched to "
                    "(harvey_g1v2: Harvey with the core rescaled to the new Lenstool O2)")
     p.add_argument("--core-only", action="store_true", help="match on the study's main-halo (core) mass alone")
     p.add_argument("--rmax", type=float, default=EDGES[-1], help="outer radius shown [kpc]")

@@ -37,7 +37,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--tag", default="final")
     ap.add_argument("--min-ncomp", type=int, default=2)
-    ap.add_argument("--studies", nargs="+", default=["harvey", "jauzac"], help="mass_weighting studies, one panel each")
+    ap.add_argument("--studies", nargs="+", default=["jauzac"], help="mass_weighting studies, one panel each")
     ap.add_argument("--out", default=None)
     opts = ap.parse_args()
     import matplotlib

@@ -76,7 +76,7 @@ def parse():
     p.add_argument("--model", default="tweakedalign_k0p9_ctr_ba_best")
     p.add_argument("--include-str", default="spin2_ft_")
     p.add_argument("--nmodels", type=int, default=None)
-    p.add_argument("--study", default="harvey", choices=sorted(A2744_MASSES))
+    p.add_argument("--study", default="jauzac", choices=sorted(A2744_MASSES))
     p.add_argument("--n", type=int, default=60, help="main clusters per cross-section")
     p.add_argument("--min-sigma", type=float, default=0.1, help="floor on the width of the core-mass Gaussian [dex]")
     p.add_argument("--main-min-ncomp", type=int, default=1, help="merger class of the main clusters: n_comp >= this")

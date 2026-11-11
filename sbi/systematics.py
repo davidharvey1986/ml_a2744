@@ -142,7 +142,7 @@ def parse():
     p.add_argument("--dz-summaries", default=None,
                    help="FLAMINGO projection-depth summaries (sbi/dz_cx.sh; default <summaries>_dz)")
     p.add_argument("--max-clusters", type=int, default=None, help="random subset per simulation (quick checks)")
-    p.add_argument("--mass-study", default="harvey", choices=["harvey", "jauzac", "harvey_g1v2"],
+    p.add_argument("--mass-study", default="jauzac", choices=["harvey", "jauzac", "harvey_g1v2"],
                    help="A2744 mass (mass_weighting.a2744_mass_gaussian): weights, the mass sweep and the clusters simulated")
     return p.parse_args()
 

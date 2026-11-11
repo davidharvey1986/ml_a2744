@@ -36,7 +36,7 @@ HALOS = {"core": ("O2", "#000000"), "nw": ("O1", "#CC79A7"), "n": ("O3", "#009E7
 def parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--summaries", required=True)
-    p.add_argument("--study", default="harvey", choices=sorted(A2744_MASSES))
+    p.add_argument("--study", default="jauzac", choices=sorted(A2744_MASSES))
     p.add_argument("--min-ncomp", type=int, default=2)
     p.add_argument("--min-sigma", type=float, default=0.1, help="floor on the width of each halo's log-mass Gaussian")
     p.add_argument("--min-neff", type=float, default=5)

@@ -489,7 +489,7 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
     from mass_weighting import a2744_mass_gaussian
 
     cdm = 3e-3
-    mu, sig = a2744_mass_gaussian(study="harvey")
+    mu, sig = a2744_mass_gaussian()
     curves = {d: summary_curve(summaries, d, mu, sig, min_ncomp) for d in ["bahamas", "darkskies"]}
     curves.update({d: summary_curve(path, d, mu, sig, min_ncomp) for d, path in extra.items()})
     obsprob = np.load(f"{summaries}/obs.npz")["softmax"][:, 0]           # (n_models,), P(SIDM)
@@ -1124,7 +1124,7 @@ def bmode_check(nmonte=200, seed=0, image_size=100):
     return np.array(rotated).ravel(), np.asarray(kappa_b).ravel()
 
 
-def figureA1():
+def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac.npz"):
     
     nrow = 2 
     ncol = 3
@@ -1372,7 +1372,7 @@ def figureA1():
     ####################################
     # from sbi/main_halo_lenstool.py --no-lenstool --sims (mass-matched BAHAMAS, n_comp >= 2)
     ax = plt.subplot(nrow,ncol,6)
-    prof = np.load("../sbi/results/main_halo_profile/main_halo_sims.npz")
+    prof = np.load(profile_npz)
     ax.axhline(0, color="0.5", lw=0.8)
     for key, col, lab in (("sim_0", "k", "BAHAMAS CDM"), ("sim_1", "#D55E00", r"BAHAMAS $\sigma/m=1$ cm$^2$g$^{-1}$")):
         if key in prof:
@@ -2146,7 +2146,7 @@ def figure5_summaries(tag=PAPER_TAG, min_ncomp=2, ml_only=False):
     '''
     from mass_weighting import a2744_mass_gaussian
     paths = paper_paths(tag)
-    mu, sig = a2744_mass_gaussian(study="harvey")
+    mu, sig = a2744_mass_gaussian()
     sigmas, curve = combined_curve(paths["summaries"], mu, sig, min_ncomp)
     p_obs = np.load(f"{paths['summaries']}/obs.npz")["softmax"][:, 0]
     gp, x, post, (med, lo, hi) = sigma_posterior(sigmas, curve, p_obs)
@@ -2345,7 +2345,7 @@ def figureA3_summaries(tag=PAPER_TAG, nshow=4, min_ncomp=2, seed=42):
     '''
     from mass_weighting import a2744_mass_gaussian
     d = paper_paths(tag)["summaries"] + "_latents"
-    mu, _ = a2744_mass_gaussian(study="harvey")
+    mu, _ = a2744_mass_gaussian()
     obs = np.load(f"{d}/obs.npz")["latents"][:, 0]                          # (n_models, 512)
     lat, par = {}, {}
     for dom in ("bahamas", "darkskies"):

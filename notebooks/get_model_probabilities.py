@@ -672,7 +672,7 @@ def get_variable_redshift_dist(data_dir="../data/100/a2744/", ifilter="concat"):
     return n_z
 
 
-def get_mass_cut(ifilter, zl=0.305, zs=1.6, thresh=0.0, nsigma=2, study="harvey"):
+def get_mass_cut(ifilter, zl=0.305, zs=1.6, thresh=0.0, nsigma=2, study="jauzac"):
     """
     Return the log10 mass threshold (and confidence interval) consistent with
     published mass measurements of Abell 2744 (numbers in mass_weighting.py).

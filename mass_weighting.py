@@ -15,6 +15,9 @@ the Gaussian whatever the simulation.
 import numpy as np
 from scipy.stats import gaussian_kde, norm
 
+# Fiducial A2744 mass for the paper (all defaults below)
+FIDUCIAL_STUDY = "jauzac"
+
 # Core + NW + N substructure masses [1e13 Msun] and their (lower, upper) errors
 A2744_MASSES = {
     "harvey": {"core": 16.0, "nw": 10.8, "n": 6.5},
@@ -29,7 +32,7 @@ A2744_ERRORS = {
 }
 
 
-def a2744_log_mass(nsigma=2, study="harvey"):
+def a2744_log_mass(nsigma=2, study=FIDUCIAL_STUDY):
     """log10 of the total A2744 substructure mass and its nsigma (lower, upper) bounds."""
     mass = A2744_MASSES[study]
     err = A2744_ERRORS[study]
@@ -38,7 +41,7 @@ def a2744_log_mass(nsigma=2, study="harvey"):
     return np.log10(est * 1e13), np.log10(np.array([est - nsigma * lo, est + nsigma * hi]) * 1e13)
 
 
-def a2744_mass_gaussian(study="harvey"):
+def a2744_mass_gaussian(study=FIDUCIAL_STUDY):
     """(mu, sigma) in log10 Msun: the measurement and the mean of its 1-sigma log errors."""
     mu, (lo, hi) = a2744_log_mass(nsigma=1, study=study)
     return mu, 0.5 * (hi - lo)

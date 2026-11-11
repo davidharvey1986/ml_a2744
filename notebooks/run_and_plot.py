@@ -107,7 +107,7 @@ def figure2(results_file="pickles/all_models_concat_nz_alignbest_wb1_results.pkl
 
     fig, axarr = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
 
-    postive_mass, mass_cut = get_mass_cut(ifilter, nsigma=2, study="harvey")
+    postive_mass, mass_cut = get_mass_cut(ifilter, nsigma=2)
     mass_cut = list(mass_cut)
 
     domain = {"tgt": "darkskies_obs", "src": "bahamas_obs"}
@@ -125,7 +125,7 @@ def figure2(results_file="pickles/all_models_concat_nz_alignbest_wb1_results.pkl
         domain_name    = domain[target].split("_")[0]
 
         if mass_weighting == "gaussian":
-            mass_kwargs = {"mass_gaussian": a2744_mass_gaussian(study="harvey")}
+            mass_kwargs = {"mass_gaussian": a2744_mass_gaussian()}
         elif mass_weighting == "cut":
             mass_kwargs = {"mass_cut": mass_cut,
                            "mass_weights": get_massfunction_weights(domain_name)}
