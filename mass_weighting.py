@@ -12,11 +12,14 @@ so abundant low-mass clusters are not over-weighted and the weighted sample foll
 the Gaussian whatever the simulation.
 """
 
+import os
+
 import numpy as np
 from scipy.stats import gaussian_kde, norm
 
-# Fiducial A2744 mass for the paper (all defaults below)
-FIDUCIAL_STUDY = "jauzac"
+# Fiducial A2744 mass for the paper (all defaults below); the MASS_STUDY environment variable overrides it
+# (notebooks/paper_figures.py --mass-study sets it for every figure)
+FIDUCIAL_STUDY = os.environ.get("MASS_STUDY", "jauzac")
 
 # Core + NW + N substructure masses [1e13 Msun] and their (lower, upper) errors
 A2744_MASSES = {
@@ -32,8 +35,9 @@ A2744_ERRORS = {
 }
 
 
-def a2744_log_mass(nsigma=2, study=FIDUCIAL_STUDY):
+def a2744_log_mass(nsigma=2, study=None):
     """log10 of the total A2744 substructure mass and its nsigma (lower, upper) bounds."""
+    study = study or FIDUCIAL_STUDY
     mass = A2744_MASSES[study]
     err = A2744_ERRORS[study]
     est = sum(mass.values())
@@ -41,7 +45,7 @@ def a2744_log_mass(nsigma=2, study=FIDUCIAL_STUDY):
     return np.log10(est * 1e13), np.log10(np.array([est - nsigma * lo, est + nsigma * hi]) * 1e13)
 
 
-def a2744_mass_gaussian(study=FIDUCIAL_STUDY):
+def a2744_mass_gaussian(study=None):
     """(mu, sigma) in log10 Msun: the measurement and the mean of its 1-sigma log errors."""
     mu, (lo, hi) = a2744_log_mass(nsigma=1, study=study)
     return mu, 0.5 * (hi - lo)

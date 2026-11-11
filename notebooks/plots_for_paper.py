@@ -30,6 +30,10 @@ the paper. These include=
 if not os.path.isdir("plots"):
     os.system("mkdir plots")
 
+SBI_DIR = "../sbi"
+FIDUCIAL = "wb1"                                        # wb1: bahamas_1 kept in the fine-tuning (nob1: "spin2cx")
+PAPER_TAG = "final"                                     # ba_final: the 30 fine-tuned seeds, final checkpoints
+
 def kappa_on_stamp(path, cat, downsample=2):
     '''
     A convergence map (FITS with a celestial WCS) in the figure-1 pixel frame (stamp pixel
@@ -1063,6 +1067,18 @@ def figure5():
     
     return log_max_like, log_like_one_sigma
 
+def figure6_summaries(tag=PAPER_TAG, min_ncomp=2, merger=True):
+    '''Figure 6 (particle physics) at the maximum likelihood of the paper GP posterior with its 16-84% interval.'''
+    from mass_weighting import a2744_mass_gaussian
+    mu, sig = a2744_mass_gaussian()
+    paths = paper_paths(tag)
+    sigmas, curve = combined_curve(paths["summaries"], mu, sig, min_ncomp)
+    p_obs = np.load(f"{paths['summaries']}/obs.npz")["softmax"][:, 0]
+    gp, x, post, (med, lo, hi) = sigma_posterior(sigmas, curve, p_obs)
+    ml = x[np.argmax(post)]
+    figure6(ml, np.array([ml - lo, hi - ml]), merger=merger)
+
+
 def figure6( log_max_like, log_error, merger=True):
     
     max_like = 10**log_max_like
@@ -2095,16 +2111,14 @@ def figureA5(log_max_like, log_error):
 # The functions above read the notebooks/pickles of the original analysis. These make the same
 # figures from the outputs of sbi/ (make_summaries.py, sensitivity.py, systematics.py) for one
 # ensemble, PAPER_TAG; `python plots_for_paper.py` remakes all of them.
-FIDUCIAL = "wb1"                                        # wb1: bahamas_1 kept in the fine-tuning (nob1: "spin2cx")
-PAPER_TAG = "final"                                     # ba_final: the 30 fine-tuned seeds, final checkpoints
-SBI_DIR = "../sbi"
 
 
 def paper_paths(tag=PAPER_TAG):
+    from mass_weighting import FIDUCIAL_STUDY            # the systematics run is per A2744 mass study
     s = f"{SBI_DIR}/summaries_{FIDUCIAL}_{tag}_n5"
     return {"summaries": s, "flamingo": f"{s}_flamingo",
             "sensitivity": f"{SBI_DIR}/results/sensitivity_{FIDUCIAL}_{tag}_w4s1/sensitivity.npz",
-            "systematics": f"{SBI_DIR}/results/systematics_{FIDUCIAL}_{tag}/systematics.json"}
+            "systematics": f"{SBI_DIR}/results/systematics_{FIDUCIAL}_{tag}_{FIDUCIAL_STUDY}/systematics.json"}
 
 
 def combined_curve(summaries, mu, sig, min_ncomp=2):
@@ -2196,6 +2210,9 @@ def figure5_summaries(tag=PAPER_TAG, min_ncomp=2, ml_only=False):
     filename = f"plots/output_to_model_ba_{tag}.pdf"
     plt.savefig(filename)
     plt.savefig(filename.replace(".pdf", ".png"), dpi=200)
+    import json
+    json.dump({"ml": round(float(ml), 3), "median": round(float(med), 3), "lo": round(float(lo), 3), "hi": round(float(hi), 3)},
+              open(f"plots/gp_posterior_ba_{tag}.json", "w"), indent=1)
     print(f"Saved {filename}: ML log10 sigma/m = {ml:.3f} ({10 ** ml:.2f}); median log10 sigma/m = {med:.2f} [{lo:.2f}, {hi:.2f}]; sigma/m = "
           f"${best:.2f}^{{+{e_hi:.2f}}}_{{-{e_lo:.2f}}}$")
     return med, np.array([med - lo, hi - med])
@@ -2418,28 +2435,98 @@ def figureA4A5_systematics(tag=PAPER_TAG):
     print(f"Copied the systematics figures from {d}")
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Figures drawn from results that sbi/ computes. The heavy computation stays in sbi/ (sensitivity maps, ratio scan,
+# systematics runs); these functions only draw the paper versions, in the paper style, into plots/.
+# ---------------------------------------------------------------------------------------------------------------------
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _run_sbi(script, *args):
+    '''Run sbi/<script> as __main__ with the given arguments (each paper figure runs in its own process, see
+    paper_figures.py, so its global state does not leak into other figures).'''
+    import runpy
+    argv, cwd = sys.argv, os.getcwd()
+    sys.argv = [script] + [str(a) for a in args]
+    sys.path.insert(0, os.path.join(REPO, "sbi"))
+    plt.rcdefaults()                     # the scripts set their own style; not the LaTeX style this module sets
+    try:
+        runpy.run_path(os.path.join(REPO, "sbi", script), run_name="__main__")
+    finally:
+        sys.argv = argv
+        os.chdir(cwd)
+
+
+def figure_sensitivity_map(pairs=(7, 10, 12, 15, 16), out="plots/sensitivity_map_pairs"):
+    '''Occlusion-sensitivity maps of SIDM / CDM-twin pairs next to A2744 (sbi/pairs_obs_panel.py; needs the
+    catalogue for the A2744 KS map, and the pair maps from sbi/pair_sensitivity.py).'''
+    _run_sbi("pairs_obs_panel.py", "--pairs", *pairs, "--out", os.path.abspath(out))
+
+
+def figure_p_vs_mass(tag=PAPER_TAG, out="plots/p_vs_mass"):
+    '''Mass-weighted mean P(SIDM) against log M(<750 kpc) for BAHAMAS, DARKSKIES and FLAMINGO CDM with A2744
+    (sbi/p_vs_mass.py), in the Figure 2 panel shape.'''
+    _run_sbi("p_vs_mass.py", "--tags", tag, "--ncomp", 2, "--no-lenstool-ks", "--harvey", "none", "--xlim", 14, 15.1,
+             "--ylim", 0.4, 0.75, "--no-title", "--paper-style", "--figsize", 5.6, 5.0, "--box-aspect", 0.78,
+             "--exclude", "tng", "--no-spread", "--out", os.path.abspath(f"{out}_ba_{tag}"))
+
+
+def figure_shear_ratio(npz=None, out="plots/shear_ratio_scatter_50-100", recompute=False, tag=PAPER_TAG):
+    '''P(SIDM) against the shear ratio <chi_t>(50-100 kpc) / <chi_t>(outer annulus) for mass-matched BAHAMAS
+    clusters, outer annuli 100-300 ... 700-900 kpc, +-0.25 dex mass window. Redrawn from the saved scan (no
+    catalogue); recompute=True reruns sbi/ratio_scan.py first (rebuilds the catalogue).'''
+    sys.path.insert(0, os.path.join(REPO, "sbi"))
+    scan_dir = os.path.abspath("plots/ratio_scan_50-100")
+    npz = npz or os.path.join(scan_dir, "ratio_scan_scatter.npz")
+    if recompute:
+        _run_sbi("ratio_scan.py", "--summaries", os.path.join(REPO, "sbi", f"summaries_{FIDUCIAL}_{tag}_n5"),
+                 "--num-kpc", 50, 100, "--den-start", 100, "--den-width", 200, "--mass-window", 0.25, "--out-dir", scan_dir)
+    from ratio_plot import plot_grid
+    plt.rcdefaults()                     # ratio_plot sets its own style, on sbi/sensitivity.style() (muted tick labels)
+    plt.rcParams.update({"axes.edgecolor": "k", "xtick.color": "#6b6b6b", "ytick.color": "#6b6b6b",
+                         "axes.labelcolor": "#222222", "legend.frameon": False, "font.size": 10})
+    plot_grid(npz, out)
+
+
+def figure_systematics(tag=PAPER_TAG, out_dir="plots"):
+    '''Figures A4 (data) and A5 (model systematics) from the sbi/systematics.py run (paper_paths()["systematics"]).
+    The model plot is centred on the maximum likelihood of the paper GP posterior with its 16-84% range as the
+    statistical bar (plots/gp_posterior_ba_<tag>.json, written by figure5_summaries).'''
+    import json
+    from pathlib import Path
+    sys.path.insert(0, os.path.join(REPO, "sbi"))
+    import systematics as sy
+    out = json.load(open(paper_paths(tag)["systematics"]))
+    gp = json.load(open(f"plots/gp_posterior_ba_{tag}.json"))
+    model = {**out, "contamination": [r for r in out.get("contamination", []) if abs(r["value"]) <= sy.CONTAMINATION_MAX + 1e-9]}
+    sy.plot_ranges(model, Path(out_dir) / f"systematics_model_paper_ba_{tag}", list(sy.MODEL_GROUPS), None,
+                   show_total=False, show_shifts=False, stat=(gp["lo"], gp["hi"]), centre=gp["ml"])
+    sy.plot_data(out, Path(out_dir) / f"systematics_data_paper_ba_{tag}", paper=True,
+                 skip=("galaxy_low_mag", "galaxy_high_mag", "galaxy_size"))
+
+
+def figure_pooled_tail(tag=PAPER_TAG, out="plots/cdm_pooled_tail"):
+    '''Pooled CDM P(SIDM) distribution against A2744 (sbi/cdm_pooled_tail.py).'''
+    from mass_weighting import FIDUCIAL_STUDY
+    _run_sbi("cdm_pooled_tail.py", "--tag", tag, "--studies", FIDUCIAL_STUDY, "--out", os.path.abspath(f"{out}_{tag}_nc2"))
+
+
+def figure_empirical_posterior(tag=PAPER_TAG, out="plots/empirical_posterior"):
+    '''Empirical posterior on sigma/m from the mass-weighted simulations (sbi/empirical_posterior.py).'''
+    from mass_weighting import FIDUCIAL_STUDY
+    _run_sbi("empirical_posterior.py", "--summaries", os.path.join(REPO, "sbi", f"summaries_{FIDUCIAL}_{tag}_n5"),
+             "--mass-study", FIDUCIAL_STUDY, "--out", os.path.abspath(f"{out}_ba_{tag}"))
+
+
 def all_figures(tag=PAPER_TAG):
-    print("Figure 1");  figure1()
-    figure1(SL_KAPPA_MAP)
-    print("Figure 2");  figure2_summaries(paper_paths(tag)["summaries"], {d: paper_paths(tag)["flamingo"] for d in ("flamingo", "tng")},
-                                          tag=f"ba_{tag}")
-    print("Figure 3");  figure3_sensitivity(tag)
-    print("Figure 4");  figure4_sensitivity(tag)
-    print("Figure 5");  log_sigma, log_error = figure5_summaries(tag)
-    print("Figure 6");  figure6(log_sigma, log_error)
-    print("Figure A1"); figureA1()
-    print("Figure A2"); figureA2_summaries(tag)
-    print("Figure A3"); figureA3_summaries(tag)
-    print("Figure A4, A5"); figureA4A5_systematics(tag)
+    '''All paper figures in one process. paper_figures.py does the same with each figure in its own process and
+    collects them under the paper's file names; prefer it.'''
+    os.system(f"{sys.executable} paper_figures.py --tag {tag}")
 
 
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["figure1"]:
-        # python plots_for_paper.py figure1 [strong-lensing kappa.fits]
-        figure1(*sys.argv[2:3])
-        sys.exit()
+    # python plots_for_paper.py <function> : one figure in this process (e.g. figure2_summaries, figureA1)
     if sys.argv[1:2] and sys.argv[1] != "all":
-        # python plots_for_paper.py figure2_summaries | figure5_summaries | ... : one figure from the current pipeline
         globals()[sys.argv[1]]()
         sys.exit()
     all_figures()
