@@ -40,7 +40,7 @@ def main():
                    "sigma/m = 1 BAHAMAS clusters (n_comp >= 2, within 0.15 dex of the Jauzac mass, final summaries)")
     p.add_argument("--mass-study", default="jauzac", help="mass_weighting study the clusters are matched to "
                    "(harvey_g1v2: Harvey with the core rescaled to the new Lenstool O2)")
-    p.add_argument("--core-only", action="store_true", help="match on the study's main-halo (core) mass alone")
+    p.add_argument("--core-only", action="store_true", default=False, help="match on the study's main-halo (core) mass alone")
     p.add_argument("--rmax", type=float, default=EDGES[-1], help="outer radius shown [kpc]")
     p.add_argument("--nbins", type=int, default=len(EDGES) - 1, help="log radial bins between 20 and 1500 kpc")
     p.add_argument("--out", default=str(OUT))

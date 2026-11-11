@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 '''
 2 x 5 figure: occlusion-sensitivity maps of selected SIDM / CDM-twin pairs (pair_sensitivity.py outputs; CDM top,
-SIDM bottom) next to A2744. Black: reconstructed kappa S/N 2,3,4,6,8 (one noise draw for the sims); dotted: true
+SIDM bottom) next to A2744. Black: reconstructed kappa S/N 2,4,8,12 (one noise draw for the sims); dotted: true
 kappa (sims). A2744: KS kappa S/N (top), Lenstool model kappa and halos (bottom).
 
     astro-env/bin/python sbi/pairs_obs_panel.py --pairs 7 10 12 15
@@ -82,7 +82,7 @@ def main():
     obs_p = np.load(REPO / "sbi" / "summaries_wb1_final_n5" / "obs.npz")["softmax"][:, 0].mean()
     ptxt = f", P(SIDM) = {obs_p:.2f}"
     k_lt = lenstool_kappa_on_stamp(forward)
-    cols.append(([{"delta": delta, "kappa_snr": k_snr, "title": f"A2744 (data){ptxt}\nKS κ S/N 2,3,4,6,8"},
+    cols.append(([{"delta": delta, "kappa_snr": k_snr, "title": f"A2744 (data){ptxt}\nKS κ S/N 2,4,8,12"},
                   {"delta": delta, "kappa_snr": np.zeros_like(k_snr), "lenstool_kappa": k_lt, "halos": halos,
                    "title": "A2744 (data)\nLenstool model κ 0.1–0.8 (z$_s$ = 2)"}], z["centres"]))
 
@@ -102,7 +102,7 @@ def main():
             axes[r, c].text(0.03, 0.97, t, transform=axes[r, c].transAxes, ha="left", va="top", fontsize=8,
                             bbox=dict(facecolor="white", edgecolor="none", alpha=0.8, pad=1.5))
     axes[0, 0].set_ylabel("CDM twin", fontsize=11)
-    axes[1, 0].set_ylabel("SIDM σ/m = 1", fontsize=11)
+    axes[1, 0].set_ylabel(r"SIDM $\sigma/m = 1\,\mathrm{cm^2\,g^{-1}}$ twin", fontsize=11)
     cb = fig.colorbar(im, ax=axes, fraction=0.02, pad=0.01)
     cb.set_label(r"$\Delta P$(SIDM) when removed (red: pushes to SIDM)")
     for e in ("png", "pdf"):

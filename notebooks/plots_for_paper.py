@@ -385,7 +385,7 @@ def figure2():
                            alpha=0.2, label=domain_name.upper())
 
 
-            axarr[1].set_xlabel("Model output", fontsize=15)
+            axarr[1].set_xlabel(r"$P(\mathrm{SIDM})$", fontsize=15)
             axarr[1].set_ylabel("Probability distribution", fontsize=15)
 
             axarr[1].set_xlim(0.475, 0.65)
@@ -406,7 +406,7 @@ def figure2():
     axarr[0].set_xscale('log')
 
     axarr[0].set_xlabel("Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
-    axarr[0].set_ylabel("Model output", fontsize=15)
+    axarr[0].set_ylabel(r"$P(\mathrm{SIDM})$", fontsize=15)
 
     axarr[0].set_xlim(1e-3,1.5)
     axarr[0].set_xscale('log')
@@ -476,9 +476,40 @@ def summary_curve(summaries, domain, mu, sig, min_ncomp=2):
     return sigmas, out
 
 
+def _pooled_tail_panel(ax, curves, mu, sig, min_ncomp, p_obs, pooled_tag):
+    '''Figure 2 right panel: mass-weighted P(SIDM) of each CDM cluster (n_comp >= min_ncomp, every noise draw),
+    per simulation and pooled with equal weight per simulation; shaded: the pooled fraction above A2744.'''
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sbi"))
+    from cdm_pooled_tail import load as load_cdm
+    x = np.linspace(0.15, 0.9, 800)
+    sims = [d for d in curves]
+    pooled, P, W, kmax = np.zeros_like(x), [], [], 0
+    for sim in sims:
+        p, w, _, _ = load_cdm(pooled_tag, sim, mu, sig, min_ncomp)
+        k = gaussian_kde(p, weights=w)(x)
+        pooled += k / len(sims)
+        kmax = max(kmax, k.max())
+        P.append(p); W.append(w / len(sims))
+        ax.plot(x, k, color=COLOUR_SCHEME[sim], lw=1.2)
+        ax.fill_between(x, k, color=COLOUR_SCHEME[sim], alpha=0.15, lw=0, label=sim.upper())
+    P, W = np.concatenate(P), np.concatenate(W)
+    f = W[P >= p_obs].sum()
+    ax.plot(x, pooled, color="k", lw=2, ls="--", label="Marginalised CDM")
+    m = x >= p_obs
+    ax.fill_between(x[m], pooled[m], color="k", alpha=0.35, lw=0, label=rf"$P(\mathrm{{SIDM}}) \geq$ A2744: {100 * f:.1f}\% ({norm.isf(f):.2f}$\sigma$)")
+    ax.axvline(p_obs, color="k", lw=2)
+    ax.text(p_obs + 0.01, 0.55, "A2744", transform=ax.get_xaxis_transform(), ha="left", va="center", fontsize=13)
+    ax.set_xlabel(r"$P(\mathrm{SIDM})$ of each CDM cluster", fontsize=15)
+    ax.set_ylabel("Probability distribution", fontsize=15)
+    ax.set_xlim(0.15, 0.9)
+    ax.set_ylim(0, 1.45 * kmax)
+    ax.legend(ncols=2, loc="upper left", fontsize=9)
+    print(f"pooled CDM above A2744 ({p_obs:.3f}): {100 * f:.2f}% ({norm.isf(f):.2f} sigma)")
+
+
 def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
                       extra={"flamingo": "../sbi/summaries_ba_best_n5_flamingo"},
-                      min_ncomp=2, tag="ba_best", show_obs=True):
+                      min_ncomp=2, tag="ba_best", show_obs=True, discrepancy=True, pooled_tag="final", sig_scale=1.0):
     '''
     Figure 2 from the current pipeline (sbi/make_summaries.py): the same CNNs, five
     shape-noise draws per cluster, clusters with >= min_ncomp components weighted to
@@ -490,6 +521,7 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
 
     cdm = 3e-3
     mu, sig = a2744_mass_gaussian()
+    sig *= sig_scale                                    # widen the mass weighting (e.g. 2x the measurement error)
     curves = {d: summary_curve(summaries, d, mu, sig, min_ncomp) for d in ["bahamas", "darkskies"]}
     curves.update({d: summary_curve(path, d, mu, sig, min_ncomp) for d, path in extra.items()})
     obsprob = np.load(f"{summaries}/obs.npz")["softmax"][:, 0]           # (n_models,), P(SIDM)
@@ -514,6 +546,9 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
 
     lo = min(cdm_vals) - 0.06
     hi = max(max(cdm_vals) + 0.06, obs_mean + 3.5 * obs_err) if show_obs else max(cdm_vals) + 0.06
+    # right panel: with discrepancy=True the per-cluster CDM distributions pooled over the simulations and the
+    # fraction above A2744 (sbi/cdm_pooled_tail.py); the Gaussian-of-means version is then drawn off-figure
+    ax_r = plt.figure().add_subplot() if discrepancy else axarr[1]
     npts = 10000
     xpdf = np.linspace(lo, hi, npts)
     marginalised_pdf = np.zeros(npts)
@@ -521,11 +556,11 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
         ypdf = norm.pdf(xpdf, m, e)
         marginalised_pdf += ypdf
         colour = COLOUR_SCHEME[domain]
-        axarr[1].plot(xpdf, ypdf, color=colour)
-        axarr[1].fill_between(xpdf, ypdf, np.zeros(npts), color=colour, alpha=0.2, label=domain.upper())
+        ax_r.plot(xpdf, ypdf, color=colour)
+        ax_r.fill_between(xpdf, ypdf, np.zeros(npts), color=colour, alpha=0.2, label=domain.upper())
     marginalised_pdf /= np.sum(marginalised_pdf) * (xpdf[1] - xpdf[0])
-    axarr[1].plot(xpdf, marginalised_pdf, lw=2, ls="--", color="k", label="Marginalised CDM")
-    axarr[1].fill_between(xpdf, marginalised_pdf, np.zeros(npts), color="k", alpha=0.2)
+    ax_r.plot(xpdf, marginalised_pdf, lw=2, ls="--", color="k", label="Marginalised CDM")
+    ax_r.fill_between(xpdf, marginalised_pdf, np.zeros(npts), color="k", alpha=0.2)
 
     # A2744: band in the left panel, pdf in the right
     obs_pdf = norm.pdf(xpdf, obs_mean, obs_err) if show_obs else np.zeros(npts)
@@ -537,12 +572,12 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
             axarr[0].plot(xr, np.full(100, obs_mean - ns * obs_err), "--", color="k")
             axarr[0].plot(xr, np.full(100, obs_mean + ns * obs_err), "--", color="k")
         axarr[0].text(0.0012, obs_mean + 2.2 * obs_err, "A2744 UNCOVER DATA (68, 95\\%)", ha="left", va="bottom", fontsize=11)
-        axarr[1].plot(xpdf, obs_pdf, lw=2, color="k")
-        axarr[1].fill_between(xpdf, obs_pdf, np.zeros(npts), alpha=0.1, color="k")
+        ax_r.plot(xpdf, obs_pdf, lw=2, color="k")
+        ax_r.fill_between(xpdf, obs_pdf, np.zeros(npts), alpha=0.1, color="k")
 
     axarr[0].set_xscale("log")
     axarr[0].set_xlabel(r"Self-interaction cross-section $[\mathrm{cm}^2\,\mathrm{g}^{-1}]$", fontsize=15)
-    axarr[0].set_ylabel("Model output", fontsize=15)
+    axarr[0].set_ylabel(r"$P(\mathrm{SIDM})$", fontsize=15)
     axarr[0].set_xlim(1e-3, 1.5)
     ytop = obs_mean + 2 * obs_err + 0.045 if show_obs else max(c[1].mean(0).max() for c in curves.values()) + 0.03
     axarr[0].set_ylim(min(cdm_vals) - 0.04, ytop)
@@ -552,16 +587,19 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
     top = 1.35 * peak if show_obs else 1.8 * peak       # without A2744: room for the legend above the brace
     edges = [np.min(cdm_vals) - 0.02, np.max(cdm_vals) + 0.02]
     yb, yt = (0.78 * top, 0.87 * top) if show_obs else (1.08 * peak, 1.17 * peak)
-    curly_brace(axarr[1], edges[0], edges[1], yb, 0.06 * top, upward=True)
-    axarr[1].text(np.mean(edges), yt, "Collisionless\nDark Matter", ha="center", fontsize=12)
+    curly_brace(ax_r, edges[0], edges[1], yb, 0.06 * top, upward=True)
+    ax_r.text(np.mean(edges), yt, "Collisionless\nDark Matter", ha="center", fontsize=12)
     if show_obs:
-        axarr[1].text(obs_mean, 1.05 * norm.pdf(0, 0, obs_err), "Observation\n(A2744 UNCOVER)", ha="center", fontsize=12)
-    axarr[1].set_xlabel("Model output", fontsize=15)
-    axarr[1].set_ylabel("Probability distribution", fontsize=15)
-    axarr[1].set_xlim(lo, hi)
-    axarr[1].set_ylim(0, top)
-    axarr[1].grid(False)
-    axarr[1].legend(ncols=2, loc=1, fontsize=8)
+        ax_r.text(obs_mean, 1.05 * norm.pdf(0, 0, obs_err), "Observation\n(A2744 UNCOVER)", ha="center", fontsize=12)
+    ax_r.set_xlabel(r"$P(\mathrm{SIDM})$", fontsize=15)
+    ax_r.set_ylabel("Probability distribution", fontsize=15)
+    ax_r.set_xlim(lo, hi)
+    ax_r.set_ylim(0, top)
+    ax_r.grid(False)
+    ax_r.legend(ncols=2, loc=1, fontsize=8)
+    if discrepancy:
+        plt.close(ax_r.figure)
+        _pooled_tail_panel(axarr[1], curves, mu, sig, min_ncomp, obsprob.mean(), pooled_tag)
     fig.align_xlabels()
 
     filename = f"plots/final_model_weighting_with_data_{tag}.pdf"
@@ -910,7 +948,7 @@ def figure5():
     ax.set_xlabel(
         r'$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$', fontsize=15
     )
-    ax.set_ylabel("Mean model output", fontsize=15)
+    ax.set_ylabel(r"Mean $P(\mathrm{SIDM})$", fontsize=15)
 
     #####################
 
@@ -1124,7 +1162,7 @@ def bmode_check(nmonte=200, seed=0, image_size=100):
     return np.array(rotated).ravel(), np.asarray(kappa_b).ravel()
 
 
-def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac.npz"):
+def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac_core.npz"):  # matched to the Jauzac main-halo (core) mass
     
     nrow = 2 
     ncol = 3
@@ -2165,7 +2203,7 @@ def figure5_summaries(tag=PAPER_TAG, min_ncomp=2, ml_only=False):
     ax.axhline(p_mean, color="b", lw=1.5)
     ax.set_xticks([-3, -2, -1, 0], ["CDM", "-2", "-1", "0"])
     ax.set_xlabel(r"$\log_{10}\!\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=13)
-    ax.set_ylabel("Mean model output", fontsize=13)
+    ax.set_ylabel(r"Mean $P(\mathrm{SIDM})$", fontsize=13)
     ax.legend(loc=2, fontsize=9)
 
     ax = axarr[1]

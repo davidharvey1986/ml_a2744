@@ -342,11 +342,14 @@ def plot_maps(panels, centres, stride, path):
     finish_maps(fig, axes, im, path)
 
 
+KAPPA_SNR_LEVELS = [2, 4, 8, 12]                  # reconstructed kappa S/N contours
+
+
 def draw_panel(ax, p, extent, vmax, scalebar=True):
     '''Delta map with reconstructed kappa S/N (solid), true kappa (dotted) and Lenstool excess (green) contours.'''
     im = ax.imshow(np.ma.masked_equal(p["delta"], 0), origin="lower", extent=extent, cmap="RdBu_r",
                    vmin=-vmax, vmax=vmax)
-    ax.contour(p["kappa_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=[2, 3, 4, 6, 8],
+    ax.contour(p["kappa_snr"], origin="lower", extent=[-50, 50, -50, 50], levels=KAPPA_SNR_LEVELS,
                colors="k", linewidths=1)
     if p.get("kappa_true") is not None:
         ax.contour(gaussian_filter(p["kappa_true"], 1), origin="lower", extent=[-50, 50, -50, 50],

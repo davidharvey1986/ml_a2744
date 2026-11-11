@@ -4,8 +4,8 @@ cd /Users/davidharvey/Work/ml_check
 J=$PWD/notebooks_jauzac/plots; PY=astro-env/bin/python
 while pgrep -f ratio_scan_run.py >/dev/null; do sleep 20; done
 echo "== $(date +%H:%M) profile"
-$PY sbi/main_halo_lenstool.py --no-lenstool --sims --rmax 800 --nbins 26 --mass-study jauzac --out $PWD/sbi/results/main_halo_profile/main_halo_sims_jauzac 2>&1 | grep "clusters\|wrote"
-cp sbi/results/main_halo_profile/main_halo_sims_jauzac.{png,pdf} $J/
+$PY sbi/main_halo_lenstool.py --no-lenstool --sims --rmax 800 --nbins 26 --mass-study jauzac --core-only --out $PWD/sbi/results/main_halo_profile/main_halo_sims_jauzac_core 2>&1 | grep "clusters\|wrote"
+cp sbi/results/main_halo_profile/main_halo_sims_jauzac_core.{png,pdf} $J/
 echo "== $(date +%H:%M) figure1"
 (cd notebooks && ../$PY -c "import plots_for_paper as p; p.figureA1()" 2>&1 | grep -i "error\|n(z)")
 cp notebooks/plots/intrinsic_ell.{png,pdf} $J/; echo "wrote $J/intrinsic_ell.png"

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 from lenspack.utils import bin2d
-from scipy.stats import spearmanr
+from scipy.stats import pearsonr, spearmanr
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO), str(REPO / "notebooks"), str(REPO / "sbi")]
@@ -40,6 +40,8 @@ def parse():
     p.add_argument("--mass-window", type=float, default=0.15)
     p.add_argument("--nboot", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--den-width", type=int, default=100, help="outer-annulus width [kpc]")
+    p.add_argument("--den-start", type=int, default=None, help="first outer annulus inner edge [kpc]")
     p.add_argument("--num-kpc", type=int, nargs=2, default=[50, 100])
     p.add_argument("--out-dir", default=None, help="default sbi/results/ratio_scan_<num>")
     return p.parse_args()
@@ -61,7 +63,8 @@ def main():
     global NUM, DEN
     opts = parse()
     NUM = tuple(opts.num_kpc)
-    DEN = [(x, x + 100) for x in range(int(np.ceil(NUM[1] / 100) * 100), 1000, 100)]
+    start = opts.den_start if opts.den_start is not None else int(np.ceil(NUM[1] / 100) * 100)
+    DEN = [(x, x + opts.den_width) for x in range(start, 1000, opts.den_width) if x + opts.den_width <= 1000]
     out = Path(opts.out_dir or REPO / "sbi" / "results" / f"ratio_scan_{NUM[0]}-{NUM[1]}")
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(opts.seed)
@@ -105,15 +108,18 @@ def main():
             R, m = s["R"][:, j], s["matched"] & np.isfinite(s["R"][:, j])
             med = {f"{c:g}": float(np.median(R[m & (s["cs"] == c)])) for c in cs}
             rho = {f"{c:g}": float(spearmanr(R[m & (s["cs"] == c)], s["p"][m & (s["cs"] == c)])[0]) for c in cs}
+            pear = {f"{c:g}": float(pearsonr(R[m & (s["cs"] == c)], s["p"][m & (s["cs"] == c)])[0]) for c in cs}
+            pear["all"] = float(pearsonr(R[m], s["p"][m])[0])
             # robust to outliers: slope of P against the rank-normalised R, given sigma
             z = np.argsort(np.argsort(R[m])) / m.sum()
             X = np.c_[z, (s["cs"][m][:, None] == cs[None]).astype(float)]
             slope = float(np.linalg.lstsq(X, s["p"][m], rcond=None)[0][0])
             pct = {f"{c:g}": float(np.mean(R[m & (s["cs"] == c)] >= R_a[j])) for c in (cs[0], cs[-1])}
-            rows.append({"den_kpc": [lo, hi], "median": med, "spearman": rho, "dP_per_rank": slope,
+            rows.append({"den_kpc": [lo, hi], "median": med, "spearman": rho, "pearson": pear, "dP_per_rank": slope,
                          "frac_ge_a2744": pct})
             print(f"{dom:9s} /{lo:4d}-{hi:4d}: A2744 {R_a[j]:6.2f} | median " +
                   " ".join(f"σ={c} {v:.2f}" for c, v in med.items()) +
+                  f" | Pearson per sigma {np.mean([v for k, v in pear.items() if k != 'all']):+.2f}, all {pear['all']:+.2f}"
                   f" | Spearman(R,P) {np.mean(list(rho.values())):+.2f} | ΔP over R range {slope:+.3f}"
                   f" | frac ≥ A2744: CDM {pct[f'{cs[0]:g}']:.2f}, σ={cs[-1]:g} {pct[f'{cs[-1]:g}']:.2f}")
         res["sims"][dom] = rows
@@ -155,29 +161,12 @@ def plot_summary(res, sims, out):
 
 
 def plot_grid(res, sims, R_a, p_a, out):
-    plt = sens.style()
-    nr = int(np.ceil(len(DEN) / 3))
-    fig, axes = plt.subplots(nr, 3, figsize=(14, 4 * nr), constrained_layout=True, sharey=True, squeeze=False)
+    '''Save what the scatter grid needs (ratio_plot.py can redraw it without the catalogue) and draw it.'''
+    import ratio_plot
     s = sims["bahamas"]
-    for ax in axes.ravel()[len(DEN):]:
-        ax.axis("off")
-    for j, ax in zip(range(len(DEN)), axes.ravel()):
-        R = s["R"][:, j]
-        for c in np.unique(s["cs"]):
-            m = s["matched"] & (s["cs"] == c) & np.isfinite(R)
-            ax.scatter(R[m], s["p"][m], s=4, color=COLOURS.get(float(c)), alpha=0.4, lw=0, label=f"σ/m = {c:g}")
-        ax.plot(R_a[j], p_a, "*", color="#E69F00", mec="k", ms=14, zorder=5, label="A2744")
-        lo, hi = np.nanpercentile(R[s["matched"]], [1, 99])
-        ax.set_xlim(min(lo, R_a[j]) - 0.1 * abs(hi - lo), max(hi, R_a[j]) + 0.1 * abs(hi - lo))
-        pass  # no panel titles (the x-label names the annulus)
-        ax.set_xlabel(f"R = ⟨χt⟩({NUM[0]}-{NUM[1]}) / ⟨χt⟩({DEN[j][0]}-{DEN[j][1]} kpc)", fontsize=8)
-    axes[0, 0].legend(fontsize=7, markerscale=2)
-    for a in axes[:, 0]:
-        a.set_ylabel("ensemble P(SIDM)")
-    pass  # no suptitle
-    for e in ("png", "pdf"):
-        fig.savefig(f"{out}.{e}", dpi=130)
-
+    np.savez(f"{out}.npz", R=s["R"], p=s["p"], cs=s["cs"], matched=s["matched"], R_a=R_a, p_a=p_a,
+             den=np.array(DEN), num=np.array(NUM))
+    ratio_plot.plot_grid(f"{out}.npz", out)
 
 if __name__ == "__main__":
     main()
