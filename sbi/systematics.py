@@ -731,7 +731,7 @@ def plot_data(out, path, domains=("combined",), paper=False, skip=()):
 
 
 
-def plot_data_paper(out, path, skip=(), d="combined", cdm_limit=-3.0):
+def plot_data_paper(out, path, skip=(), d="combined", cdm_limit=-3.0, ncol=4):
     '''Data systematics for the paper, in the style of the original galaxy-selection figure (SciencePlots, black
     points with the 16-84% errors joined by a line, the CDM limit dashed, grey bands where fewer than 95 / 90 / 80 /
     70% of the fiducial galaxies are kept), with the fiducial setting as a star joined into the line.'''
@@ -746,8 +746,12 @@ def plot_data_paper(out, path, skip=(), d="combined", cdm_limit=-3.0):
     sweeps = [s for s in sweeps if s[0] in out and s[0] not in skip]
     fid = out["fiducial"]
     f0, e0 = fid["metrics"][d]["log_sigma"], np.array(fid["metrics"][d]["log_sigma_err"])[:, None]
-    fig, axes = plt.subplots(1, len(sweeps), figsize=(3.3 * len(sweeps), 2.6), sharey=True, constrained_layout=True)
-    axes = np.atleast_1d(axes)
+    ncol = min(ncol, len(sweeps))                       # wrap onto rows of ncol panels
+    nrow = int(np.ceil(len(sweeps) / ncol))
+    fig, grid = plt.subplots(nrow, ncol, figsize=(3.3 * ncol, 2.6 * nrow), sharey=True, constrained_layout=True, squeeze=False)
+    axes = grid.ravel()
+    for ax in axes[len(sweeps):]:
+        ax.axis("off")
     for ax, (key, xlabel) in zip(axes, sweeps):
         rows = out[key]
         x = np.array([r["value"] for r in rows])
@@ -788,7 +792,8 @@ def plot_data_paper(out, path, skip=(), d="combined", cdm_limit=-3.0):
             ax.set_xticks(np.r_[xf, ticks], ["none"] + [f"{t:g}" for t in ticks])
         if key == "galaxy_high_mag":
             ax.invert_xaxis()
-    axes[0].set_ylabel(r"$\log_{10}\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=10)
+    for ax in grid[:, 0]:
+        ax.set_ylabel(r"$\log_{10}\left[(\sigma_{\rm DM}/m)/(\mathrm{cm}^2\,\mathrm{g}^{-1})\right]$", fontsize=10)
     for ext in ("pdf", "png"):
         fig.savefig(Path(path).with_suffix(f".{ext}"), dpi=200)
 
