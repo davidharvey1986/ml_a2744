@@ -1152,7 +1152,7 @@ def figure6( log_max_like, log_error, merger=True):
                 markersize=20, color='orange', fmt='*', capsize=4, lw=2)
     print(f"$\sigma_{{\\rm DM}}/m={max_like.real:0.2f}_{{-{error[0].real:0.2f}}}^{{+{error[1].real:0.2f}}}$cm$^2$g^{{-1}}")
     # get handles
-    ax.legend(loc=1)
+    ax.legend(loc=1, fontsize=9, markerscale=0.6, handlelength=1.6, labelspacing=0.3, borderpad=0.4)   # small enough to clear the upper error bars
     fname = "plots/particle_physics.pdf"
     plt.savefig(fname)
     plt.savefig(fname.replace(".pdf", ".png"), dpi=200)
