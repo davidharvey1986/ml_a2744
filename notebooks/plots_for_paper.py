@@ -2501,7 +2501,7 @@ def figure_systematics(tag=PAPER_TAG, out_dir="plots"):
     model = {**out, "contamination": [r for r in out.get("contamination", []) if abs(r["value"]) <= sy.CONTAMINATION_MAX + 1e-9]}
     sy.plot_ranges(model, Path(out_dir) / f"systematics_model_paper_ba_{tag}", list(sy.MODEL_GROUPS), None,
                    show_total=False, show_shifts=False, stat=(gp["lo"], gp["hi"]), centre=gp["ml"])
-    sy.plot_data(out, Path(out_dir) / f"systematics_data_paper_ba_{tag}", paper=True)
+    sy.plot_data_paper(out, Path(out_dir) / f"systematics_data_paper_ba_{tag}", skip=("galaxy_low_mag",), ncol=3)
 
 
 def figure_pooled_tail(tag=PAPER_TAG, out="plots/cdm_pooled_tail"):
