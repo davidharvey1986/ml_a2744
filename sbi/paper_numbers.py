@@ -6,12 +6,17 @@ Numbers quoted in the paper that need the trained models (final ensemble, 30 see
                ensemble-mean P(SIDM) per realisation: the output when the lensing signal is removed but the shape
                noise and galaxy distribution are the data's. The unrotated map is checked against obs.npz first.
                Reads the A2744 catalogue (rebuilds the shared filtered catalogue: run alone).
+  rho          correlation between ensemble members (Eq. 8 of the paper, Fig. A2): the fit of
+               sigma sqrt((1 - rho)/N + rho) to the RMSE of the mean of N random models (BAHAMAS CDM clusters, every
+               shape-noise draw), the mean pairwise correlation of the models' errors, and the spread of both over a
+               bootstrap of the clusters. Reads the summaries only.
   a-distance   proxy A-distance between BAHAMAS and DARKSKIES, d_A = 2 (1 - 2 eps), with eps the 5-fold
                cross-validated error of a logistic regression separating the two domains on one model's latent
                features (512-d, standardised); clusters that model never trained on, one shape-noise draw.
 
     astro-env/bin/python sbi/paper_numbers.py noise-floor --n 1000
     astro-env/bin/python sbi/paper_numbers.py a-distance --per-domain 1500
+    astro-env/bin/python sbi/paper_numbers.py rho --n-boot 200
 '''
 import argparse
 import json
@@ -109,17 +114,53 @@ def a_distance(opts):
     return res
 
 
+def rho(opts):
+    from scipy.optimize import curve_fit
+    S = REPO / "sbi" / "summaries_wb1_final_n5"
+    P = np.load(S / "params_bahamas.npz")
+    soft = np.load(S / "softmax_bahamas.npy")[:, :, P["cross_section"] == 0]       # (n_models, n_noise, N)
+    M = soft.shape[0]
+    Ns = np.arange(1, M + 1)
+    law = lambda N, s, r: s * np.sqrt((1 - r) / N + r)                               # noqa: E731
+    rng = np.random.default_rng(opts.seed)
+
+    def fit(s, nrandom):                         # as figureA2_summaries in notebooks/plots_for_paper.py
+        y = np.broadcast_to(s.mean((0, 1)), s.shape[1:]).ravel()
+        pred = s.reshape(M, -1)
+        scale = np.std(pred - y, axis=0)
+        rmse = np.array([np.mean([np.sqrt(np.mean(((pred[rng.choice(M, N, replace=False)].mean(0) - y) / scale) ** 2))
+                                  for _ in range(nrandom)]) for N in Ns])
+        (_, r), _ = curve_fit(law, Ns, rmse, p0=[1, 0.1])
+        return r, np.polyfit(np.log(Ns), np.log(rmse), 1)[0]
+
+    def pairwise(s):                             # mean correlation between two models' errors about the cluster mean
+        c = np.corrcoef((s - s.mean((0, 1), keepdims=True)).reshape(M, -1))
+        return c[~np.eye(M, dtype=bool)].mean()
+
+    r0, b0 = fit(soft, 1000)
+    boot = []
+    for _ in tqdm(range(opts.n_boot), desc="bootstrap over clusters"):
+        idx = rng.integers(0, soft.shape[2], soft.shape[2])
+        boot.append((*fit(soft[:, :, idx], 100), pairwise(soft[:, :, idx])))
+    boot = np.array(boot)
+    return {"n_models": M, "n_noise": soft.shape[1], "n_clusters": soft.shape[2],
+            "rho_fit": float(r0), "rho_fit_boot_std": float(boot[:, 0].std()),
+            "rho_pairwise": float(pairwise(soft)), "rho_pairwise_boot_std": float(boot[:, 2].std()),
+            "loglog_slope": float(b0), "loglog_slope_boot_std": float(boot[:, 1].std())}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("what", choices=["noise-floor", "a-distance"])
+    p.add_argument("what", choices=["noise-floor", "a-distance", "rho"])
     p.add_argument("--n", type=int, default=1000, help="noise-floor: rotations")
     p.add_argument("--per-domain", type=int, default=1500, help="a-distance: clusters drawn per domain")
     p.add_argument("--C", type=float, default=1.0, help="a-distance: inverse regularisation of the classifier")
+    p.add_argument("--n-boot", type=int, default=200, help="rho: bootstrap resamples of the clusters")
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--seed", type=int, default=0)
     opts = p.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    res = noise_floor(opts) if opts.what == "noise-floor" else a_distance(opts)
+    res = {"noise-floor": noise_floor, "a-distance": a_distance, "rho": rho}[opts.what](opts)
     res["settings"] = {**vars(opts), "model": MODEL, "include_str": INCLUDE}
     json.dump(res, open(OUT / f"{opts.what}.json", "w"), indent=1)
     print(json.dumps({k: v for k, v in res.items() if k != "settings"}, indent=1)[:2000])
