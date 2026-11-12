@@ -358,7 +358,7 @@ class Runner:
         self.opts, self.out = opts, out
         self.mu, self.sig = a2744_mass_gaussian(opts.mass_study)
         self.sel = {d: select_clusters(opts.summaries, d, self.mu) for d in DOMAINS}
-        self.models, self.zcats = [], {}
+        self.models, self.zcats, self.maps = [], {}, {}
         if opts.from_cache:
             return
         self.device = ms.get_device()

@@ -878,7 +878,10 @@ def get_source_redshift(ifilter, data_dir='data/100/a2744', cuts=None):
     return sig_mean(nz)
 
 
-def return_error_in_mean(all_thresholds, model_correlation=0.283):
+MODEL_CORRELATION = 0.42     # rho of the final ensemble (sbi/paper_numbers.py rho: 0.418 +- 0.007)
+
+
+def return_error_in_mean(all_thresholds, model_correlation=MODEL_CORRELATION):
     '''
     Equation 7.51 in https://www.deeplearningbook.org/contents/regularization.html
     '''
