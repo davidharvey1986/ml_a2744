@@ -820,13 +820,15 @@ MODEL_GROUPS = [   # key, name, setting label for the annotated end points
 NOT_IN_TOTAL = {"resolution"}     # a choice of map, not an uncertainty in the data: shown, left out of the total
 
 
-def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_shifts=True, row_height=0.3, stat=None, centre=None, fid_label=False):
+def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_shifts=True, row_height=0.3, stat=None, centre=None, fid_label=False,
+                bottom=()):
     '''
     The combined (BAHAMAS + DARKSKIES) log10 sigma/m for each systematic in groups: one row per systematic,
     ordered by its spread, each setting a dot on a bar spanning its range, the two extremes labelled and
     the shifts from the fiducial on the right (settings beyond the axis drawn as arrows at its edge, open
     when the posterior is unconstrained); below, the largest shift each way added in quadrature over the
     systematics (except NOT_IN_TOTAL) and the statistical 16-84% posterior of the fiducial estimate.
+    bottom: keys kept together as the last rows, in this order from the bottom up, instead of by spread.
     '''
     plt = style()
     groups = [g for g in groups if out.get(g[0])]
@@ -845,7 +847,8 @@ def plot_ranges(out, path, groups, title, d="combined", show_total=True, show_sh
     plt.style.use(["science", "grid"])
     stat_lo, stat_hi = (f0 - lo, f0 + hi) if stat is None else stat    # stat: (16%, 84%) of another posterior (e.g. figure 7's GP)
     vals = {g[0]: np.array([r["metrics"][d]["log_sigma"] for r in out[g[0]]]) for g in groups}
-    groups.sort(key=lambda g: (g[0] not in NOT_IN_TOTAL, np.ptp(vals[g[0]])))   # largest spread at the top
+    rank = {k: i for i, k in enumerate(bottom)}
+    groups.sort(key=lambda g: (rank.get(g[0], len(bottom)), g[0] not in NOT_IN_TOTAL, np.ptp(vals[g[0]])))  # largest spread at the top
     total = [v for k, v in vals.items() if k not in NOT_IN_TOTAL]
     sys_lo = np.sqrt(sum(min(v.min() - f0, 0) ** 2 for v in total))
     sys_hi = np.sqrt(sum(max(v.max() - f0, 0) ** 2 for v in total))

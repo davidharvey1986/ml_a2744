@@ -2500,7 +2500,8 @@ def figure_systematics(tag=PAPER_TAG, out_dir="plots"):
     gp = json.load(open(f"plots/gp_posterior_ba_{tag}.json"))
     model = {**out, "contamination": [r for r in out.get("contamination", []) if abs(r["value"]) <= sy.CONTAMINATION_MAX + 1e-9]}
     sy.plot_ranges(model, Path(out_dir) / f"systematics_model_paper_ba_{tag}", list(sy.MODEL_GROUPS), None,
-                   show_total=False, show_shifts=False, stat=(gp["lo"], gp["hi"]), centre=gp["ml"])
+                   show_total=False, show_shifts=False, stat=(gp["lo"], gp["hi"]), centre=gp["ml"],
+                   bottom=("shape_m", "shape_c"))         # the two shear biases together, last
     sy.plot_data_paper(out, Path(out_dir) / f"systematics_data_paper_ba_{tag}", skip=("galaxy_low_mag",), ncol=3)
 
 
