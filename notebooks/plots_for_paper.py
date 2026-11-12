@@ -536,6 +536,7 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
 
     fig, axarr = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
     cdm_vals, cdm_val_err = [], []
+    left_cdm = []
     for domain, (sigmas, per_model) in curves.items():
         means, errors = per_model.mean(0), return_error_in_mean(per_model)
         colour = COLOUR_SCHEME[domain]
@@ -543,11 +544,11 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
         cdm_val_err.append(errors[0])
         x = sigmas.copy()
         x[0] += cdm
-        if len(x) > 1:
+        if len(x) > 1:                           # left panel: the SIDM suites only (CDM-only ones are on the right)
             axarr[0].errorbar(x, means, errors, fmt="-o", capsize=2, markersize=8, color=colour)
             axarr[0].plot(x, means, "o", label=domain.upper(), markersize=8, color=colour)
-        axarr[0].errorbar(cdm, means[0], errors[0], fmt="*", capsize=2, markersize=15, color=colour,
-                          label=domain.upper() if len(x) == 1 else None)
+            axarr[0].errorbar(cdm, means[0], errors[0], fmt="*", capsize=2, markersize=15, color=colour)
+            left_cdm.append(means[0] - errors[0])
         print(f"{domain}: CDM {means[0]:.4f} +/- {errors[0]:.4f}; "
               + ", ".join(f"{s:g}: {m:.4f}" for s, m in zip(sigmas[1:], means[1:])))
 
@@ -587,8 +588,8 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
     axarr[0].set_ylabel(r"$P(\mathrm{SIDM})$", fontsize=15)
     axarr[0].set_xlim(1e-3, 1.5)
     ytop = obs_mean + 2 * obs_err + 0.045 if show_obs else max(c[1].mean(0).max() for c in curves.values()) + 0.03
-    axarr[0].set_ylim(min(cdm_vals) - 0.04, ytop)
-    axarr[0].legend(loc=4, ncols=2)
+    axarr[0].set_ylim(min(left_cdm) - 0.02, ytop)
+    axarr[0].legend(loc=4)
 
     peak = max(np.max(marginalised_pdf), np.max(obs_pdf), max(norm.pdf(0, 0, e) for e in cdm_val_err))
     top = 1.35 * peak if show_obs else 1.8 * peak       # without A2744: room for the legend above the brace
