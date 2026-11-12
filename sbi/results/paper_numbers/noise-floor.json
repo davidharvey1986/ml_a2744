@@ -1,0 +1,24 @@
+{
+ "n_rotations": 1000,
+ "a2744": 0.6997778415679932,
+ "rotated_mean": 0.500959038734436,
+ "rotated_std": 0.01930917613208294,
+ "rotated_16_50_84": [
+  0.48234957933425904,
+  0.5021347105503082,
+  0.5186350822448731
+ ],
+ "rotated_max": 0.5500085353851318,
+ "fraction_at_or_above_a2744": 0.0,
+ "a2744_sigma_above_floor": 10.29659652709961,
+ "settings": {
+  "what": "noise-floor",
+  "n": 1000,
+  "per_domain": 1500,
+  "C": 1.0,
+  "batch_size": 256,
+  "seed": 0,
+  "model": "tweakedalign_k0p7_ctr_wb1_ba_final",
+  "include_str": "spin2_cx_pgc_ft_"
+ }
+}
