@@ -44,7 +44,7 @@ KAPPA_THRESH = 0.7                     # was 0.9 (the k0p9 models were trained w
 # catalogues; RA 3.58958, Dec -30.40511), 45 kpc from the Lenstool halo O2 (RA 3.5882,
 # Dec -30.4027), whose profile has negative shear inside 100 kpc. It used to be O2, and
 # before that the median galaxy position, ~720 kpc from the peak, while every simulated
-# cluster is centred (sbi/obs_map_checks.py).
+# cluster is centred (notebooks/obs_map_checks.py).
 A2744_LENSTOOL_O2 = (12949.2, 8049.1)
 A2744_STAMP_CENTRE = (12734.1, 7619.0)
 # Strong-lensing convergence of A2744 (zs = 2.28). Galaxies of the A2744 *data* map where it
@@ -56,7 +56,7 @@ SL_KAPPA_MAP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", 
 # Shear-catalogue cuts used for the A2744 data map, its galaxy positions and noise model,
 # and the source-redshift map: the highest mean tangential shear within 300 kpc of the main
 # halo with S/N cut <= 5, 2 <= lower size cut <= 3 and magnitude limit >= 27.5
-# (sbi/optimise_cuts.py --objective inner_chi_t, 28/10 catalogues and pyRRG G1 fit to all S/N).
+# (notebooks/optimise_cuts.py --objective inner_chi_t, 28/10 catalogues and pyRRG G1 fit to all S/N).
 G1_2D = True       # shear susceptibility G1(size, S/N) (shear_susceptibility.py) instead of pyRRG's S/N arctan; from 2026-11-02
 SHEAR_CUTS = {'f115w': {'signal_noise_cut': 4, 'size_cut': [2.75, 200], 'mag_cut': [0, 27.5], 'stat_type': 'snr'},
               'f150w': {'signal_noise_cut': 0, 'size_cut': [2.75, 200], 'mag_cut': [0, 27.5], 'stat_type': 'snr'}}
@@ -878,7 +878,7 @@ def get_source_redshift(ifilter, data_dir='data/100/a2744', cuts=None):
     return sig_mean(nz)
 
 
-MODEL_CORRELATION = 0.42     # rho of the final ensemble (sbi/paper_numbers.py rho: 0.418 +- 0.007)
+MODEL_CORRELATION = 0.42     # rho of the final ensemble (notebooks/paper_numbers.py rho: 0.418 +- 0.007)
 
 
 def return_error_in_mean(all_thresholds, model_correlation=MODEL_CORRELATION):

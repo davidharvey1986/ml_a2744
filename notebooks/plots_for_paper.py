@@ -30,7 +30,7 @@ the paper. These include=
 if not os.path.isdir("plots"):
     os.system("mkdir plots")
 
-SBI_DIR = "../sbi"
+RESULTS_DIR = "results"                                 # summaries and results (relative to notebooks/)
 FIDUCIAL = "wb1"                                        # wb1: bahamas_1 kept in the fine-tuning (nob1: "spin2cx")
 PAPER_TAG = "final"                                     # ba_final: the 30 fine-tuned seeds, final checkpoints
 
@@ -466,7 +466,7 @@ def summary_curve(summaries, domain, mu, sig, min_ncomp=2):
     '''
     Per model, the A2744-mass-weighted mean P(SIDM) at each simulated cross-section,
     over every cluster with at least min_ncomp components and every shape-noise draw
-    (sbi/make_summaries.py output). Returns (cross_sections, (n_models, n_cross)).
+    (notebooks/make_summaries.py output). Returns (cross_sections, (n_models, n_cross)).
     '''
     P = np.load(f"{summaries}/params_{domain}.npz")
     soft = np.load(f"{summaries}/softmax_{domain}.npy")                 # (n_models, n_noise, N)
@@ -483,7 +483,7 @@ def summary_curve(summaries, domain, mu, sig, min_ncomp=2):
 def _pooled_tail_panel(ax, curves, mu, sig, min_ncomp, p_obs, pooled_tag, means=None):
     '''Figure 2 right panel: mass-weighted P(SIDM) of each CDM cluster (n_comp >= min_ncomp, every noise draw),
     per simulation and pooled with equal weight per simulation; shaded: the pooled fraction above A2744.'''
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sbi"))
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "notebooks"))
     from cdm_pooled_tail import load as load_cdm
     x = np.linspace(0.15, 0.9, 800)
     sims = [d for d in curves]
@@ -514,11 +514,11 @@ def _pooled_tail_panel(ax, curves, mu, sig, min_ncomp, p_obs, pooled_tag, means=
     print(f"pooled CDM above A2744 ({p_obs:.3f}): {100 * f:.2f}% ({norm.isf(f):.2f} sigma)")
 
 
-def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
-                      extra={"flamingo": "../sbi/summaries_ba_best_n5_flamingo"},
+def figure2_summaries(summaries="results/summaries_ba_best_n5",
+                      extra={"flamingo": "results/summaries_ba_best_n5_flamingo"},
                       min_ncomp=2, tag="ba_best", show_obs=True, discrepancy=True, pooled_tag="final", sig_scale=1.0):
     '''
-    Figure 2 from the current pipeline (sbi/make_summaries.py): the same CNNs, five
+    Figure 2 from the current pipeline (notebooks/make_summaries.py): the same CNNs, five
     shape-noise draws per cluster, clusters with >= min_ncomp components weighted to
     the A2744 mass (mass_weighting.gaussian_mass_weights), and A2744 from obs.npz.
     extra adds CDM-only simulations (e.g. FLAMINGO) to both panels and to the
@@ -555,7 +555,7 @@ def figure2_summaries(summaries="../sbi/summaries_ba_best_n5",
     lo = min(cdm_vals) - 0.06
     hi = max(max(cdm_vals) + 0.06, obs_mean + 3.5 * obs_err) if show_obs else max(cdm_vals) + 0.06
     # right panel: with discrepancy=True the per-cluster CDM distributions pooled over the simulations and the
-    # fraction above A2744 (sbi/cdm_pooled_tail.py); the Gaussian-of-means version is then drawn off-figure
+    # fraction above A2744 (notebooks/cdm_pooled_tail.py); the Gaussian-of-means version is then drawn off-figure
     ax_r = plt.figure().add_subplot() if discrepancy else axarr[1]
     npts = 10000
     xpdf = np.linspace(lo, hi, npts)
@@ -1183,7 +1183,7 @@ def bmode_check(nmonte=200, seed=0, image_size=100):
     return np.array(rotated).ravel(), np.asarray(kappa_b).ravel()
 
 
-def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac_core.npz"):  # matched to the Jauzac main-halo (core) mass
+def figureA1(profile_npz="results/main_halo_profile/main_halo_sims_jauzac_core.npz"):  # matched to the Jauzac main-halo (core) mass
     
     nrow = 2 
     ncol = 3
@@ -1377,9 +1377,9 @@ def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac
     ####################################
     ##### PLOT 5 CLUSTER-MEMBER LEAK #####
     ####################################
-    # photo-z member leak against the weak-lensing (KS) convergence (sbi/leakage_vs_kappa.py)
+    # photo-z member leak against the weak-lensing (KS) convergence (notebooks/leakage_vs_kappa.py)
     ax = plt.subplot(nrow,ncol,5)
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sbi"))
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "notebooks"))
     from leakage_vs_kappa import leakage, draw_leakage
     leak_cat = get_obs_data('concat', data_dir="../data/100/a2744/", photoz=True, cuts=SHEAR_CUTS)
     L = leakage(leak_cat, "ks", nbins=12)
@@ -1389,7 +1389,7 @@ def figureA1(profile_npz="../sbi/results/main_halo_profile/main_halo_sims_jauzac
     ####################################
     ##### PLOT 6 MAIN-HALO PROFILE #####
     ####################################
-    # from sbi/main_halo_lenstool.py --no-lenstool --sims (mass-matched BAHAMAS, n_comp >= 2)
+    # from notebooks/main_halo_lenstool.py --no-lenstool --sims (mass-matched BAHAMAS, n_comp >= 2)
     ax = plt.subplot(nrow,ncol,6)
     prof = np.load(profile_npz)
     ax.axhline(0, color="k", lw=1.6)
@@ -2108,24 +2108,24 @@ def figureA5(log_max_like, log_error):
     plt.savefig("plots/summarised_systematics.png")
 
     
-# # Figures from the current pipeline (sbi/)
+# # Figures from the current pipeline (notebooks/*.py scripts, outputs in notebooks/results/)
 # The functions above read the notebooks/pickles of the original analysis. These make the same
-# figures from the outputs of sbi/ (make_summaries.py, sensitivity.py, systematics.py) for one
+# figures from the outputs in results/ (make_summaries.py, sensitivity.py, systematics.py) for one
 # ensemble, PAPER_TAG; `python plots_for_paper.py` remakes all of them.
 
 
 def paper_paths(tag=PAPER_TAG):
     from mass_weighting import FIDUCIAL_STUDY            # the systematics run is per A2744 mass study
-    s = f"{SBI_DIR}/summaries_{FIDUCIAL}_{tag}_n5"
+    s = f"{RESULTS_DIR}/summaries_{FIDUCIAL}_{tag}_n5"
     return {"summaries": s, "flamingo": f"{s}_flamingo",
-            "sensitivity": f"{SBI_DIR}/results/sensitivity_{FIDUCIAL}_{tag}_w4s1/sensitivity.npz",
-            "systematics": f"{SBI_DIR}/results/systematics_{FIDUCIAL}_{tag}_{FIDUCIAL_STUDY}/systematics.json"}
+            "sensitivity": f"{RESULTS_DIR}/sensitivity_{FIDUCIAL}_{tag}_w4s1/sensitivity.npz",
+            "systematics": f"{RESULTS_DIR}/systematics_{FIDUCIAL}_{tag}_{FIDUCIAL_STUDY}/systematics.json"}
 
 
 def combined_curve(summaries, mu, sig, min_ncomp=2):
     '''
     Per model, the A2744-mass-weighted mean P(SIDM) against cross-section with BAHAMAS and DARKSKIES
-    pooled as in sbi/systematics.py: each simulation's curve, the mean of the two where both have that
+    pooled as in notebooks/systematics.py: each simulation's curve, the mean of the two where both have that
     cross-section. Returns (cross_sections, (n_models, n_cross)).
     '''
     curves = {d: summary_curve(summaries, d, mu, sig, min_ncomp) for d in ["bahamas", "darkskies"]}
@@ -2138,7 +2138,7 @@ def combined_curve(summaries, mu, sig, min_ncomp=2):
 
 def sigma_posterior(sigmas, curve, p_obs, prior=(-3, 1), cdm=1e-3):
     '''
-    Posterior on log10 sigma/m as sbi/systematics.posterior: the paper's GP through the ensemble curve,
+    Posterior on log10 sigma/m as systematics.posterior: the paper's GP through the ensemble curve,
     likelihood N(A2744's ensemble P(SIDM); GP mean, sqrt(GP var + error in the ensemble mean^2)), flat
     prior. Returns the fitted GP, the grid, the normalised posterior and (median, 16%, 84%).
     '''
@@ -2243,7 +2243,7 @@ def sensitivity_panel(ax, delta, centres, kappa, kappa_extent, title, vmin=1, vm
 
 def figure3_sensitivity(tag=PAPER_TAG, sigma_sidm=1.0):
     '''
-    Figure 3 from sbi/sensitivity.py (4x4-pixel windows, stride 1): the occlusion sensitivity of the
+    Figure 3 from notebooks/sensitivity.py (4x4-pixel windows, stride 1): the occlusion sensitivity of the
     BAHAMAS CDM and sigma/m = sigma_sidm clusters most like A2744 (largest A2744 mass weight) and of
     A2744, each in units of its rms, positive (pushes to SIDM) only, with the convergence contours.
     '''
@@ -2267,7 +2267,7 @@ def figure3_sensitivity(tag=PAPER_TAG, sigma_sidm=1.0):
 
 def figure4_sensitivity(tag=PAPER_TAG, bins=np.linspace(0, 0.5, 11), nshuffle=1000, seed=0):
     '''
-    Figure 4 from sbi/sensitivity.py: the fraction of windows (with galaxies) whose removal lowers
+    Figure 4 from notebooks/sensitivity.py: the fraction of windows (with galaxies) whose removal lowers
     P(SIDM), i.e. that push towards SIDM, against the convergence in the window, for the BAHAMAS
     clusters at each cross-section (pooled, binomial errors) and A2744 (errors from shuffling kappa).
     '''
@@ -2355,7 +2355,7 @@ def figureA2_summaries(tag=PAPER_TAG, nrandom=1000, seed=0):
 
 def figureA3_summaries(tag=PAPER_TAG, nshow=4, min_ncomp=2, seed=42):
     '''
-    Figure A3 from summaries with latents (sbi/make_summaries.py without --no-latents, one noise draw,
+    Figure A3 from summaries with latents (notebooks/make_summaries.py without --no-latents, one noise draw,
     in <summaries>_latents): for the first nshow models, the UMAP of the DARKSKIES latents with the
     BAHAMAS ones projected on it (density contours) and A2744 (star); then, per cross-section, the
     distance of A2744's latent from the mean latent of the simulated clusters, in units of the pooled
@@ -2427,7 +2427,7 @@ def figureA3_summaries(tag=PAPER_TAG, nshow=4, min_ncomp=2, seed=42):
 
 
 def figureA4A5_systematics(tag=PAPER_TAG):
-    '''Figures A4 (data) and A5 (model systematics) as drawn by sbi/systematics.py, copied to plots/.'''
+    '''Figures A4 (data) and A5 (model systematics) as drawn by notebooks/systematics.py, copied to plots/.'''
     import shutil
     d = os.path.dirname(paper_paths(tag)["systematics"])
     for name, out in (("systematics_data", "data_systematics"), ("systematics_model", "summarised_systematics")):
@@ -2437,37 +2437,37 @@ def figureA4A5_systematics(tag=PAPER_TAG):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Figures drawn from results that sbi/ computes. The heavy computation stays in sbi/ (sensitivity maps, ratio scan,
+# Figures drawn from results that the analysis scripts compute. The heavy computation stays in those scripts (sensitivity maps, ratio scan,
 # systematics runs); these functions only draw the paper versions, in the paper style, into plots/.
 # ---------------------------------------------------------------------------------------------------------------------
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _run_sbi(script, *args):
-    '''Run sbi/<script> as __main__ with the given arguments (each paper figure runs in its own process, see
+def _run_script(script, *args):
+    '''Run notebooks/<script> as __main__ with the given arguments (each paper figure runs in its own process, see
     paper_figures.py, so its global state does not leak into other figures).'''
     import runpy
     argv, cwd = sys.argv, os.getcwd()
     sys.argv = [script] + [str(a) for a in args]
-    sys.path.insert(0, os.path.join(REPO, "sbi"))
+    sys.path.insert(0, os.path.join(REPO, "notebooks"))
     plt.rcdefaults()                     # the scripts set their own style; not the LaTeX style this module sets
     try:
-        runpy.run_path(os.path.join(REPO, "sbi", script), run_name="__main__")
+        runpy.run_path(os.path.join(REPO, "notebooks", script), run_name="__main__")
     finally:
         sys.argv = argv
         os.chdir(cwd)
 
 
 def figure_sensitivity_map(pairs=(7, 10, 12, 15, 16), out="plots/sensitivity_map_pairs"):
-    '''Occlusion-sensitivity maps of SIDM / CDM-twin pairs next to A2744 (sbi/pairs_obs_panel.py; needs the
-    catalogue for the A2744 KS map, and the pair maps from sbi/pair_sensitivity.py).'''
-    _run_sbi("pairs_obs_panel.py", "--pairs", *pairs, "--out", os.path.abspath(out))
+    '''Occlusion-sensitivity maps of SIDM / CDM-twin pairs next to A2744 (notebooks/pairs_obs_panel.py; needs the
+    catalogue for the A2744 KS map, and the pair maps from notebooks/pair_sensitivity.py).'''
+    _run_script("pairs_obs_panel.py", "--pairs", *pairs, "--out", os.path.abspath(out))
 
 
 def figure_p_vs_mass(tag=PAPER_TAG, out="plots/p_vs_mass"):
     '''Mass-weighted mean P(SIDM) against log M(<750 kpc) for BAHAMAS, DARKSKIES and FLAMINGO CDM with A2744
-    (sbi/p_vs_mass.py), in the Figure 2 panel shape.'''
-    _run_sbi("p_vs_mass.py", "--tags", tag, "--ncomp", 2, "--no-lenstool-ks", "--harvey", "none", "--xlim", 14, 15.1,
+    (notebooks/p_vs_mass.py), in the Figure 2 panel shape.'''
+    _run_script("p_vs_mass.py", "--tags", tag, "--ncomp", 2, "--no-lenstool-ks", "--harvey", "none", "--xlim", 14, 15.1,
              "--ylim", 0.4, 0.75, "--no-title", "--paper-style", "--figsize", 5.6, 5.0, "--box-aspect", 0.78,
              "--exclude", "tng", "--no-spread", "--out", os.path.abspath(f"{out}_ba_{tag}"))
 
@@ -2475,27 +2475,27 @@ def figure_p_vs_mass(tag=PAPER_TAG, out="plots/p_vs_mass"):
 def figure_shear_ratio(npz=None, out="plots/shear_ratio_scatter_50-100", recompute=False, tag=PAPER_TAG):
     '''P(SIDM) against the shear ratio <chi_t>(50-100 kpc) / <chi_t>(outer annulus) for mass-matched BAHAMAS
     clusters, outer annuli 100-300 ... 700-900 kpc, +-0.25 dex mass window. Redrawn from the saved scan (no
-    catalogue); recompute=True reruns sbi/ratio_scan.py first (rebuilds the catalogue).'''
-    sys.path.insert(0, os.path.join(REPO, "sbi"))
+    catalogue); recompute=True reruns notebooks/ratio_scan.py first (rebuilds the catalogue).'''
+    sys.path.insert(0, os.path.join(REPO, "notebooks"))
     scan_dir = os.path.abspath("plots/ratio_scan_50-100")
     npz = npz or os.path.join(scan_dir, "ratio_scan_scatter.npz")
     if recompute:
-        _run_sbi("ratio_scan.py", "--summaries", os.path.join(REPO, "sbi", f"summaries_{FIDUCIAL}_{tag}_n5"),
+        _run_script("ratio_scan.py", "--summaries", os.path.join(REPO, "notebooks", "results", f"summaries_{FIDUCIAL}_{tag}_n5"),
                  "--num-kpc", 50, 100, "--den-start", 100, "--den-width", 200, "--mass-window", 0.25, "--out-dir", scan_dir)
     from ratio_plot import plot_grid
-    plt.rcdefaults()                     # ratio_plot sets its own style, on sbi/sensitivity.style() (muted tick labels)
+    plt.rcdefaults()                     # ratio_plot sets its own style, on sensitivity.style() (muted tick labels)
     plt.rcParams.update({"axes.edgecolor": "k", "xtick.color": "#6b6b6b", "ytick.color": "#6b6b6b",
                          "axes.labelcolor": "#222222", "legend.frameon": False, "font.size": 10})
     plot_grid(npz, out)
 
 
 def figure_systematics(tag=PAPER_TAG, out_dir="plots"):
-    '''Figures A4 (data) and A5 (model systematics) from the sbi/systematics.py run (paper_paths()["systematics"]).
+    '''Figures A4 (data) and A5 (model systematics) from the notebooks/systematics.py run (paper_paths()["systematics"]).
     The model plot is centred on the maximum likelihood of the paper GP posterior with its 16-84% range as the
     statistical bar (plots/gp_posterior_ba_<tag>.json, written by figure5_summaries).'''
     import json
     from pathlib import Path
-    sys.path.insert(0, os.path.join(REPO, "sbi"))
+    sys.path.insert(0, os.path.join(REPO, "notebooks"))
     import systematics as sy
     out = json.load(open(paper_paths(tag)["systematics"]))
     gp = json.load(open(f"plots/gp_posterior_ba_{tag}.json"))
@@ -2507,15 +2507,15 @@ def figure_systematics(tag=PAPER_TAG, out_dir="plots"):
 
 
 def figure_pooled_tail(tag=PAPER_TAG, out="plots/cdm_pooled_tail"):
-    '''Pooled CDM P(SIDM) distribution against A2744 (sbi/cdm_pooled_tail.py).'''
+    '''Pooled CDM P(SIDM) distribution against A2744 (notebooks/cdm_pooled_tail.py).'''
     from mass_weighting import FIDUCIAL_STUDY
-    _run_sbi("cdm_pooled_tail.py", "--tag", tag, "--studies", FIDUCIAL_STUDY, "--out", os.path.abspath(f"{out}_{tag}_nc2"))
+    _run_script("cdm_pooled_tail.py", "--tag", tag, "--studies", FIDUCIAL_STUDY, "--out", os.path.abspath(f"{out}_{tag}_nc2"))
 
 
 def figure_empirical_posterior(tag=PAPER_TAG, out="plots/empirical_posterior"):
-    '''Empirical posterior on sigma/m from the mass-weighted simulations (sbi/empirical_posterior.py).'''
+    '''Empirical posterior on sigma/m from the mass-weighted simulations (notebooks/empirical_posterior.py).'''
     from mass_weighting import FIDUCIAL_STUDY
-    _run_sbi("empirical_posterior.py", "--summaries", os.path.join(REPO, "sbi", f"summaries_{FIDUCIAL}_{tag}_n5"),
+    _run_script("empirical_posterior.py", "--summaries", os.path.join(REPO, "notebooks", "results", f"summaries_{FIDUCIAL}_{tag}_n5"),
              "--mass-study", FIDUCIAL_STUDY, "--out", os.path.abspath(f"{out}_ba_{tag}"))
 
 

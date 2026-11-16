@@ -17,13 +17,22 @@ notebooks/plots
 plots
 *.zip
 notebooks/*.zip
-# SBI latents are ~1 GB; regenerate with sbi/make_summaries.py
-sbi/summaries/latents_*.npy
-sbi/test
-sbi/summaries/legacy/latents.pkl
-sbi/summaries_*/latents_*.npy
-sbi/summaries_*/legacy/latents.pkl
-sbi/results/*/*.pt
+# latents are ~1 GB; regenerate with notebooks/make_summaries.py
+notebooks/results/summaries_*/latents_*.npy
+notebooks/results/summaries_*/legacy/latents.pkl
+notebooks/results/*/*.pt
+notebooks/results/test
+notebooks/logs/
+# sbi/ before it was folded into notebooks/ (16 Nov 2026), kept on disk only
+archive_sbi_20261116/
+# not code
+wandb/
+sbi-logs/
+.ipynb_checkpoints/
+__pycache__/
+.DS_Store
+\#*\#
+*~
 archive_k0p9/
 archive_k0p7_pyrrg/
 archive_k0p7_k0p9models/

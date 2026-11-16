@@ -615,7 +615,7 @@ class SpinRotation:
     no galaxies) and rotating the spin-2 components with them: for TF.rotate by theta,
     (e1 + i e2) -> (e1 + i e2) exp(-2 i theta). Without the second step the shear orientations
     are randomised relative to the positions and the CNN cannot tell E- from B-modes
-    (sbi/eb_swap_test.py).
+    (notebooks/eb_swap_test.py).
     '''
     def __init__(self, degrees=360, p=1.0):
         self.degrees = degrees
@@ -638,7 +638,7 @@ class CentreJitter:
     Shift a map by a random whole-pixel offset, Gaussian with sigma_px per axis, filling the
     emptied border with 0 (no galaxies). Forward-models the error in the observed stamp's
     centre: the simulations are centred on the true halo, A2744 on a fitted centre known to
-    ~50 kpc (sbi/centre_uncertainty.py). A pure translation leaves the shear components alone.
+    ~50 kpc (notebooks/centre_uncertainty.py). A pure translation leaves the shear components alone.
     Offsets that keep less than min_keep of the occupied pixels in the stamp are redrawn (an
     empty map cannot be normalised); after max_tries the map is returned unshifted. For
     sigma_px of a few pixels this never triggers; for jitters comparable to the stamp it

@@ -16,8 +16,8 @@ to its fiducial value, so they can run at any time.
     astro-env/bin/python notebooks/paper_figures.py --no-catalogue        # skip the catalogue figures
     astro-env/bin/python notebooks/paper_figures.py --mass-study harvey_g1v2 --out-dir paper_figures_harvey
 
-Heavy computation is not redone here: the summaries (sbi/make_summaries.py), the sensitivity maps
-(sbi/pair_sensitivity.py), the systematics run (sbi/systematics.py) and the shear-ratio scan (sbi/ratio_scan.py; or
+Heavy computation is not redone here: the summaries (notebooks/make_summaries.py), the sensitivity maps
+(notebooks/pair_sensitivity.py), the systematics run (notebooks/systematics.py) and the shear-ratio scan (notebooks/ratio_scan.py; or
 --recompute-ratio) must exist. Order matters for one dependency: output_to_model writes plots/gp_posterior_ba_<tag>.json, which
 particle_physics and the model systematics read (it is run first).
 '''

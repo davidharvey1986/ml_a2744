@@ -20,7 +20,7 @@ $SSH $DEST_HOST "mkdir -p $DEST/models/base_models $DEST/data/100/obs/concat $DE
 
 echo "== code"
 rsync -av -e "$SSH" --exclude .git --exclude data --exclude models --exclude astro-env --exclude wandb --exclude logs \
-    --exclude pyRRG --exclude 'sbi/summaries*' --exclude sbi/results --exclude notebooks/pickles \
+    --exclude pyRRG --exclude 'notebooks/results/summaries*' --exclude notebooks/results --exclude notebooks/pickles \
     --exclude __pycache__ --exclude .ipynb_checkpoints ./ $DEST_HOST:$DEST/
 
 echo "== data: obs/concat without flamingo, and the noise model"

@@ -28,12 +28,15 @@ Note: this requies ~5GB of storage and can take a while to download.
 
 We note that we are not at liberty to share the Flamingo or TNG data - however for the purposes of the refereeing of the paper these can be provided on request privately.
 
-To re-derive the plots please run 
+To re-derive the plots please run
 ```
 ./get_model_and_data.sh  # 30 minutes (depending on download speed)
 python add_shear_to_data.py # 30 minutes
-cd notebooks
-./plots_for_paper.py # 5 minutes
+bash notebooks/paper_pipeline.sh   # all summaries, analyses and paper figures (steps whose output exists are skipped)
+```
+or, with the summaries and results already in `notebooks/results/`, only the figures:
+```
+python notebooks/paper_figures.py
 ```
 
 Optionally you can then run
@@ -57,26 +60,25 @@ Overview of the data
 - `darkskies_0.1.pkl` (cross-section 0.1, class 1)
 - `darkskies_0.2.pkl` (cross-section 0.2, class 1)
 
-Code structure and notes for code base
+Code structure
 ---------------------
+The training code is in the repository root; everything that turns the trained CNNs into the paper's numbers and
+figures is in `notebooks/`, with its outputs in `notebooks/results/`.
 ```
 project_root/
-├── data/
-│   ├── bahamas_cdm.pkl
-│   ├── bahamas_0.1.pkl
-│   ├── bahamas_0.3.pkl
-│   ├── darkskies_cdm.pkl
-│   ├── darkskies_0.01.pkl
-│   ├── darkskies_0.05.pkl
-│   ├── darkskies_0.1.pkl
-│   └── darkskies_0.2.pkl
-├── main.py
-├── model.py
-├── dataset.py
-├── train.py
-├── utils.py
-├── adaptation.py
-├── run_experiment.sh
+├── main.py, train.py, model.py, dataset.py,    training (main.py is the entry point; train_seed.sh trains one
+│   adaptation.py, utils.py, train_seed.sh      seed: base model, fine-tuning, final stage)
+├── add_shear_to_data.py, mass_weighting.py,    A2744 catalogue and maps, A2744 mass prior, shear calibration
+│   shear_susceptibility.py, ...
+├── slurm/                                      cluster submission scripts
+├── notebooks/
+│   ├── paper_pipeline.sh                       every number and figure in the paper, from the trained models
+│   ├── make_summaries.py                       runs the CNNs over the simulations and A2744 (inputs to everything below)
+│   ├── run_sbi.py, systematics.py, sensitivity.py, ...   the analyses
+│   ├── paper_figures.py, plots_for_paper.py    the paper figures
+│   ├── paper_numbers.py                        numbers quoted in the text (noise floor, rho, A-distance)
+│   └── results/                                summaries and analysis outputs (README.md there describes the summaries)
+├── data/, models/                              (downloaded, not in git)
 └── README.md
 ```
 
