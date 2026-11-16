@@ -1,0 +1,40 @@
+{
+ "all": {
+  "mean": 0.2197022544349963,
+  "std": 0.06416145980914792,
+  "per_model": [
+   0.13119746233148266,
+   0.21651695160822948,
+   0.19147236614853202,
+   0.2309134385461502,
+   0.3284110535405871
+  ],
+  "n_per_domain": 481
+ },
+ "cdm": {
+  "mean": 0.26162338295793497,
+  "std": 0.09531678383341743,
+  "per_model": [
+   0.15026208503203264,
+   0.20000000000000018,
+   0.3252937538651821,
+   0.21830365014988562,
+   0.4142574257425742
+  ],
+  "n_per_domain": 251
+ },
+ "settings": {
+  "what": "a-distance",
+  "n": 1000,
+  "per_domain": 1500,
+  "C": 1.0,
+  "n_boot": 200,
+  "batch_size": 256,
+  "seed": 0,
+  "include": "noda_",
+  "models_root": "/Users/davidharvey/Work/ml_check/models_noda",
+  "tag": "_noda",
+  "model": "tweakedalign_k0p7_ctr_wb1_ba_final",
+  "include_str": "noda_"
+ }
+}

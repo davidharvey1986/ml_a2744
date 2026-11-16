@@ -55,10 +55,10 @@ Outputs in sbi/results/<summaries dir name>[_pc<k>]/: results.json, posteriors.n
 posterior.pdf/png, discrepancy.pdf/png, validation.pdf/png and the trained
 estimators (*.pt, not in git).
 
-Usage (needs the sbi package, e.g. the Dark_Matter_DA/sbi environment):
+Usage (needs the sbi package, 0.27.0, installed in astro-env):
     cd ml_check
-    ../Dark_Matter_DA/sbi/bin/python sbi/run_sbi.py --summaries sbi/summaries_ta
-    ../Dark_Matter_DA/sbi/bin/python sbi/run_sbi.py --summaries sbi/summaries_ta --latent-pcs 0   # softmax only
+    astro-env/bin/python sbi/run_sbi.py --summaries sbi/summaries_ta
+    astro-env/bin/python sbi/run_sbi.py --summaries sbi/summaries_ta --latent-pcs 0   # softmax only
 """
 
 import argparse

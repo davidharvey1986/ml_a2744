@@ -10,7 +10,7 @@
 cd "$(dirname "$0")/.."
 caffeinate -is -w $$ &
 PY=$PWD/astro-env/bin/python
-SBI_PY=../Dark_Matter_DA/sbi/bin/python
+SBI_PY=astro-env/bin/python
 LOG=$PWD/sbi/logs_k0p7_wb1
 INC=spin2_cx_pgc_ft_
 R=sbi/results

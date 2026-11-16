@@ -7,7 +7,7 @@
 # summaries with the corrected noise composition (evaluate_chifix.sh, which runs this script last).
 cd "$(dirname "$0")/.."
 PY=astro-env/bin/python
-SBI_PY=../Dark_Matter_DA/sbi/bin/python
+SBI_PY=astro-env/bin/python
 LOG=sbi/logs_eval_jit500
 INC=spin2_jit500_ft_
 MODEL=tweakedalign_k0p9_ctr_ba_best

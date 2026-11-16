@@ -33,6 +33,10 @@ pip install torch torchvision
 
 pip install wandb gdown sympy networkx filelock jinja2 fsspec requests pyyaml pillow lenspack scienceplots
 
+# Simulation-based inference (sbi/run_sbi.py); previously a separate environment
+
+pip install sbi==0.27.0
+
 if [ ! -d pyRRG ]
 then
     git clone git@github.com:davidharvey1986/pyRRG.git

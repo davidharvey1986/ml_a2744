@@ -8,11 +8,11 @@
 #   SKIP_SYSTEMATICS=1 bash sbi/rerun_all.sh   # without the (~2 h) systematics suite
 #   WAIT_FOR_PID=<pid> bash sbi/rerun_all.sh   # first wait for add_shear_to_data to finish
 #
-# Needs: astro-env (CNNs, summaries) and the Dark_Matter_DA/sbi environment (sbi package).
+# Needs: astro-env (CNNs, summaries and the sbi package).
 set -u
 cd "$(dirname "$0")/.."
 PY=astro-env/bin/python
-SBI_PY=../Dark_Matter_DA/sbi/bin/python
+SBI_PY=astro-env/bin/python
 R=sbi/results
 
 step() { echo "##### $(date +%H:%M) $*"; }

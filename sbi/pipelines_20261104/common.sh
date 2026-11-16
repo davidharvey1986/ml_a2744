@@ -1,7 +1,7 @@
 # shared by the 4 Nov pipelines: same commands as sbi/k0p7_pgc.sh
 cd /Users/davidharvey/Work/ml_check
 PY=$PWD/astro-env/bin/python
-SBI_PY=../Dark_Matter_DA/sbi/bin/python
+SBI_PY=astro-env/bin/python
 R=sbi/results
 step() { name=$1; shift; echo "== $(date '+%d %H:%M') $name"; "$@" > $LOG/$name.txt 2>&1 || echo "   FAILED (see $LOG/$name.txt)"; }
 summaries() { # name model inc outdir domains...

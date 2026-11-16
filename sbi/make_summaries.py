@@ -126,12 +126,16 @@ def get_device():
 
 def load_models(opts, args, device):
     names, _ = get_model_names(
-        ifilter=opts.filter, model_dir=str(REPO / "models"), model=opts.model,
+        ifilter=opts.filter, model_dir=str(getattr(opts, "model_dir", None) or REPO / "models"), model=opts.model,
         include_str=opts.include_str, nmodels=opts.nmodels,
     )
     models = []
+    default_adaptation = getattr(args, "adaptation", None)
     for name in sorted(names):
         args.checkpoint = name
+        # build the DA head only if the checkpoint has one (no-DA models were trained with --adaptation none)
+        ck_args = torch.load(name, weights_only=False, map_location="cpu").get("args")
+        args.adaptation = getattr(ck_args, "adaptation", default_adaptation)
         imodel = create_model(args).to(device).eval()
         assert getattr(imodel, "num_meta_info", 0) == 0, "image-only models expected"
         imodel.checkpoint_name = os.path.basename(name)

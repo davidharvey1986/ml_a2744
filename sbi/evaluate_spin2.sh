@@ -6,7 +6,7 @@
 # does not stop the others.
 cd "$(dirname "$0")/.."
 PY=astro-env/bin/python
-SBI_PY=../Dark_Matter_DA/sbi/bin/python
+SBI_PY=astro-env/bin/python
 LOG=sbi/logs_eval_spin2
 mkdir -p $LOG
 step() { name=$1; shift; echo "== $(date +%H:%M) $name"; "$@" > $LOG/$name.txt 2>&1 || echo "   FAILED (see $LOG/$name.txt)"; }

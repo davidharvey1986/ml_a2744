@@ -36,11 +36,14 @@ MODEL, INCLUDE = "tweakedalign_k0p7_ctr_wb1_ba_final", "spin2_cx_pgc_ft_"
 OUT = REPO / "sbi" / "results" / "paper_numbers"
 
 
-def models_and_args():
+def models_and_args(opts=None):
     device = ms.get_device()
     args = ms.setup_args("concat")
-    models = ms.load_models(SimpleNamespace(filter="concat", model=MODEL, include_str=INCLUDE, nmodels=None), args, device)
-    print(f"{len(models)} models ({MODEL}), device {device}")
+    include = getattr(opts, "include", None) or INCLUDE
+    model_dir = getattr(opts, "models_root", None)
+    models = ms.load_models(SimpleNamespace(filter="concat", model=MODEL, include_str=include, nmodels=None,
+                                            model_dir=model_dir), args, device)
+    print(f"{len(models)} models ({include}*{MODEL} in {model_dir or 'models'}), device {device}")
     return models, args, device
 
 
@@ -80,7 +83,7 @@ def a_distance(opts):
     from sklearn.model_selection import cross_val_score
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
-    models, args, device = models_and_args()
+    models, args, device = models_and_args(opts)
     rng = np.random.default_rng(opts.seed)
     lat, held, cs = {}, {}, {}
     for d in ms.DOMAINS:
@@ -158,11 +161,14 @@ def main():
     p.add_argument("--n-boot", type=int, default=200, help="rho: bootstrap resamples of the clusters")
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--include", default=None, help="a-distance: include_str for the models (default: the fiducial)")
+    p.add_argument("--models-root", default=None, help="a-distance: directory holding concat/ (default: models/)")
+    p.add_argument("--tag", default="", help="suffix for the output json, e.g. _noda")
     opts = p.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     res = {"noise-floor": noise_floor, "a-distance": a_distance, "rho": rho}[opts.what](opts)
-    res["settings"] = {**vars(opts), "model": MODEL, "include_str": INCLUDE}
-    json.dump(res, open(OUT / f"{opts.what}.json", "w"), indent=1)
+    res["settings"] = {**vars(opts), "model": MODEL, "include_str": opts.include or INCLUDE}
+    json.dump(res, open(OUT / f"{opts.what}{opts.tag}.json", "w"), indent=1)
     print(json.dumps({k: v for k, v in res.items() if k != "settings"}, indent=1)[:2000])
 
 
